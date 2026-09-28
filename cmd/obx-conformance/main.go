@@ -49,11 +49,17 @@ suite creates retailers, API keys and upload keys itself):
   --client-id / --client-secret               API key with access to all brands
   --second-client-id / --second-client-secret API key restricted to brand "kestrel"
   --no-original-client-id / --no-original-client-secret   API key without originals
+  (each pair also as one flag: --client id:secret, --second-client …, --no-original-client …)
   --token             upload key with ingest:read, ingest:write and ingest:delete
 
 "all" on a fresh node is the reference run: it completes setup (Kestrel
 Outfitters, brand "kestrel", languages nl,en), imports fixtures/kestrel and
 runs every profile.
+
+Report: --format text (default, for people), markdown or json (also --json).
+Exit codes: 0 = every required test passed, 1 = a required test failed,
+2 = the suite could not run.
+Run "obx-conformance <profile> --help" for every option.
 `
 
 func main() {
@@ -110,6 +116,20 @@ func runSuite(ctx context.Context, profile string, args []string, stdout, stderr
 	fs.StringVar(&cfg.NoOriginalClientID, "no-original-client-id", "", "API key without originals: client id")
 	fs.StringVar(&cfg.NoOriginalClientSecret, "no-original-client-secret", "", "API key without originals: client secret")
 	fs.StringVar(&cfg.IngestToken, "token", "", "upload key (obxi_…) with all ingest scopes")
+	pair := func(name string, id, secret *string) {
+		fs.Func(name, "the same as --"+name+"-id and --"+name+"-secret, given as id:secret", func(v string) error {
+			i := strings.Index(v, ":")
+			if i <= 0 || i == len(v)-1 {
+				return errors.New("use id:secret")
+			}
+			*id, *secret = v[:i], v[i+1:]
+			return nil
+		})
+	}
+	pair("client", &cfg.ClientID, &cfg.ClientSecret)
+	pair("second-client", &cfg.SecondClientID, &cfg.SecondClientSecret)
+	pair("no-original-client", &cfg.NoOriginalClientID, &cfg.NoOriginalClientSecret)
+	format := fs.String("format", "text", "report format: text (for people), markdown (issues, CI summaries) or json")
 	fixtures := fs.String("fixtures", "", "path to a spec fixtures directory (default: the embedded copy)")
 	only := fs.String("only", "", "comma-separated test id prefixes to run (for example P-FEED,I-IMP-3)")
 	asJSON := fs.Bool("json", false, "print the report as JSON")
@@ -123,7 +143,14 @@ func runSuite(ctx context.Context, profile string, args []string, stdout, stderr
 		return 2
 	}
 	if cfg.BaseURL == "" {
-		fmt.Fprintln(stderr, "obx-conformance: --url is required")
+		fmt.Fprintln(stderr, "obx-conformance: --url is required (the address of the portal to check)")
+		return 2
+	}
+	if *asJSON {
+		*format = "json"
+	}
+	if *format != "text" && *format != "markdown" && *format != "json" {
+		fmt.Fprintln(stderr, "obx-conformance: --format must be text, markdown or json")
 		return 2
 	}
 	if cfg.SetupCode == "" {
@@ -144,15 +171,19 @@ func runSuite(ctx context.Context, profile string, args []string, stdout, stderr
 		fmt.Fprintf(stderr, "obx-conformance: %v\n", err)
 		return 2
 	}
-	if rep.SetupError != "" && !*asJSON {
+	if rep.SetupError != "" && *format != "json" {
 		fmt.Fprintf(stderr, "obx-conformance: could not prepare the run: %s\n", rep.SetupError)
+		fmt.Fprintln(stderr, "Check the address, that the portal is running, and the setup code or admin login.")
 		return 2
 	}
-	if *asJSON {
+	switch *format {
+	case "json":
 		enc := json.NewEncoder(stdout)
 		enc.SetIndent("", "  ")
 		enc.Encode(rep)
-	} else {
+	case "markdown":
+		printMarkdown(stdout, rep)
+	default:
 		printReport(stdout, rep)
 	}
 	if rep.SetupError != "" {
@@ -162,38 +193,6 @@ func runSuite(ctx context.Context, profile string, args []string, stdout, stderr
 		return 1
 	}
 	return 0
-}
-
-func printReport(w io.Writer, rep *conformance.Report) {
-	sw := rep.Software
-	if sw == "" {
-		sw = "unknown software"
-	}
-	fmt.Fprintf(w, "OBX conformance: %s (%s), spec %.12s\n", rep.BaseURL, sw, rep.SpecCommit)
-	for _, s := range rep.Setup {
-		fmt.Fprintf(w, "  setup: %s\n", s)
-	}
-	profile := ""
-	for _, r := range rep.Results {
-		if r.Profile != profile {
-			profile = r.Profile
-			fmt.Fprintf(w, "\n%s\n", profile)
-		}
-		label := map[string]string{conformance.StatusPass: "PASS", conformance.StatusFail: "FAIL", conformance.StatusSkip: "SKIP"}[r.Status]
-		opt := ""
-		if !r.Required {
-			opt = " (optional)"
-		}
-		fmt.Fprintf(w, "  %s  %-10s %s%s\n", label, r.ID, r.Title, opt)
-		for _, m := range r.Messages {
-			fmt.Fprintf(w, "        - %s\n", m)
-		}
-	}
-	verdict := "CONFORMANT for " + strings.Join(rep.Profiles, ", ")
-	if !rep.OK() {
-		verdict = "NOT CONFORMANT (a required test failed)"
-	}
-	fmt.Fprintf(w, "\n%d passed, %d failed, %d skipped in %.1fs: %s\n", rep.Passed, rep.Failed, rep.Skipped, float64(rep.Millis)/1000, verdict)
 }
 
 func runMock(ctx context.Context, args []string, stdout, stderr io.Writer, getenv func(string) string) int {

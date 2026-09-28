@@ -56,7 +56,7 @@ func TestBrokenNodeFails(t *testing.T) {
 	c := n.Credentials()
 	var out, errb bytes.Buffer
 	code := run(context.Background(), []string{"protocol", "--url", srv.URL, "--admin-user", c.AdminEmail, "--admin-password", c.AdminPassword, "--only", "P-DISC-1"}, &out, &errb, noEnv)
-	if code != 1 || !strings.Contains(out.String(), "FAIL  P-DISC-1") || !strings.Contains(out.String(), "NOT CONFORMANT") {
+	if code != 1 || !strings.Contains(out.String(), "FAIL  P-DISC-1") || !strings.Contains(out.String(), "NOT CONFORMANT") || !strings.Contains(out.String(), "Why it matters") {
 		t.Fatalf("exit %d\n%s\n%s", code, out.String(), errb.String())
 	}
 }
@@ -72,5 +72,23 @@ func TestUsageErrors(t *testing.T) {
 	errb.Reset()
 	if code := run(context.Background(), []string{"all", "--url", "http://127.0.0.1:1", "--setup-code", "x"}, &out, &errb, noEnv); code != 2 {
 		t.Fatalf("unreachable node: %d %s", code, errb.String())
+	}
+}
+
+// The id:secret flags of docs/conformance.md and the Markdown report.
+func TestPairFlagsAndMarkdown(t *testing.T) {
+	n := mock.New(mock.Options{Fixtures: true})
+	srv := httptest.NewServer(n)
+	defer srv.Close()
+	c := n.Credentials()
+	var out, errb bytes.Buffer
+	code := run(context.Background(), []string{"protocol", "--url", srv.URL, "--client", c.Full.ClientID + ":" + c.Full.ClientSecret,
+		"--second-client", c.Restricted.ClientID + ":" + c.Restricted.ClientSecret, "--only", "P-FEED-4,P-DISC", "--format", "markdown"}, &out, &errb, noEnv)
+	if code != 0 || !strings.Contains(out.String(), "## Open Brand Exchange conformance: selected checks passed") || !strings.Contains(out.String(), "| pass | P-FEED-4 |") {
+		t.Fatalf("exit %d\n%s\n%s", code, out.String(), errb.String())
+	}
+	errb.Reset()
+	if code := run(context.Background(), []string{"protocol", "--url", srv.URL, "--client", "no-colon"}, &out, &errb, noEnv); code != 2 || !strings.Contains(errb.String(), "id:secret") {
+		t.Fatalf("bad --client: %d %s", code, errb.String())
 	}
 }

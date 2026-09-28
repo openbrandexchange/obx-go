@@ -101,6 +101,9 @@ type Report struct {
 	Skipped    int       `json:"skipped"`
 	Results    []Result  `json:"results"`
 	Setup      []string  `json:"setup,omitempty"`
+	// Partial is true when only some tests ran (Config.Only); a partial run
+	// is not a conformance claim.
+	Partial bool `json:"partial,omitempty"`
 	// SetupError is set when the suite could not prepare the run (no
 	// connection, wrong credentials); every test then fails or is skipped.
 	SetupError string `json:"setup_error,omitempty"`
@@ -279,7 +282,7 @@ func Run(ctx context.Context, profiles []string, cfg Config) (*Report, error) {
 			return nil, fmt.Errorf("conformance: unknown profile %q (use protocol, ingest, portal, security or all)", p)
 		}
 	}
-	r := &runner{cfg: cfg, fixtures: cfg.Fixtures, report: &Report{BaseURL: base, SpecCommit: specdata.SpecCommit(), StartedAt: time.Now().UTC()}}
+	r := &runner{cfg: cfg, fixtures: cfg.Fixtures, report: &Report{BaseURL: base, SpecCommit: specdata.SpecCommit(), StartedAt: time.Now().UTC(), Partial: len(cfg.Only) > 0}}
 	if r.fixtures == nil {
 		r.fixtures = specdata.Fixtures()
 	}
