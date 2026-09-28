@@ -1,0 +1,146 @@
+name: Publish to Open Brand Exchange
+description: Publish product data (products.csv) and images to your Open Brand Exchange portal with the obx command.
+author: Open Brand Exchange
+branding:
+  icon: upload-cloud
+  color: blue
+
+inputs:
+  url:
+    description: Address of your portal, for example https://brands.kestrel.example (store it as a secret or variable).
+    required: true
+  token:
+    description: Automatic upload key from your portal (starts with obxi_). Store it as a repository secret.
+    required: true
+  folder:
+    description: A folder with products.csv, an optional assets.csv and the images (images may be in subfolders).
+    required: false
+    default: ""
+  csv:
+    description: Path to products.csv (instead of, or next to, folder).
+    required: false
+    default: ""
+  assets-csv:
+    description: Path to an optional assets.csv (rights, AI information, alt text per image).
+    required: false
+    default: ""
+  images:
+    description: Folder or zip with images named {style}_{colour}_{position}.jpg.
+    required: false
+    default: ""
+  package:
+    description: One zip with products.csv, assets.csv and images.
+    required: false
+    default: ""
+  mirror:
+    description: Also take offline the products of these brands that are not in the file ("true"/"false").
+    required: false
+    default: "false"
+  allow-mass-unpublish:
+    description: With mirror, allow taking more than half of the products offline.
+    required: false
+    default: "false"
+  dry-run:
+    description: Only check, change nothing.
+    required: false
+    default: "false"
+  language:
+    description: Language of columns without a language suffix (default the portal's first language).
+    required: false
+    default: ""
+  fail-on-problems:
+    description: Fail the step when some rows or images had problems (exit code 2).
+    required: false
+    default: "true"
+  version:
+    description: obx version to use ("latest" or a release tag such as v0.1.0).
+    required: false
+    default: latest
+
+outputs:
+  exit-code:
+    description: 0 = all good, 2 = done but some rows had problems, 1 = failed.
+    value: ${{ steps.push.outputs.exit-code }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install obx
+      shell: bash
+      env:
+        OBX_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        case "${RUNNER_OS}" in
+          Linux) os=linux ;;
+          macOS) os=darwin ;;
+          Windows) os=windows ;;
+          *) echo "unsupported runner ${RUNNER_OS}" >&2; exit 1 ;;
+        esac
+        case "${RUNNER_ARCH}" in
+          X64) arch=amd64 ;;
+          ARM64) arch=arm64 ;;
+          *) echo "unsupported architecture ${RUNNER_ARCH}" >&2; exit 1 ;;
+        esac
+        dir="${RUNNER_TEMP}/obx-bin"
+        mkdir -p "$dir"
+        if [ "${OBX_VERSION}" = "latest" ]; then
+          base="https://github.com/openbrandexchange/obx-go/releases/latest/download"
+        else
+          base="https://github.com/openbrandexchange/obx-go/releases/download/${OBX_VERSION}"
+        fi
+        if [ "$os" = windows ]; then
+          curl -fsSL -o "$dir/obx.zip" "$base/obx_${os}_${arch}.zip"
+          unzip -o -q "$dir/obx.zip" -d "$dir"
+        elif curl -fsSL "$base/obx_${os}_${arch}.tar.gz" | tar -xz -C "$dir" obx; then
+          :
+        elif command -v go >/dev/null 2>&1; then
+          echo "No release archive found; building obx from source" >&2
+          GOBIN="$dir" go install "github.com/openbrandexchange/obx-go/cmd/obx@${OBX_VERSION}"
+        else
+          echo "could not download obx" >&2
+          exit 1
+        fi
+        echo "$dir" >> "$GITHUB_PATH"
+
+    - name: Publish
+      id: push
+      shell: bash
+      env:
+        OBX_URL: ${{ inputs.url }}
+        OBX_TOKEN: ${{ inputs.token }}
+        IN_FOLDER: ${{ inputs.folder }}
+        IN_CSV: ${{ inputs.csv }}
+        IN_ASSETS: ${{ inputs.assets-csv }}
+        IN_IMAGES: ${{ inputs.images }}
+        IN_PACKAGE: ${{ inputs.package }}
+        IN_MIRROR: ${{ inputs.mirror }}
+        IN_MASS: ${{ inputs.allow-mass-unpublish }}
+        IN_DRY: ${{ inputs.dry-run }}
+        IN_LANG: ${{ inputs.language }}
+        IN_FAIL: ${{ inputs.fail-on-problems }}
+      run: |
+        set -uo pipefail
+        args=(push)
+        [ -n "$IN_FOLDER" ] && args+=("$IN_FOLDER")
+        [ -n "$IN_CSV" ] && args+=(--csv "$IN_CSV")
+        [ -n "$IN_ASSETS" ] && args+=(--assets-csv "$IN_ASSETS")
+        [ -n "$IN_IMAGES" ] && args+=(--images "$IN_IMAGES")
+        [ -n "$IN_PACKAGE" ] && args+=(--package "$IN_PACKAGE")
+        [ "$IN_MIRROR" = "true" ] && args+=(--mirror)
+        [ "$IN_MASS" = "true" ] && args+=(--allow-mass-unpublish)
+        [ "$IN_DRY" = "true" ] && args+=(--dry-run)
+        [ -n "$IN_LANG" ] && args+=(--language "$IN_LANG")
+        obx "${args[@]}" | tee "${RUNNER_TEMP}/obx-summary.txt"
+        code=${PIPESTATUS[0]}
+        echo "exit-code=$code" >> "$GITHUB_OUTPUT"
+        {
+          echo "### Open Brand Exchange"
+          echo '```'
+          cat "${RUNNER_TEMP}/obx-summary.txt"
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"
+        if [ "$code" = "2" ] && [ "$IN_FAIL" != "true" ]; then
+          exit 0
+        fi
+        exit "$code"

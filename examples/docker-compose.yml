@@ -1,0 +1,14 @@
+# docker compose up -d: publish everything that lands in ./outbox.
+services:
+  obx-watch:
+    image: ghcr.io/openbrandexchange/obx:latest
+    command: ["watch", "/outbox"]
+    restart: unless-stopped
+    environment:
+      OBX_URL: https://brands.kestrel.example
+      OBX_TOKEN: ${OBX_TOKEN}
+    volumes:
+      - ./outbox:/outbox:ro
+      - obx-state:/home/obx/.obx
+volumes:
+  obx-state:

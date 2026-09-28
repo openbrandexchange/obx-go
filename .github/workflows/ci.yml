@@ -1,0 +1,24 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go test -count=1 ./...
+      - name: Conformance of the mock node (fresh node, all profiles)
+        run: |
+          go build -o obx-conformance ./cmd/obx-conformance
+          ./obx-conformance mock --fresh --addr 127.0.0.1:8099 --setup-code ci-setup-code &
+          sleep 2
+          ./obx-conformance all --url http://127.0.0.1:8099 --setup-code ci-setup-code
+      - name: Container image builds
+        run: docker build -t obx:ci .

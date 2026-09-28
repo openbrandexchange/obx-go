@@ -1,0 +1,6 @@
+Open Brand Exchange Go SDK, CLI and conformance suite (obx-go)
+Copyright 2026 The Open Brand Exchange contributors
+
+This product includes the JSON Schemas and fixtures of the Open Brand
+Exchange specification (https://github.com/openbrandexchange/spec),
+licensed under CC-BY-4.0, in the specdata directory.

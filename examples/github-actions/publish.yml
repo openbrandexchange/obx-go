@@ -1,0 +1,21 @@
+# .github/workflows/publish.yml in the repository that holds your exports.
+# Store OBX_URL and OBX_TOKEN (an automatic upload key) as repository secrets.
+name: Publish product content
+on:
+  push:
+    branches: [main]
+    paths: ["export/**"]
+  schedule:
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: openbrandexchange/obx-go/push-action@v0
+        with:
+          url: ${{ secrets.OBX_URL }}
+          token: ${{ secrets.OBX_TOKEN }}
+          folder: export

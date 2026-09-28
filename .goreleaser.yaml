@@ -1,0 +1,63 @@
+# GoReleaser configuration for the obx and obx-conformance binaries.
+# Not published yet: run locally with `goreleaser release --snapshot --clean`
+# to produce the archives in dist/. The archive names match the download URL
+# used in the spec's automation recipes (obx_linux_amd64.tar.gz).
+version: 2
+project_name: obx
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - id: obx
+    main: ./cmd/obx
+    binary: obx
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X main.Version={{ .Version }}
+  - id: obx-conformance
+    main: ./cmd/obx-conformance
+    binary: obx-conformance
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X main.Version={{ .Version }}
+
+archives:
+  - id: obx
+    ids: [obx]
+    name_template: "obx_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files: [LICENSE, NOTICE, README.md]
+  - id: obx-conformance
+    ids: [obx-conformance]
+    name_template: "obx-conformance_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files: [LICENSE, NOTICE]
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot"
+
+changelog:
+  sort: asc
+
+release:
+  github:
+    owner: openbrandexchange
+    name: obx-go
+  draft: true

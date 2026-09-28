@@ -1,0 +1,23 @@
+# Keep publishing whatever lands in /data/outbox.
+#   sudo cp obx-watch.service /etc/systemd/system/
+#   sudo systemctl edit obx-watch   # set OBX_URL and OBX_TOKEN, see below
+#   sudo systemctl enable --now obx-watch
+[Unit]
+Description=Publish product exports to Open Brand Exchange
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Environment=OBX_URL=https://brands.kestrel.example
+# Put the upload key in a file only root can read: OBX_TOKEN=obxi_…
+EnvironmentFile=/etc/obx/token.env
+ExecStart=/usr/local/bin/obx watch /data/outbox
+Restart=always
+RestartSec=30
+DynamicUser=yes
+StateDirectory=obx
+Environment=OBX_CONFIG_DIR=/var/lib/obx
+ReadOnlyPaths=/data/outbox
+
+[Install]
+WantedBy=multi-user.target

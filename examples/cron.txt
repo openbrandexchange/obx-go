@@ -1,0 +1,9 @@
+# crontab -e: publish every night at 02:30.
+30 2 * * * OBX_URL=https://brands.kestrel.example OBX_TOKEN=obxi_… /usr/local/bin/obx push /exports >> /var/log/obx.log 2>&1
+
+# Windows (PowerShell, once):
+# $action = New-ScheduledTaskAction -Execute "C:\Tools\obx.exe" -Argument "push D:\Export"
+# $trigger = New-ScheduledTaskTrigger -Daily -At 2:30am
+# [Environment]::SetEnvironmentVariable("OBX_URL", "https://brands.kestrel.example", "Machine")
+# [Environment]::SetEnvironmentVariable("OBX_TOKEN", "obxi_…", "Machine")
+# Register-ScheduledTask -TaskName "Publish to OBX" -Action $action -Trigger $trigger -User "SYSTEM"
