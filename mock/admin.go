@@ -567,15 +567,37 @@ func (n *Node) handleSettings(w http.ResponseWriter, r *http.Request, _ *adminCt
 		writeProblem(w, p)
 		return
 	}
-	// JSON null cannot be told apart from an absent field after decoding into
-	// a map type, so look at the raw body for the texts that null clears.
+	// The update is a JSON merge patch (RFC 7396): the localised texts are
+	// merged per language from the raw body, where null removes a language
+	// (or, for the whole field, the whole text).
 	var raw struct {
 		Branding map[string]json.RawMessage `json:"branding"`
 	}
 	json.Unmarshal(body, &raw)
-	isNull := func(key string) bool {
+	mergeText := func(cur obx.LocalizedText, key string) obx.LocalizedText {
 		v, ok := raw.Branding[key]
-		return ok && strings.TrimSpace(string(v)) == "null"
+		if !ok {
+			return cur
+		}
+		if strings.TrimSpace(string(v)) == "null" {
+			return nil
+		}
+		var patch map[string]*string
+		if json.Unmarshal(v, &patch) != nil {
+			return cur
+		}
+		out := obx.LocalizedText{}
+		for k, t := range cur {
+			out[k] = t
+		}
+		for k, t := range patch {
+			if t == nil || strings.TrimSpace(*t) == "" {
+				delete(out, k)
+			} else {
+				out[k] = *t
+			}
+		}
+		return nilIfEmpty(out)
 	}
 	if c := in.Company; c != nil && c.Website != nil && *c.Website != "" && !webURL(*c.Website) {
 		writeProblem(w, problem(obx.ErrValidationFailed, "company.website must be an http(s) address"))
@@ -608,19 +630,9 @@ func (n *Node) handleSettings(w http.ResponseWriter, r *http.Request, _ *adminCt
 		if b.AccentColor != nil {
 			st.accent = b.AccentColor
 		}
-		if b.WelcomeText != nil {
-			st.welcome = cleanText(b.WelcomeText)
-		}
-		if b.PortalName != nil {
-			st.portalName = cleanText(b.PortalName)
-		}
 	}
-	if isNull("welcome_text") {
-		st.welcome = nil
-	}
-	if isNull("portal_name") {
-		st.portalName = nil
-	}
+	st.welcome = mergeText(st.welcome, "welcome_text")
+	st.portalName = mergeText(st.portalName, "portal_name")
 	if p := in.Portal; p != nil {
 		if p.AccessRequestsEnabled != nil {
 			st.accessRequests = *p.AccessRequestsEnabled

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/openbrandexchange/obx-go/obx"
@@ -396,17 +395,6 @@ func (s *state) productRepr(r *record) obx.Product {
 		Description: nilIfEmpty(in.Description), ItemType: in.ItemType, GPCBrick: in.GPCBrick, TargetGroup: in.TargetGroup,
 		Season: in.Season, Collection: in.Collection, Materials: in.Materials, Care: in.Care, CountryOfOrigin: in.CountryOfOrigin,
 		DPPURL: in.DPPURL, Attributes: attrs, CreatedAt: r.createdAt, UpdatedAt: r.protoAt}
-}
-
-// cleanText drops languages whose text is empty; nil when nothing is left.
-func cleanText(t obx.LocalizedText) obx.LocalizedText {
-	out := obx.LocalizedText{}
-	for k, v := range t {
-		if strings.TrimSpace(v) != "" {
-			out[k] = v
-		}
-	}
-	return nilIfEmpty(out)
 }
 
 func nilIfEmpty(t obx.LocalizedText) obx.LocalizedText {

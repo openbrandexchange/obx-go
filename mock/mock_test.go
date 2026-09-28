@@ -176,12 +176,21 @@ func TestPortalName(t *testing.T) {
 	if b := public(); b.PortalName["nl"] != "Merkbeeldbank" {
 		t.Fatalf("public branding portal_name: %v", b.PortalName)
 	}
-	// Changing another setting keeps it; null clears it.
+	// Changing another setting keeps it; languages merge (RFC 7396); null
+	// removes one language or, for the whole field, the override.
 	if _, err := adm.PatchSettings(ctx, map[string]any{"branding": map[string]any{"accent_color": "#123456"}}); err != nil {
 		t.Fatal(err)
 	}
 	if b := public(); b.PortalName["nl"] != "Merkbeeldbank" {
 		t.Fatalf("portal_name lost by an unrelated change: %v", b.PortalName)
+	}
+	if s, err = adm.PatchSettings(ctx, map[string]any{"branding": map[string]any{"portal_name": map[string]string{"de": "Markenportal"}}}); err != nil ||
+		s.Branding.PortalName["nl"] != "Merkbeeldbank" || s.Branding.PortalName["de"] != "Markenportal" {
+		t.Fatalf("adding a language must keep the others: %v %v", s.Branding.PortalName, err)
+	}
+	if s, err = adm.PatchSettings(ctx, json.RawMessage(`{"branding":{"portal_name":{"nl":null}}}`)); err != nil ||
+		len(s.Branding.PortalName) != 1 || s.Branding.PortalName["de"] != "Markenportal" {
+		t.Fatalf("null for one language removes only that one: %v %v", s.Branding.PortalName, err)
 	}
 	s, err = adm.PatchSettings(ctx, json.RawMessage(`{"branding":{"portal_name":null}}`))
 	if err != nil || s.Branding.PortalName != nil {

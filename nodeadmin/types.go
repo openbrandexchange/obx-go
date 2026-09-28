@@ -112,7 +112,9 @@ type SettingsBranding struct {
 	AccentColor *string           `json:"accent_color,omitempty"`
 	WelcomeText obx.LocalizedText `json:"welcome_text,omitempty"`
 	// PortalName overrides the portal word ("Beeldbank", "Händlerportal" …)
-	// per language. In a PATCH, an empty object or JSON null clears it.
+	// per language. PATCH is a JSON merge patch: send the languages to set;
+	// to remove one, send {"branding":{"portal_name":{"de":null}}} as raw
+	// JSON (PatchSettings accepts a json.RawMessage), or null for all.
 	PortalName obx.LocalizedText `json:"portal_name,omitempty"`
 }
 
