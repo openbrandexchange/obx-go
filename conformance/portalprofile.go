@@ -29,6 +29,47 @@ func init() {
 	register(p, "A-PORT-1", "retailer portal: list, facets, detail, EAN paste, selection, zips, CSV, download job", false, testPortal)
 	register(p, "A-PORT-2", "restricted retailer never sees other brands; originals hidden when not allowed", false, testPortalRestricted)
 	register(p, "A-STAT-1", "retailer downloads appear in stats; admin previews do not", false, testStats)
+	register(p, "A-BRAND-1", "branding.portal_name per language: merge patch sets, null removes a language or all", false, testPortalName)
+}
+
+// testPortalName: the brand's own portal word is stored per language and
+// updated as a JSON merge patch (node-admin.yaml, Settings.branding), and the
+// public branding shows it.
+func testPortalName(t *T) {
+	t.needAdmin("branding settings")
+	patch := func(body string) *nodeadmin.Settings {
+		s, err := t.r.admin.PatchSettings(t.ctx, json.RawMessage(body))
+		t.Check(err, "PATCH settings "+body)
+		return s
+	}
+	public := func() obx.LocalizedText {
+		var b nodeadmin.PublicBranding
+		t.Check(t.r.admin.Call(t.ctx, http.MethodGet, obx.PathAdminAPI+"/public/branding", nil, &b), "public branding")
+		return b.PortalName
+	}
+	defer func() { _, _ = t.r.admin.PatchSettings(t.ctx, json.RawMessage(`{"branding":{"portal_name":null}}`)) }()
+	s := patch(`{"branding":{"portal_name":{"nl":"Merkbeeldbank"}}}`)
+	if got := s.Branding.PortalName; got["nl"] != "Merkbeeldbank" {
+		t.Fatalf("after setting nl: portal_name %v", got)
+	}
+	if got := public(); got["nl"] != "Merkbeeldbank" {
+		t.Errorf("public branding does not show portal_name: %v", got)
+	}
+	s = patch(`{"branding":{"portal_name":{"de":"Markenportal"}}}`)
+	if got := s.Branding.PortalName; got["nl"] != "Merkbeeldbank" || got["de"] != "Markenportal" {
+		t.Errorf("setting de must keep nl (merge patch): %v", got)
+	}
+	s = patch(`{"branding":{"portal_name":{"nl":null}}}`)
+	if got := s.Branding.PortalName; got["nl"] != "" || got["de"] != "Markenportal" {
+		t.Errorf("null for nl must remove only nl: %v", got)
+	}
+	s = patch(`{"branding":{"portal_name":null}}`)
+	if got := s.Branding.PortalName; len(got) != 0 {
+		t.Errorf("null for portal_name must remove the override: %v", got)
+	}
+	if got := public(); len(got) != 0 {
+		t.Errorf("public branding still shows a removed portal_name: %v", got)
+	}
 }
 
 // ---- helpers
