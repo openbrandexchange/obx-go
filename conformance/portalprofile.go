@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
 	"time"
 
@@ -98,16 +99,57 @@ func (t *T) download(c *nodeadmin.Client, path string) (int, http.Header, []byte
 	return status, h, b
 }
 
-func zipNames(t *T, data []byte) []string {
+// zipImages splits a portal zip into its image entries and the rows of its
+// assets.csv (import-format.md §2.3), checking that every image has a row.
+func zipImages(t *T, what string, data []byte) (images []string, rows []map[string]string) {
 	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
-		t.Fatalf("not a zip: %v", err)
+		t.Fatalf("%s is not a zip: %v", what, err)
 	}
-	var out []string
+	var csvData []byte
 	for _, f := range zr.File {
-		out = append(out, f.Name)
+		switch f.Name {
+		case "assets.csv":
+			rc, err := f.Open()
+			t.Check(err, what+": open assets.csv")
+			csvData, _ = io.ReadAll(rc)
+			rc.Close()
+		case "data.csv":
+		default:
+			images = append(images, f.Name)
+		}
 	}
-	return out
+	if csvData == nil {
+		t.Errorf("%s has no assets.csv with the images' rights, embargo and AI provenance", what)
+		return images, nil
+	}
+	recs, err := csv.NewReader(bytes.NewReader(csvData)).ReadAll()
+	if err != nil || len(recs) == 0 {
+		t.Errorf("%s: assets.csv is not a CSV: %v", what, err)
+		return images, nil
+	}
+	for _, rec := range recs[1:] {
+		row := map[string]string{}
+		for i, h := range recs[0] {
+			if i < len(rec) {
+				row[h] = rec[i]
+			}
+		}
+		rows = append(rows, row)
+	}
+	files := map[string]bool{}
+	for _, r := range rows {
+		files[r["file"]] = true
+	}
+	for _, im := range images {
+		if !files[path.Base(im)] {
+			t.Errorf("%s: image %s has no row in assets.csv", what, im)
+		}
+	}
+	if len(rows) != len(images) {
+		t.Errorf("%s: assets.csv has %d rows for %d images", what, len(rows), len(images))
+	}
+	return images, rows
 }
 
 // ---- tests
@@ -569,9 +611,9 @@ func testPortal(t *T) {
 	if status != http.StatusOK || !strings.Contains(h.Get("Content-Disposition"), "attachment") {
 		t.Errorf("product zip: %d %s", status, h.Get("Content-Disposition"))
 	} else {
-		names := zipNames(t, data)
+		names, _ := zipImages(t, "product zip of KO-1005", data)
 		if len(names) != 3 {
-			t.Errorf("product zip of KO-1005 has %d entries, want 3: %v", len(names), names)
+			t.Errorf("product zip of KO-1005 has %d images, want 3: %v", len(names), names)
 		}
 		for _, n := range names {
 			if !strings.HasSuffix(n, "_web.jpg") {
@@ -583,14 +625,39 @@ func testPortal(t *T) {
 	if status != http.StatusOK {
 		t.Errorf("selection zip: %d", status)
 	} else {
-		names := zipNames(t, data)
+		names, _ := zipImages(t, "selection zip", data)
 		if len(names) != 7 {
-			t.Errorf("selection zip has %d entries, want 7", len(names))
+			t.Errorf("selection zip has %d images, want 7", len(names))
 		}
 		for _, n := range names {
 			if !strings.HasPrefix(n, "KO-1001/") && !strings.HasPrefix(n, "KO-1005/") {
 				t.Errorf("selection zip entry %q is not in a folder per style number", n)
 			}
+		}
+	}
+	// The rights, the embargo and the AI provenance travel with the files.
+	for _, c2 := range []struct{ style, file, column, want string }{
+		{"KO-1002", "KO-1002_BLK_2", "embargo_until", "2030-01-01"},
+		{"KO-1002", "KO-1002_BLK_2", "credit", "Photo: Kestrel Studio"},
+		{"KO-1003", "KO-1003_RST_3", "ai_generated", "true"},
+	} {
+		status, _, data = t.download(c, "/portal/products/"+t.productID(c2.style)+"/download.zip?variant=web")
+		if status != http.StatusOK {
+			t.Errorf("product zip of %s: %d", c2.style, status)
+			continue
+		}
+		_, rows := zipImages(t, "product zip of "+c2.style, data)
+		found := false
+		for _, r := range rows {
+			if strings.HasPrefix(r["file"], c2.file+"_") || strings.HasPrefix(r["file"], c2.file+".") {
+				found = true
+				if !strings.HasPrefix(r[c2.column], c2.want) {
+					t.Errorf("assets.csv in the zip of %s: %s of %s is %q, want %s", c2.style, c2.column, r["file"], r[c2.column], c2.want)
+				}
+			}
+		}
+		if !found && rows != nil {
+			t.Errorf("assets.csv in the zip of %s has no row for %s", c2.style, c2.file)
 		}
 	}
 	status, _, data = t.download(c, "/portal/selection/data.csv?delimiter=semicolon")
@@ -638,8 +705,8 @@ func testPortal(t *T) {
 	status, _, data = t.download(c, "/portal/download-jobs/"+job.ID+"/file")
 	if status != http.StatusOK {
 		t.Errorf("download job file: %d", status)
-	} else if names := zipNames(t, data); len(names) < 7 {
-		t.Errorf("download job zip has %d entries, want at least 7", len(names))
+	} else if names, _ := zipImages(t, "download job zip", data); len(names) < 7 {
+		t.Errorf("download job zip has %d images, want at least 7", len(names))
 	}
 	other, _ := t.portalUser("OBX conformance: other retailer", nodeadmin.RetailerInput{})
 	if status, _, _ := t.download(other, "/portal/download-jobs/"+job.ID+"/file"); status != http.StatusNotFound {

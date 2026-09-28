@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"net/http"
+	"path"
 	"sort"
 	"strings"
 	"time"
@@ -389,12 +390,17 @@ func portalVariant(r *http.Request, pc *portalCtx) (string, *obx.Problem) {
 type zipEntry struct {
 	name string
 	data []byte
+	// image describes an image entry for assets.csv (nil for other files).
+	image *canonicalcsv.DownloadImage
 }
 
+// buildZip writes the entries and, when there are images, an assets.csv
+// with their rights, embargo and AI provenance (import-format.md §2.3).
 func buildZip(entries []zipEntry, at time.Time) []byte {
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
 	used := map[string]int{}
+	var images []canonicalcsv.DownloadImage
 	for _, e := range entries {
 		name := e.name
 		if c := used[name]; c > 0 {
@@ -407,6 +413,17 @@ func buildZip(entries []zipEntry, at time.Time) []byte {
 		used[e.name]++
 		fw, _ := zw.CreateHeader(&zip.FileHeader{Name: name, Method: zip.Store, Modified: at})
 		fw.Write(e.data)
+		if e.image != nil {
+			im := *e.image
+			im.File = path.Base(name)
+			images = append(images, im)
+		}
+	}
+	if len(images) > 0 {
+		var csvBuf bytes.Buffer
+		_ = canonicalcsv.WriteDownloadAssets(&csvBuf, images)
+		fw, _ := zw.CreateHeader(&zip.FileHeader{Name: "assets.csv", Method: zip.Deflate, Modified: at})
+		fw.Write(csvBuf.Bytes())
 	}
 	zw.Close()
 	return buf.Bytes()
@@ -422,11 +439,12 @@ func (n *Node) productFiles(p *record, variant, folder string) []zipEntry {
 			continue
 		}
 		b := s.blobs[a.files[variant].SHA256]
-		name := canonicalcsv.RenditionFilename(s.assetRepr(a, nil).Filename, variant)
+		repr := s.assetRepr(a, nil)
+		name := canonicalcsv.RenditionFilename(repr.Filename, variant)
 		if folder != "" {
 			name = safeZipName(folder) + "/" + safeZipName(name)
 		}
-		out = append(out, zipEntry{name: name, data: b.data})
+		out = append(out, zipEntry{name: name, data: b.data, image: &canonicalcsv.DownloadImage{StyleNumber: p.product.StyleNumber, Asset: repr}})
 	}
 	return out
 }
@@ -611,7 +629,7 @@ func (n *Node) handleDownloadJobs(w http.ResponseWriter, r *http.Request, ac *ad
 		files = append(files, n.productFiles(p, in.Variant, p.product.StyleNumber)...)
 	}
 	if includeCSV {
-		files = append(files, zipEntry{name: "products.csv", data: n.exportCSV(r, pc, products)})
+		files = append(files, zipEntry{name: "data.csv", data: n.exportCSV(r, pc, products)})
 	}
 	now := n.now()
 	data := buildZip(files, now)

@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/openbrandexchange/obx-go/canonicalcsv"
 	"github.com/openbrandexchange/obx-go/obx"
@@ -369,5 +370,52 @@ func TestImageNameVectors(t *testing.T) {
 			canonicalcsv.AssetExternalID(n.Style, n.Color, n.Position) != c.ExternalID {
 			t.Errorf("%s: got style %s colour %q position %d role %s view %q id %s", c.Name, n.Style, n.Color, n.Position, n.Role, obx.Str(n.View), canonicalcsv.AssetExternalID(n.Style, n.Color, n.Position))
 		}
+	}
+}
+
+// TestWriteDownloadAssets: the assets.csv of a portal zip (import-format.md
+// §2.3) carries rights, embargo and provenance, formula-escaped, and reads
+// back as an assets.csv.
+func TestWriteDownloadAssets(t *testing.T) {
+	embargo := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
+	credit := "=HYPERLINK(\"x\")"
+	view := "back"
+	nvy := "NVY"
+	images := []canonicalcsv.DownloadImage{
+		{File: "KO-1002_BLK_2_back_web.jpg", StyleNumber: "KO-1002", Asset: obx.Asset{ColorCode: &nvy, Position: 2, Role: "packshot", View: &view,
+			AltText:    obx.LocalizedText{"nl": "Achterkant", "en": "Back"},
+			Rights:     obx.Rights{License: "retailer-use", Channels: []string{"webshop", "social"}, EmbargoUntil: &embargo, Credit: &credit},
+			Provenance: obx.Provenance{AIGenerated: true, Source: "generated", C2PA: "none"}}},
+		{File: "KO-1005_ALL_4_size_chart_web.jpg", StyleNumber: "KO-1005", Asset: obx.Asset{Position: 4, Role: "size_chart", Rights: obx.DefaultRights(), Provenance: obx.DefaultProvenance()}},
+	}
+	var buf bytes.Buffer
+	if err := canonicalcsv.WriteDownloadAssets(&buf, images); err != nil {
+		t.Fatal(err)
+	}
+	af, err := canonicalcsv.ParseAssets(bytes.NewReader(buf.Bytes()), "assets.csv", canonicalcsv.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range af.Problems {
+		t.Errorf("reading it back as an assets.csv: %+v", p)
+	}
+	if len(af.Rows) != 2 {
+		t.Fatalf("rows %d", len(af.Rows))
+	}
+	r := af.Rows[0]
+	if r.Rights == nil || r.Rights.EmbargoUntil == nil || !r.Rights.EmbargoUntil.Equal(embargo) {
+		t.Errorf("embargo did not travel: %+v", r.Rights)
+	}
+	if r.Provenance == nil || r.Provenance.AIGenerated == nil || !*r.Provenance.AIGenerated {
+		t.Errorf("AI label did not travel: %+v", r.Provenance)
+	}
+	if !strings.Contains(buf.String(), "'=HYPERLINK") {
+		t.Errorf("a credit starting with = must be formula-escaped:\n%s", buf.String())
+	}
+	if r.AltText["nl"] != "Achterkant" {
+		t.Errorf("alt text: %v", r.AltText)
+	}
+	if af.Rows[1].ColorCode == nil || *af.Rows[1].ColorCode != "" {
+		t.Errorf("a colourless image has an empty color_code: %v", af.Rows[1].ColorCode)
 	}
 }

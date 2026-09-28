@@ -21,6 +21,9 @@ it reads stay compatible within a minor version.
 - The mock node follows import rule 9: a column that a products.csv does not have leaves that
   field of an existing product or variant as it is (texts per language). New conformance check
   I-IMP-6. `canonicalcsv.ProductsFile.Present` says which columns a file has.
+- Portal download zips hold an `assets.csv` (spec import-format.md §2.3): the mock writes it,
+  `canonicalcsv.WriteDownloadAssets` builds it, and conformance A-PORT-1 requires one row per image
+  with the embargo and AI label. The mock's background download names its article data `data.csv`.
 - The shared filename test vectors: `obx-conformance` and the mock read image names as
   the specification's `fixtures/expected/image-filenames.json` says.
 
