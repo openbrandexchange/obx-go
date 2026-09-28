@@ -351,7 +351,7 @@ type ImportRun struct {
 	Files         []ImportRunFile  `json:"files"`
 	Counts        ImportCounts     `json:"counts"`
 	Error         *Problem         `json:"error"`
-	ErrorsPreview []ImportRowError `json:"errors_preview"`
+	ErrorsPreview []ImportRowError `json:"errors_preview,omitempty"`
 }
 
 // ImportOptions is the `options` part of POST /imports.
