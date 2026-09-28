@@ -109,6 +109,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: go-licenses (the before-hook packs third-party licence files)
+        run: go install github.com/google/go-licenses/v2@v2.0.1
       - name: Binaries for every release platform
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -133,6 +135,6 @@ jobs:
           govulncheck ./...
       - name: Licenses of dependencies (Apache-2.0 compatible only)
         run: |
-          go install github.com/google/go-licenses/v2@latest
+          go install github.com/google/go-licenses/v2@v2.0.1
           GOROOT=$(go env GOROOT) go-licenses check ./... --allowed_licenses=Apache-2.0,BSD-2-Clause,BSD-3-Clause,MIT,ISC
           PATH="$(go env GOPATH)/bin:$PATH" scripts/third-party-licenses.sh

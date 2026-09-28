@@ -36,7 +36,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - uses: anchore/sbom-action/download-syft@v0
       - name: go-licenses (third-party licence files for the archives)
-        run: go install github.com/google/go-licenses/v2@latest
+        run: go install github.com/google/go-licenses/v2@v2.0.1
       - uses: goreleaser/goreleaser-action@v6
         with:
           version: "~> v2"

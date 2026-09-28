@@ -25,7 +25,7 @@ code=INTEROP-SETUP-1
 secret=interop-only-secret-key-0123456789abcdef
 pids=()
 
-# shellcheck disable=SC2329 # called by the EXIT trap
+# shellcheck disable=SC2317,SC2329 # called by the EXIT trap (SC2317 on shellcheck < 0.10)
 cleanup() {
   if [ "${KEEP:-0}" != 1 ]; then
     for p in "${pids[@]}"; do kill "$p" 2>/dev/null || true; done
