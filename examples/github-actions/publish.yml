@@ -1,5 +1,5 @@
 # .github/workflows/publish.yml in the repository that holds your exports.
-# Store OBX_URL and OBX_TOKEN (an automatic upload key) as repository secrets.
+# Store OBX_URL and OBX_TOKEN (an access key: Automatic upload → Access keys in your portal) as repository secrets.
 name: Publish product content
 on:
   push:

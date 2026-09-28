@@ -9,7 +9,7 @@ Wants=network-online.target
 
 [Service]
 Environment=OBX_URL=https://brands.kestrel.example
-# Put the upload key in a file only root can read: OBX_TOKEN=obxi_…
+# Put the access key in a file only root can read: OBX_TOKEN=obxi_…
 EnvironmentFile=/etc/obx/token.env
 ExecStart=/usr/local/bin/obx watch /data/outbox
 Restart=always

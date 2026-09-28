@@ -1,7 +1,7 @@
 # docker compose up -d: publish everything that lands in ./outbox.
 services:
   obx-watch:
-    image: ghcr.io/openbrandexchange/obx:latest
+    image: ghcr.io/openbrandexchange/obx:v0
     command: ["watch", "/outbox"]
     restart: unless-stopped
     environment:
