@@ -100,7 +100,7 @@ func cmdLogin(ctx context.Context, args []string, e *env) error {
 		}
 		adm.Logout(ctx)
 		tok = created.Secret
-		fmt.Fprintf(e.stderr, "Created upload key %q (you can revoke it in the portal under Automation).\n", created.Token.Name)
+		fmt.Fprintf(e.stderr, "Created upload key %q (you can switch it off in the portal under Automatic upload > Access keys).\n", created.Token.Name)
 	}
 	ic, err := e.ingestClient(base, tok)
 	if err != nil {

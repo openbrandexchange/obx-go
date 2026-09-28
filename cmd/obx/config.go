@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -145,9 +146,12 @@ func isTerminal(f *os.File) bool { return term.IsTerminal(int(f.Fd())) }
 func readPassword(prompt string) (string, error) {
 	fmt.Fprint(os.Stderr, prompt)
 	if !isTerminal(os.Stdin) {
-		var s string
-		_, err := fmt.Fscanln(os.Stdin, &s)
-		return s, err
+		// A whole line: passphrases contain spaces ("correct horse battery staple").
+		line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+		if err != nil && !(errors.Is(err, io.EOF) && line != "") {
+			return "", err
+		}
+		return strings.TrimRight(line, "\r\n"), nil
 	}
 	b, err := term.ReadPassword(int(os.Stdin.Fd()))
 	fmt.Fprintln(os.Stderr)
