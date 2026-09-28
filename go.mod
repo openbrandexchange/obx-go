@@ -6,3 +6,5 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	golang.org/x/text v0.42.0
 )
+
+require golang.org/x/image v0.46.0
