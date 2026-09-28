@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openbrandexchange/obx-go/internal/safedial"
 	"github.com/openbrandexchange/obx-go/obx"
 	"github.com/openbrandexchange/obx-go/webhook"
 )
@@ -77,38 +78,16 @@ func (n *Node) checkOutboundURL(raw string, schemes ...string) *obx.Problem {
 		}
 	}
 	for _, ip := range ips {
-		if reason := unsafeIP(ip, n.opts.AllowPrivateURLs); reason != "" {
+		if reason := safedial.Reason(ip, n.opts.AllowPrivateURLs); reason != "" {
 			return problemf(obx.ErrUnsafeURL, "%s points to a %s address", host, reason).WithField("/url", obx.ErrUnsafeURL, reason+" address")
 		}
 	}
 	return nil
 }
 
-var cgnat = &net.IPNet{IP: net.IPv4(100, 64, 0, 0), Mask: net.CIDRMask(10, 32)}
-
-// unsafeIP returns why an address is refused, or "". Link-local addresses
-// (including cloud metadata) are refused even when private URLs are allowed.
-func unsafeIP(ip net.IP, allowPrivate bool) string {
-	switch {
-	case ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast():
-		return "link-local"
-	case ip.IsUnspecified():
-		return "unspecified"
-	case ip.IsMulticast():
-		return "multicast"
-	case allowPrivate:
-		return ""
-	case ip.IsLoopback():
-		return "loopback"
-	case ip.IsPrivate():
-		return "private"
-	case cgnat.Contains(ip):
-		return "shared (CGNAT)"
-	}
-	return ""
-}
-
-// webhookHTTP returns the client used for deliveries: no redirects, 10 s.
+// webhookHTTP returns the client used for deliveries and scheduled imports:
+// no redirects, 10 s, and every connection checked on its resolved address
+// (the address is pinned, so DNS rebinding cannot reach a private address).
 func (n *Node) webhookHTTP() *http.Client {
 	n.knobs.mu.Lock()
 	c := n.knobs.webhookClient
@@ -116,7 +95,7 @@ func (n *Node) webhookHTTP() *http.Client {
 	if c != nil {
 		return c
 	}
-	return &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	return &http.Client{Timeout: 10 * time.Second, Transport: safedial.Transport(n.opts.AllowPrivateURLs), CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 }
 
 // send delivers one event synchronously (without holding n.mu) and returns
