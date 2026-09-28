@@ -2,6 +2,7 @@ package conformance_test
 
 import (
 	"context"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -47,5 +48,23 @@ func TestMockPassesAll(t *testing.T) {
 				t.Fatalf("the mock must pass everything: %d failed, %d skipped", rep.Failed, rep.Skipped)
 			}
 		})
+	}
+}
+
+// A node that sends CORS headers on its APIs fails S-HDR-1: only the
+// discovery document may be read by other websites.
+func TestCORSOutsideDiscoveryFails(t *testing.T) {
+	n := mock.New(mock.Options{AllowPrivateURLs: true})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		n.ServeHTTP(w, r)
+	}))
+	defer srv.Close()
+	rep, err := conformance.Run(context.Background(), []string{conformance.ProfileSecurity}, conformance.Config{BaseURL: srv.URL, SetupCode: n.SetupCode(), Only: []string{"S-HDR-1"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Results) != 1 || rep.Results[0].Status != conformance.StatusFail || !strings.Contains(strings.Join(rep.Results[0].Messages, "\n"), "only /.well-known/obx may send CORS headers") {
+		t.Fatalf("S-HDR-1 with CORS on every API: %+v", rep.Results)
 	}
 }

@@ -24,7 +24,7 @@ const ProfileSecurity = "security"
 
 func init() {
 	p := ProfileSecurity
-	register(p, "S-HDR-1", "admin UI and file downloads carry the security headers of security.md §4", false, testSecurityHeaders)
+	register(p, "S-HDR-1", "admin UI and file downloads carry the security headers of security.md §4; CORS only on discovery", false, testSecurityHeaders)
 	register(p, "S-TOK-1", "upload keys, access tokens and sessions only work on their own API", true, testTokenSeparation)
 	register(p, "S-SESS-1", "a logged-out session cookie is dead; retailers cannot use admin endpoints", true, testSessionEnd)
 	register(p, "S-ISO-1", "exports, webhooks and access requests are bound to their owner (404 for others)", true, testOwnership)
@@ -112,6 +112,35 @@ func testSecurityHeaders(t *T) {
 	c, _ := t.portalUser("OBX security: headers", nodeadmin.RetailerInput{})
 	status, h, _ := t.download(c, "/portal/assets/"+t.assetID("KO-1001_NVY_1")+"/download?variant=web")
 	checkContentHeaders(t, "portal image download", &response{status: status, header: h}, true)
+	checkNoCORS(t)
+}
+
+// checkNoCORS: only the discovery document is CORS-enabled (protocol.md §2).
+// The protocol, ingest and admin APIs never tell a browser that a foreign
+// page's script may read their answers.
+func checkNoCORS(t *T) {
+	withOrigin := func(h http.Header) http.Header {
+		if h == nil {
+			h = http.Header{}
+		}
+		h.Set("Origin", "https://other-site.example")
+		return h
+	}
+	check := func(what, u string, h http.Header) {
+		res := t.rawGet(u, withOrigin(h))
+		if v := res.header.Get("Access-Control-Allow-Origin"); v != "" {
+			t.Errorf("%s answers another website with Access-Control-Allow-Origin: %s; only /.well-known/obx may send CORS headers", what, v)
+		}
+	}
+	if t.r.full != nil {
+		tok, err := t.r.full.Token(t.ctx)
+		t.Check(err, "token")
+		check("the protocol API (/changes)", t.r.cfg.BaseURL+obx.PathAPIBase+"/changes?limit=1", bearerHeader(tok))
+	}
+	if t.r.cfg.IngestToken != "" {
+		check("the Ingest API", t.r.cfg.BaseURL+obx.PathIngest, bearerHeader(t.r.cfg.IngestToken))
+	}
+	check("the admin API", t.r.cfg.AdminURL+obx.PathAdminAPI+"/session", nil)
 }
 
 func cspDirective(csp, name string) string {
