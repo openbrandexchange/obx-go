@@ -164,7 +164,7 @@ func Generate(original []byte) (*Set, error) {
 	src = applyOrientation(src, jpegOrientation(original))
 	b := src.Bounds()
 	ww, wh := Fit(b.Dx(), b.Dy(), WebMaxSide)
-	web := resizeOnWhite(src, ww, wh)
+	web := scale(flatten(src), ww, wh)
 	set := &Set{}
 	if err := encode(&set.Web, "web", web, WebQuality); err != nil {
 		return nil, err
@@ -181,24 +181,34 @@ func Generate(original []byte) (*Set, error) {
 		return nil, err
 	}
 	tw, th := Fit(b.Dx(), b.Dy(), ThumbMaxSide)
-	thumb := resizeOnWhite(src, tw, th)
+	thumb := scale(web, tw, th)
 	if err := encode(&set.Thumb, "thumb", thumb, ThumbQuality); err != nil {
 		return nil, err
 	}
 	return set, nil
 }
 
-// resizeOnWhite flattens src on white and scales it to w×h.
-func resizeOnWhite(src image.Image, w, h int) *image.RGBA {
+// flatten draws src on white (transparency becomes white).
+func flatten(src image.Image) *image.RGBA {
 	b := src.Bounds()
 	flat := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
-	draw.Draw(flat, flat.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
-	draw.Draw(flat, flat.Bounds(), src, b.Min, draw.Over)
-	if w == b.Dx() && h == b.Dy() {
+	if o, ok := src.(interface{ Opaque() bool }); ok && o.Opaque() {
+		draw.Draw(flat, flat.Bounds(), src, b.Min, draw.Src)
 		return flat
 	}
+	draw.Draw(flat, flat.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
+	draw.Draw(flat, flat.Bounds(), src, b.Min, draw.Over)
+	return flat
+}
+
+// scale resizes an opaque image to w×h (Catmull-Rom); same size returns img.
+func scale(img *image.RGBA, w, h int) *image.RGBA {
+	b := img.Bounds()
+	if w == b.Dx() && h == b.Dy() {
+		return img
+	}
 	dst := image.NewRGBA(image.Rect(0, 0, w, h))
-	draw.CatmullRom.Scale(dst, dst.Bounds(), flat, flat.Bounds(), draw.Src, nil)
+	draw.CatmullRom.Scale(dst, dst.Bounds(), img, b, draw.Src, nil)
 	return dst
 }
 
