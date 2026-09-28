@@ -91,9 +91,10 @@ type pullMirror struct {
 	index struct {
 		Files map[string][]pulledFile `json:"files"` // asset id → files
 	}
-	seen    map[string]bool
-	changed bool
-	stats   struct{ upserts, deletes, downloads, kept int }
+	seen     map[string]bool
+	changed  bool
+	reported bool // said something at least once, so a run without changes is not silent
+	stats    struct{ upserts, deletes, downloads, kept int }
 }
 
 type pulledFile struct {
@@ -163,6 +164,10 @@ func (m *pullMirror) handle(ctx context.Context, ev client.Event) error {
 		m.sweep()
 		m.seen = nil
 	case client.EventCaughtUp:
+		if !m.changed && !m.reported {
+			fmt.Fprintln(m.e.stdout, "Up to date: nothing changed since the last pull.")
+		}
+		m.reported = true
 		if m.changed {
 			fmt.Fprintf(m.e.stdout, "Up to date: %d updated, %d removed, %d images downloaded, %d images already present.\n", m.stats.upserts, m.stats.deletes, m.stats.downloads, m.stats.kept)
 			m.stats = struct{ upserts, deletes, downloads, kept int }{}

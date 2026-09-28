@@ -241,8 +241,8 @@ func TestPull(t *testing.T) {
 		t.Fatalf("%d product files", len(products))
 	}
 	code, stdout, _ = h.run("pull", srv.URL, "--out", out, "--renditions", "web,original")
-	if code != 0 || strings.Contains(stdout, "downloaded") && !strings.Contains(stdout, "0 images downloaded") {
-		t.Fatalf("second pull downloaded again: %s", stdout)
+	if code != 0 || !strings.Contains(stdout, "nothing changed") {
+		t.Fatalf("second pull should download nothing and say so: %s", stdout)
 	}
 	ic, _ := ingest.New(srv.URL, creds.IngestToken)
 	if _, err := ic.Unpublish(context.Background(), obx.KindProduct, "KO-1006"); err != nil {
