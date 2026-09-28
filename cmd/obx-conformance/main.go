@@ -40,6 +40,8 @@ Usage:
   obx-conformance <profile> --url <node> [options]   profile: protocol, ingest, portal, security or all
   obx-conformance mock [--addr :8080]                run the in-memory mock node
   obx-conformance list                               list all tests
+  obx-conformance report [--format text|markdown] <report.json>
+                                                     show a saved --json report for people
   obx-conformance version
 
 Credentials (give what you have; with admin credentials or a setup code the
@@ -91,6 +93,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, getenv fu
 		return 0
 	case "mock":
 		return runMock(ctx, args[1:], stdout, stderr, getenv)
+	case "report":
+		return runReport(args[1:], stdout, stderr)
 	case conformance.ProfileProtocol, conformance.ProfileIngest, conformance.ProfilePortal, conformance.ProfileSecurity, conformance.ProfileAll:
 		return runSuite(ctx, args[0], args[1:], stdout, stderr, getenv)
 	}
@@ -248,11 +252,47 @@ Try:
 		<-ctx.Done()
 		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		srv.Shutdown(sctx)
+		_ = srv.Shutdown(sctx)
 	}()
 	if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		fmt.Fprintf(stderr, "obx-conformance mock: %v\n", err)
 		return 2
+	}
+	return 0
+}
+
+// runReport renders a saved --json report as text or Markdown.
+func runReport(args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("report", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	format := fs.String("format", "text", "text or markdown")
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
+	if fs.NArg() != 1 || (*format != "text" && *format != "markdown") {
+		fmt.Fprintln(stderr, "usage: obx-conformance report [--format text|markdown] <report.json>")
+		return 2
+	}
+	b, err := os.ReadFile(fs.Arg(0))
+	if err != nil {
+		fmt.Fprintf(stderr, "obx-conformance: %v\n", err)
+		return 2
+	}
+	var rep conformance.Report
+	if err := json.Unmarshal(b, &rep); err != nil || rep.SpecCommit == "" {
+		fmt.Fprintf(stderr, "obx-conformance: %s is not a report written with --json\n", fs.Arg(0))
+		return 2
+	}
+	if *format == "markdown" {
+		printMarkdown(stdout, &rep)
+	} else {
+		printReport(stdout, &rep)
+	}
+	if !rep.OK() {
+		return 1
 	}
 	return 0
 }

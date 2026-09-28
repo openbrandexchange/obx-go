@@ -1,0 +1,65 @@
+name: Open Brand Exchange conformance
+description: Check a running portal against the Open Brand Exchange specification with obx-conformance and publish the report in the job summary.
+author: Open Brand Exchange Foundation (in formation)
+branding:
+  icon: check-circle
+  color: blue
+
+inputs:
+  url:
+    description: Address of the portal under test, for example http://127.0.0.1:8080 (start it in an earlier step).
+    required: true
+  profile:
+    description: "Profile: protocol, ingest, portal, security or all."
+    required: false
+    default: all
+  setup-code:
+    description: First-run setup code of a fresh portal (the reference run for "all").
+    required: false
+    default: ""
+  admin-user:
+    description: Admin e-mail of an already set-up portal (instead of setup-code).
+    required: false
+    default: ""
+  admin-password:
+    description: Admin password (store it as a secret).
+    required: false
+    default: ""
+  args:
+    description: More obx-conformance options, for example "--rate-limit-test" or "--only P-FEED".
+    required: false
+    default: ""
+
+outputs:
+  passed:
+    description: Number of passed checks.
+    value: ${{ steps.run.outputs.passed }}
+  failed:
+    description: Number of failed checks.
+    value: ${{ steps.run.outputs.failed }}
+  report:
+    description: Path of the JSON report.
+    value: ${{ steps.run.outputs.report }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: ${{ github.action_path }}/../go.mod
+        cache-dependency-path: ${{ github.action_path }}/../go.sum
+    - name: Build obx-conformance
+      shell: bash
+      working-directory: ${{ github.action_path }}/..
+      run: go build -o "$RUNNER_TEMP/obx-conformance" ./cmd/obx-conformance
+    - name: Run obx-conformance
+      id: run
+      shell: bash
+      env:
+        IN_URL: ${{ inputs.url }}
+        IN_PROFILE: ${{ inputs.profile }}
+        OBX_SETUP_CODE: ${{ inputs.setup-code }}
+        IN_ADMIN_USER: ${{ inputs.admin-user }}
+        IN_ADMIN_PASSWORD: ${{ inputs.admin-password }}
+        IN_ARGS: ${{ inputs.args }}
+      run: bash "${{ github.action_path }}/run.sh"

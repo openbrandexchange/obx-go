@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -90,5 +92,31 @@ func TestPairFlagsAndMarkdown(t *testing.T) {
 	errb.Reset()
 	if code := run(context.Background(), []string{"protocol", "--url", srv.URL, "--client", "no-colon"}, &out, &errb, noEnv); code != 2 || !strings.Contains(errb.String(), "id:secret") {
 		t.Fatalf("bad --client: %d %s", code, errb.String())
+	}
+}
+
+// A saved --json report can be shown for people later.
+func TestReportFromJSON(t *testing.T) {
+	n := mock.New(mock.Options{Fixtures: true})
+	srv := httptest.NewServer(n)
+	defer srv.Close()
+	c := n.Credentials()
+	var out, errb bytes.Buffer
+	if code := run(context.Background(), []string{"protocol", "--url", srv.URL, "--admin-user", c.AdminEmail, "--admin-password", c.AdminPassword, "--only", "P-DISC", "--json"}, &out, &errb, noEnv); code != 0 {
+		t.Fatalf("run: %d %s", code, errb.String())
+	}
+	file := filepath.Join(t.TempDir(), "report.json")
+	os.WriteFile(file, out.Bytes(), 0o644)
+	out.Reset()
+	if code := run(context.Background(), []string{"report", "--format", "markdown", file}, &out, &errb, noEnv); code != 0 || !strings.Contains(out.String(), "| pass | P-DISC-1 |") {
+		t.Fatalf("markdown from json: %d %s", code, out.String())
+	}
+	out.Reset()
+	if code := run(context.Background(), []string{"report", file}, &out, &errb, noEnv); code != 0 || !strings.Contains(out.String(), "Open Brand Exchange conformance report") {
+		t.Fatalf("text from json: %d %s", code, out.String())
+	}
+	os.WriteFile(file, []byte(`{"hello": 1}`), 0o644)
+	if code := run(context.Background(), []string{"report", file}, &out, &errb, noEnv); code != 2 {
+		t.Fatalf("not a report: %d", code)
 	}
 }
