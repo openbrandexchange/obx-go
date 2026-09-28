@@ -160,6 +160,10 @@ obx-conformance list                                                         # a
 
 Profiles: `protocol` (read side, normative), `ingest` (write side, normative), `portal` (Node Admin + Portal API used by the shared admin UI) and `all`. Results are reported per test id (see the spec's [conformance.md](https://github.com/openbrandexchange/spec/blob/main/docs/conformance.md)) as text or `--json`. Exit code `0` = every required test passed, `1` = a required test failed, `2` = the suite could not run. With admin credentials or a setup code the suite creates its own retailers, API keys and upload keys. To test webhook delivery to a local receiver, run the node with `OBX_ALLOW_PRIVATE_URLS=true`.
 
+### Interop: do all portals answer the same?
+
+`scripts/interop.sh` runs the same automation against node-go, node-php and node-ts (sibling checkouts; needs Go, Docker and Bun): first-run setup, `obx push` of the Kestrel fixtures, `obx pull`, then `obx-interop trace`, which records the change feed, every product and the sha256 of every file and replays the spec's ingest script (an image replacement, an unpublish, deletes) step by step, and finally an incremental and a fresh `obx pull`. Node ids, timestamps, cursors and signed URLs are replaced by stable labels such as `product:KO-1001` before `obx-interop compare` lists every difference. Originals must be byte-identical; web, square and thumb come from each portal's own image library, so for those only the dimensions must match. `NODES=go,ts` runs a subset.
+
 The spec's schemas and fixtures are embedded (`specdata/`, refreshed with `scripts/sync-spec.sh ../spec`); `--fixtures` points at another copy.
 
 ## Building
@@ -168,7 +172,7 @@ Go 1.26 or newer.
 
 ```sh
 go test ./...                     # unit, HTTP and CLI tests; includes a full conformance run against the mock
-go build ./cmd/obx ./cmd/obx-conformance
+go build ./cmd/obx ./cmd/obx-conformance ./cmd/obx-interop
 docker build -t obx .             # the container image
 goreleaser release --snapshot --clean   # release archives (obx_linux_amd64.tar.gz, …) in dist/
 ```
