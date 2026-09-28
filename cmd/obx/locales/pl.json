@@ -179,6 +179,7 @@
   "status.col_upload": "Przesyłka",
   "status.col_when": "Kiedy",
   "status.details_hint": "Szczegóły i problemy: obx status --job <upload>",
+  "status.dry_run": "próba",
   "status.flag_job": "pokazać jedną przesyłkę ze wszystkimi problemami",
   "status.flag_limit": "ile ostatnich przesyłek pokazać",
   "status.hours_ago": "{n} godz. temu",

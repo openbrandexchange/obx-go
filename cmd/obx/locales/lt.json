@@ -179,6 +179,7 @@
   "status.col_upload": "Įkėlimas",
   "status.col_when": "Kada",
   "status.details_hint": "Išsami informacija ir problemos: obx status --job <upload>",
+  "status.dry_run": "bandomasis paleidimas",
   "status.flag_job": "parodyti vieną įkėlimą su visomis jo problemomis",
   "status.flag_limit": "kiek paskutinių įkėlimų rodyti",
   "status.hours_ago": "prieš {n} val.",

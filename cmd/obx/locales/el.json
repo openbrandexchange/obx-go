@@ -179,6 +179,7 @@
   "status.col_upload": "Μεταφόρτωση",
   "status.col_when": "Πότε",
   "status.details_hint": "Λεπτομέρειες και προβλήματα: obx status --job <upload>",
+  "status.dry_run": "δοκιμή",
   "status.flag_job": "εμφάνιση μίας μεταφόρτωσης με όλα τα προβλήματά της",
   "status.flag_limit": "πόσες πρόσφατες μεταφορτώσεις να εμφανιστούν",
   "status.hours_ago": "πριν από {n} ώρ.",

@@ -13,6 +13,8 @@ it reads stay compatible within a minor version.
 - `obx push --csv products.csv` also sends the `assets.csv` in the same folder when
   `--assets-csv` is not given, as a folder or package push already did. Before, the
   embargo dates, rights and AI labels in it silently fell back to the portal defaults.
+- `obx status` labels a `--dry-run` upload as a dry run; it read like an upload that had
+  changed the catalog.
 
 ## [0.1.0] - unreleased
 

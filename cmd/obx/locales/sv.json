@@ -179,6 +179,7 @@
   "status.col_upload": "Uppladdning",
   "status.col_when": "När",
   "status.details_hint": "Detaljer och problem: obx status --job <upload>",
+  "status.dry_run": "provkörning",
   "status.flag_job": "visa en uppladdning med alla dess problem",
   "status.flag_limit": "hur många senaste uppladdningar som visas",
   "status.hours_ago": "för {n} h sedan",

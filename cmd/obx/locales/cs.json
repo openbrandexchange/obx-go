@@ -179,6 +179,7 @@
   "status.col_upload": "Nahrání",
   "status.col_when": "Kdy",
   "status.details_hint": "Podrobnosti a problémy: obx status --job <upload>",
+  "status.dry_run": "zkouška",
   "status.flag_job": "ukázat jedno nahrání se všemi jeho problémy",
   "status.flag_limit": "kolik posledních nahrání ukázat",
   "status.hours_ago": "před {n} h",

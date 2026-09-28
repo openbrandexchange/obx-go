@@ -179,6 +179,7 @@
   "status.col_upload": "Nahrávanie",
   "status.col_when": "Kedy",
   "status.details_hint": "Podrobnosti a problémy: obx status --job <upload>",
+  "status.dry_run": "skúška",
   "status.flag_job": "ukázať jedno nahrávanie so všetkými jeho problémami",
   "status.flag_limit": "koľko posledných nahrávaní ukázať",
   "status.hours_ago": "pred {n} h",

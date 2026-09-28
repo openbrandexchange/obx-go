@@ -179,6 +179,7 @@
   "status.col_upload": "Caricamento",
   "status.col_when": "Quando",
   "status.details_hint": "Dettagli e problemi: obx status --job <upload>",
+  "status.dry_run": "prova",
   "status.flag_job": "mostrare un caricamento con tutti i suoi problemi",
   "status.flag_limit": "quanti caricamenti recenti mostrare",
   "status.hours_ago": "{n} h fa",

@@ -179,6 +179,7 @@
   "status.col_upload": "Lataus",
   "status.col_when": "Milloin",
   "status.details_hint": "Tiedot ja ongelmat: obx status --job <upload>",
+  "status.dry_run": "koeajo",
   "status.flag_job": "näytä yksi lataus kaikkine ongelmineen",
   "status.flag_limit": "kuinka monta viimeisintä latausta näytetään",
   "status.hours_ago": "{n} h sitten",

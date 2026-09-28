@@ -179,6 +179,7 @@
   "status.col_upload": "Feltöltés",
   "status.col_when": "Mikor",
   "status.details_hint": "Részletek és problémák: obx status --job <upload>",
+  "status.dry_run": "próbafuttatás",
   "status.flag_job": "egy feltöltés megjelenítése minden problémájával",
   "status.flag_limit": "hány legutóbbi feltöltést mutasson",
   "status.hours_ago": "{n} órája",

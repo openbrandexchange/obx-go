@@ -179,6 +179,7 @@
   "status.col_upload": "Üleslaadimine",
   "status.col_when": "Millal",
   "status.details_hint": "Üksikasjad ja probleemid: obx status --job <upload>",
+  "status.dry_run": "proovikäivitus",
   "status.flag_job": "näita ühte üleslaadimist kõigi selle probleemidega",
   "status.flag_limit": "mitu viimast üleslaadimist näidata",
   "status.hours_ago": "{n} h tagasi",

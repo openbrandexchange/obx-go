@@ -179,6 +179,7 @@
   "status.col_upload": "Subida",
   "status.col_when": "Cuándo",
   "status.details_hint": "Detalles y problemas: obx status --job <upload>",
+  "status.dry_run": "prueba",
   "status.flag_job": "mostrar una subida con todos sus problemas",
   "status.flag_limit": "cuántas subidas recientes mostrar",
   "status.hours_ago": "hace {n} h",

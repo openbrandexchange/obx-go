@@ -179,6 +179,7 @@
   "status.col_upload": "Envio",
   "status.col_when": "Quando",
   "status.details_hint": "Detalhes e problemas: obx status --job <upload>",
+  "status.dry_run": "ensaio",
   "status.flag_job": "mostrar um envio com todos os seus problemas",
   "status.flag_limit": "quantos envios recentes mostrar",
   "status.hours_ago": "há {n} h",

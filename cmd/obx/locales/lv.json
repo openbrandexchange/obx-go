@@ -179,6 +179,7 @@
   "status.col_upload": "Augšupielāde",
   "status.col_when": "Kad",
   "status.details_hint": "Sīkāka informācija un problēmas: obx status --job <upload>",
+  "status.dry_run": "izmēģinājums",
   "status.flag_job": "parādīt vienu augšupielādi ar visām tās problēmām",
   "status.flag_limit": "cik pēdējās augšupielādes parādīt",
   "status.hours_ago": "pirms {n} h",

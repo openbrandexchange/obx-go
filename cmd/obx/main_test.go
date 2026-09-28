@@ -601,3 +601,24 @@ func TestProgressBar(t *testing.T) {
 		t.Fatalf("a log gets the first and the last line only within 5 s, got %d lines: %q", lines, log.String())
 	}
 }
+
+// obx status tells a check-only run apart from a real upload.
+func TestStatusMarksDryRuns(t *testing.T) {
+	h, tok := freshNode(t, mock.Options{})
+	dir := fixtureFolder(t)
+	if code, out, errOut := h.run("push", dir, "--url", h.srv.URL, "--token", tok, "--dry-run"); code != 0 {
+		t.Fatalf("dry run: %d\n%s\n%s", code, out, errOut)
+	}
+	if code, out, errOut := h.run("push", dir, "--url", h.srv.URL, "--token", tok); code != 0 {
+		t.Fatalf("push: %d\n%s\n%s", code, out, errOut)
+	}
+	code, out, _ := h.run("status", "--url", h.srv.URL, "--token", tok)
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if code != 0 || len(lines) < 3 {
+		t.Fatalf("status: %d\n%s", code, out)
+	}
+	// Newest first: the real push, then the dry run.
+	if strings.Contains(lines[1], "(dry run)") || !strings.Contains(lines[2], "(dry run)") {
+		t.Fatalf("dry run not labelled:\n%s", out)
+	}
+}

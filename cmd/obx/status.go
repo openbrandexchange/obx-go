@@ -54,6 +54,10 @@ func defineStatus(e *env, fs *flag.FlagSet) func(context.Context, []string) (int
 				if c.Errors > 0 {
 					result += " · " + e.t("count.problems", "n", c.Errors)
 				}
+				// A --dry-run changed nothing; without the label it reads like a real upload.
+				if j.ImportRun.DryRun {
+					result += " (" + e.t("status.dry_run") + ")"
+				}
 			} else if j.Summary != nil {
 				result = strings.Join([]string{e.t("count.new", "n", j.Summary.Created), e.t("count.updated", "n", j.Summary.Updated),
 					e.t("count.unchanged", "n", j.Summary.Unchanged), e.t("count.problems", "n", j.Summary.Errors)}, " · ")
@@ -155,6 +159,7 @@ var _ = register(map[string]string{
 	"status.col_status":    "Status",
 	"status.col_result":    "Result",
 	"status.details_hint":  "Details and problems: obx status --job <upload>",
+	"status.dry_run":       "dry run",
 	"status.job_head":      "Upload {job}: {status}, started {time}",
 	"status.problem":       "problem",
 	"status.warning":       "warning",

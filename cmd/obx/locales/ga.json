@@ -179,6 +179,7 @@
   "status.col_upload": "Uaslódáil",
   "status.col_when": "Cathain",
   "status.details_hint": "Sonraí agus fadhbanna: obx status --job <upload>",
+  "status.dry_run": "triail",
   "status.flag_job": "taispeáin uaslódáil amháin lena cuid fadhbanna go léir",
   "status.flag_limit": "cé mhéad de na huaslódálacha is déanaí a thaispeánfar",
   "status.hours_ago": "{n} u ó shin",

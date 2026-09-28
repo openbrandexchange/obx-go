@@ -179,6 +179,7 @@
   "status.col_upload": "Nalaganje",
   "status.col_when": "Kdaj",
   "status.details_hint": "Podrobnosti in težave: obx status --job <upload>",
+  "status.dry_run": "poskus",
   "status.flag_job": "pokazati eno nalaganje z vsemi težavami",
   "status.flag_limit": "koliko zadnjih nalaganj pokazati",
   "status.hours_ago": "pred {n} h",

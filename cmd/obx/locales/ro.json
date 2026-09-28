@@ -179,6 +179,7 @@
   "status.col_upload": "Încărcare",
   "status.col_when": "Când",
   "status.details_hint": "Detalii și probleme: obx status --job <upload>",
+  "status.dry_run": "probă",
   "status.flag_job": "arată o încărcare cu toate problemele ei",
   "status.flag_limit": "câte încărcări recente se arată",
   "status.hours_ago": "acum {n} h",

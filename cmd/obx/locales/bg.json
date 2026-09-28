@@ -179,6 +179,7 @@
   "status.col_upload": "Качване",
   "status.col_when": "Кога",
   "status.details_hint": "Подробности и проблеми: obx status --job <upload>",
+  "status.dry_run": "проба",
   "status.flag_job": "показва едно качване с всичките му проблеми",
   "status.flag_limit": "колко последни качвания да се покажат",
   "status.hours_ago": "преди {n} ч",

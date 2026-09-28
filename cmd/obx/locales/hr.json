@@ -179,6 +179,7 @@
   "status.col_upload": "Učitavanje",
   "status.col_when": "Kada",
   "status.details_hint": "Pojedinosti i problemi: obx status --job <upload>",
+  "status.dry_run": "proba",
   "status.flag_job": "pokazati jedno učitavanje sa svim njegovim problemima",
   "status.flag_limit": "koliko nedavnih učitavanja prikazati",
   "status.hours_ago": "prije {n} h",

@@ -179,6 +179,7 @@
   "status.col_upload": "Tlugħ",
   "status.col_when": "Meta",
   "status.details_hint": "Dettalji u problemi: obx status --job <upload>",
+  "status.dry_run": "prova",
   "status.flag_job": "uri tlugħ wieħed bil-problemi kollha tiegħu",
   "status.flag_limit": "kemm tlugħ riċenti jintwerew",
   "status.hours_ago": "{n} siegħa ilu",
