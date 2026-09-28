@@ -218,16 +218,35 @@ type IngestOperation struct {
 // IngestRecord is a stored object as read through the ingest API
 // (schemas/IngestRecord.json). Data is the stored input document.
 type IngestRecord struct {
-	Kind         string          `json:"kind"`
-	ID           string          `json:"id"`
-	ExternalID   string          `json:"external_id"`
-	Status       string          `json:"status"`
-	Visibility   string          `json:"visibility"`
-	ETag         string          `json:"etag"`
-	CreatedAt    time.Time       `json:"created_at"`
-	UpdatedAt    time.Time       `json:"updated_at"`
-	Data         json.RawMessage `json:"data"`
-	MissingFiles []string        `json:"missing_files"`
+	Kind       string          `json:"kind"`
+	ID         string          `json:"id"`
+	ExternalID string          `json:"external_id"`
+	Status     string          `json:"status"`
+	Visibility string          `json:"visibility"`
+	ETag       string          `json:"etag"`
+	CreatedAt  time.Time       `json:"created_at"`
+	UpdatedAt  time.Time       `json:"updated_at"`
+	Data       json.RawMessage `json:"data"`
+	// MissingFiles is for assets only (an empty list when nothing is
+	// missing); it is left out for other kinds.
+	MissingFiles []string `json:"missing_files,omitempty"`
+}
+
+// MarshalJSON writes missing_files as [] for a complete asset and leaves it
+// out for brands, products and variants (schemas/IngestRecord.json).
+func (r IngestRecord) MarshalJSON() ([]byte, error) {
+	type plain IngestRecord
+	if r.Kind != KindAsset {
+		return json.Marshal(plain(r))
+	}
+	mf := r.MissingFiles
+	if mf == nil {
+		mf = []string{}
+	}
+	return json.Marshal(struct {
+		plain
+		MissingFiles []string `json:"missing_files"`
+	}{plain(r), mf})
 }
 
 // IngestResult is the result of one write (schemas/IngestResult.json).

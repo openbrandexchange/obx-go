@@ -273,7 +273,7 @@ func (s *state) put(w writer, kind, ext string, data json.RawMessage, ifMatch, o
 	}
 	nr.status = status
 	nr.input = s.storedInput(nr)
-	if existing != nil && bytes.Equal(existing.input, nr.input) && existing.status == nr.status {
+	if existing != nil && (bytes.Equal(existing.input, nr.input) || s.sameData(existing, nr)) && existing.status == nr.status {
 		return s.result(existing, op, obx.ResultUnchanged, warnings), nil
 	}
 	if kind == obx.KindAsset {

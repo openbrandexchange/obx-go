@@ -292,10 +292,10 @@ func (s *state) visibility(r *record, now time.Time) string {
 }
 
 func (s *state) missingFiles(r *record) []string {
-	out := []string{}
 	if r.kind != obx.KindAsset {
-		return out
+		return nil
 	}
+	out := []string{}
 	for _, n := range obx.RenditionNames {
 		if _, ok := r.files[n]; !ok {
 			out = append(out, n)

@@ -2,6 +2,7 @@ package mock_test
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -98,5 +99,49 @@ func TestUnknownPathsAreProblems(t *testing.T) {
 		if resp.StatusCode != c.status || resp.Header.Get("Content-Type") != obx.MediaTypeProblem {
 			t.Errorf("%s %s: %d %s", c.method, c.path, resp.StatusCode, resp.Header.Get("Content-Type"))
 		}
+	}
+}
+
+// The mock's IngestRecord has the same shape as the nodes': defaults applied,
+// every nullable field present, missing_files for assets only.
+func TestIngestRecordShape(t *testing.T) {
+	n := mock.New(mock.Options{Fixtures: true})
+	srv := httptest.NewServer(n)
+	defer srv.Close()
+	get := func(path string) map[string]any {
+		req, _ := http.NewRequest(http.MethodGet, srv.URL+obx.PathIngest+path, nil)
+		req.Header.Set("Authorization", "Bearer "+n.Credentials().IngestToken)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		var m map[string]any
+		if err := json.NewDecoder(resp.Body).Decode(&m); err != nil {
+			t.Fatal(err)
+		}
+		return m
+	}
+	a := get("/assets/KO-1001_NVY_1")
+	data := a["data"].(map[string]any)
+	if r, _ := data["rights"].(map[string]any); r == nil || r["license"] == nil {
+		t.Errorf("rights with defaults applied: %v", data["rights"])
+	}
+	if p, _ := data["provenance"].(map[string]any); p == nil || p["source"] != "photo" {
+		t.Errorf("provenance with defaults applied: %v", data["provenance"])
+	}
+	files, _ := data["files"].(map[string]any)
+	if len(files) != 4 {
+		t.Errorf("files should list all four current blobs: %v", files)
+	}
+	if mf, ok := a["missing_files"].([]any); !ok || len(mf) != 0 {
+		t.Errorf("missing_files of a complete asset: %#v", a["missing_files"])
+	}
+	p := get("/products/KO-1001")
+	if _, ok := p["missing_files"]; ok {
+		t.Error("missing_files is for assets only")
+	}
+	if v, ok := p["data"].(map[string]any)["dpp_url"]; !ok || v != nil {
+		t.Errorf("unsent nullable fields are null: %v", p["data"])
 	}
 }

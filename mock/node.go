@@ -108,7 +108,7 @@ func New(opts Options) *Node {
 	if opts.Clock == nil {
 		opts.Clock = time.Now
 	}
-	n := &Node{opts: opts, key: randomBytes(32), nodeID: randomToken("", 6)}
+	n := &Node{opts: opts, key: randomBytes(32), nodeID: "node-" + randomToken("", 6)} // the prefix keeps the id matching the Id pattern (a random token may start with - or _)
 	n.knobs.snapshotMaxAge = 24 * time.Hour
 	n.knobs.accessRateLimit = 5
 	n.st = newState(n)

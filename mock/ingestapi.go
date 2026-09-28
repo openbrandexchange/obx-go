@@ -182,7 +182,7 @@ func kindFromPath(r *http.Request) string {
 
 func (s *state) ingestRecord(rec *record) obx.IngestRecord {
 	return obx.IngestRecord{Kind: rec.kind, ID: rec.id, ExternalID: rec.extID, Status: rec.status, Visibility: s.visibility(rec, s.n.now()),
-		ETag: rec.etag(), CreatedAt: rec.createdAt, UpdatedAt: rec.updatedAt, Data: rec.input, MissingFiles: s.missingFiles(rec)}
+		ETag: rec.etag(), CreatedAt: rec.createdAt, UpdatedAt: rec.updatedAt, Data: s.recordData(rec), MissingFiles: s.missingFiles(rec)}
 }
 
 func (n *Node) handleIngestRecord(w http.ResponseWriter, r *http.Request) {
