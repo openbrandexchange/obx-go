@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/openbrandexchange/obx-go/internal/httpx"
 	"github.com/openbrandexchange/obx-go/obx"
@@ -279,11 +280,17 @@ type RenditionCache interface {
 	Put(originalSHA string, r *obx.ManifestRenditions)
 }
 
-// FileRenditionCache is a RenditionCache stored as JSON in a file.
+// FileRenditionCache is a RenditionCache stored as JSON in a file. Puts are
+// written at most every FlushEvery (default 2 s) and by Flush, so caching the
+// renditions of tens of thousands of images does not rewrite the file for
+// every one of them. Call Flush when done.
 type FileRenditionCache struct {
-	Path string
-	mu   sync.Mutex
-	m    map[string]*obx.ManifestRenditions
+	Path       string
+	FlushEvery time.Duration
+	mu         sync.Mutex
+	m          map[string]*obx.ManifestRenditions
+	dirty      bool
+	written    time.Time
 }
 
 func (f *FileRenditionCache) load() {
@@ -291,8 +298,8 @@ func (f *FileRenditionCache) load() {
 		return
 	}
 	f.m = map[string]*obx.ManifestRenditions{}
-	if b, err := os.ReadFile(f.Path); err == nil {
-		_ = json.Unmarshal(b, &f.m)
+	if b, err := os.ReadFile(f.Path); err == nil && json.Unmarshal(b, &f.m) != nil {
+		f.m = map[string]*obx.ManifestRenditions{} // damaged: renditions are made again
 	}
 }
 
@@ -305,19 +312,50 @@ func (f *FileRenditionCache) Get(sha string) (*obx.ManifestRenditions, bool) {
 	return r, ok
 }
 
-// Put stores renditions and writes the file.
+// Put stores renditions; the file is written when FlushEvery has passed
+// since the last write.
 func (f *FileRenditionCache) Put(sha string, r *obx.ManifestRenditions) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.load()
 	f.m[sha] = r
-	if b, err := json.Marshal(f.m); err == nil {
-		_ = os.MkdirAll(filepath.Dir(f.Path), 0o755)
-		tmp := f.Path + ".tmp"
-		if os.WriteFile(tmp, b, 0o644) == nil {
-			_ = os.Rename(tmp, f.Path)
-		}
+	f.dirty = true
+	every := f.FlushEvery
+	if every == 0 {
+		every = 2 * time.Second
 	}
+	if time.Since(f.written) >= every {
+		_ = f.writeLocked() // on failure the entry stays dirty and Flush tries again
+	}
+}
+
+// Flush writes pending Puts to the file.
+func (f *FileRenditionCache) Flush() error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if !f.dirty {
+		return nil
+	}
+	return f.writeLocked()
+}
+
+func (f *FileRenditionCache) writeLocked() error {
+	b, err := json.Marshal(f.m)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(f.Path), 0o755); err != nil {
+		return err
+	}
+	tmp := f.Path + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o644); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, f.Path); err != nil {
+		return err
+	}
+	f.dirty, f.written = false, time.Now()
+	return nil
 }
 
 // ImageSource is an image to prepare: a file on disk or bytes in memory.

@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"image"
 	"image/png"
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/openbrandexchange/obx-go/ingest"
 	"github.com/openbrandexchange/obx-go/mock"
@@ -186,5 +188,28 @@ func TestImportReportsRowProblems(t *testing.T) {
 	probs, err := c.ImportProblems(ctx, job.ID)
 	if err != nil || len(probs) != 1 || probs[0].ObxError != obx.ErrInvalidGTIN || *probs[0].Row != 2 {
 		t.Fatalf("problems: %v %+v", err, probs)
+	}
+}
+
+// Caching the renditions of a large catalog does not rewrite the cache file
+// for every image, and Flush makes every entry durable.
+func TestFileRenditionCacheScales(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "renditions.json")
+	c := &ingest.FileRenditionCache{Path: path}
+	start := time.Now()
+	const n = 40000
+	for i := 0; i < n; i++ {
+		sha := fmt.Sprintf("%064x", i)
+		c.Put(sha, &obx.ManifestRenditions{Web: &obx.BlobRef{SHA256: sha, Width: 2000, Height: 2400}})
+	}
+	if err := c.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	if took := time.Since(start); took > 10*time.Second {
+		t.Fatalf("caching %d images took %s", n, took)
+	}
+	again := &ingest.FileRenditionCache{Path: path}
+	if r, ok := again.Get(fmt.Sprintf("%064x", n-1)); !ok || r.Web.Width != 2000 {
+		t.Fatalf("last entry not on disk after Flush: %v %v", r, ok)
 	}
 }

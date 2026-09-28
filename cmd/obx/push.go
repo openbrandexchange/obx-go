@@ -351,7 +351,9 @@ func push(ctx context.Context, o pushOptions, e *env) (*pushResult, error) {
 	// Images: hash, ask the portal, upload what is new.
 	var bytesUp, uploaded, wouldUpload atomic.Int64
 	missing := map[string]bool{} // dry run: image names the portal does not have yet
-	prep := &ingest.Preparer{Client: ic, Cache: &ingest.FileRenditionCache{Path: filepath.Join(e.cacheDir, "renditions.json")},
+	cache := &ingest.FileRenditionCache{Path: filepath.Join(e.cacheDir, "renditions.json")}
+	defer func() { _ = cache.Flush() }() // best effort: a lost cache only means renditions are made again
+	prep := &ingest.Preparer{Client: ic, Cache: cache,
 		Uploads: &fileUploadState{path: filepath.Join(e.cacheDir, "uploads.json")}, OnBytes: func(n int64) { bytesUp.Add(n) }}
 	manifest := make([]obx.ManifestImage, len(in.images))
 	ok := make([]bool, len(in.images))
