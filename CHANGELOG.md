@@ -6,27 +6,6 @@ All notable changes to obx-go are listed here. The format follows
 change the Go API; the `obx` command line, its exit codes and the file formats
 it reads stay compatible within a minor version.
 
-## [Unreleased]
-
-### Changed
-
-- `obx push --csv products.csv` also sends the `assets.csv` in the same folder when
-  `--assets-csv` is not given, as a folder or package push already did. Before, the
-  embargo dates, rights and AI labels in it silently fell back to the portal defaults.
-- `obx status` labels a `--dry-run` upload as a dry run; it read like an upload that had
-  changed the catalog.
-- The mock node follows import rule 8 of the specification: an import no longer takes
-  away the alt text, rights, embargo or AI label of an image it does not state them for.
-  New conformance check I-IMP-5 tests this on every portal.
-- The mock node follows import rule 9: a column that a products.csv does not have leaves that
-  field of an existing product or variant as it is (texts per language). New conformance check
-  I-IMP-6. `canonicalcsv.ProductsFile.Present` says which columns a file has.
-- Portal download zips hold an `assets.csv` (spec import-format.md §2.3): the mock writes it,
-  `canonicalcsv.WriteDownloadAssets` builds it, and conformance A-PORT-1 requires one row per image
-  with the embargo and AI label. The mock's background download names its article data `data.csv`.
-- The shared filename test vectors: `obx-conformance` and the mock read image names as
-  the specification's `fixtures/expected/image-filenames.json` says.
-
 ## [0.1.0] - unreleased
 
 First release, for Open Brand Exchange specification 0.1.0.
@@ -69,5 +48,25 @@ First release, for Open Brand Exchange specification 0.1.0.
   arm64), sha256 checksums, SPDX SBOMs, a multi-arch container image
   `ghcr.io/openbrandexchange/obx` and a Homebrew formula template.
 
-[Unreleased]: https://github.com/openbrandexchange/obx-go/compare/v0.1.0...HEAD
+### Also in this release
+
+#### Changed
+
+- `obx push --csv products.csv` also sends the `assets.csv` in the same folder when
+  `--assets-csv` is not given, as a folder or package push already did. Before, the
+  embargo dates, rights and AI labels in it silently fell back to the portal defaults.
+- `obx status` labels a `--dry-run` upload as a dry run; it read like an upload that had
+  changed the catalog.
+- The mock node follows import rule 8 of the specification: an import no longer takes
+  away the alt text, rights, embargo or AI label of an image it does not state them for.
+  New conformance check I-IMP-5 tests this on every portal.
+- The mock node follows import rule 9: a column that a products.csv does not have leaves that
+  field of an existing product or variant as it is (texts per language). New conformance check
+  I-IMP-6. `canonicalcsv.ProductsFile.Present` says which columns a file has.
+- Portal download zips hold an `assets.csv` (spec import-format.md §2.3): the mock writes it,
+  `canonicalcsv.WriteDownloadAssets` builds it, and conformance A-PORT-1 requires one row per image
+  with the embargo and AI label. The mock's background download names its article data `data.csv`.
+- The shared filename test vectors: `obx-conformance` and the mock read image names as
+  the specification's `fixtures/expected/image-filenames.json` says.
+
 [0.1.0]: https://github.com/openbrandexchange/obx-go/releases/tag/v0.1.0
