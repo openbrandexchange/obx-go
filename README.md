@@ -158,7 +158,7 @@ obx-conformance protocol --url https://node.example --client-id obxc_… --clien
 obx-conformance list                                                         # all test ids
 ```
 
-Profiles: `protocol` (read side, normative), `ingest` (write side, normative), `portal` (Node Admin + Portal API used by the shared admin UI) and `all`. Results are reported per test id (see the spec's [conformance.md](https://github.com/openbrandexchange/spec/blob/main/docs/conformance.md)) as text or `--json`. Exit code `0` = every required test passed, `1` = a required test failed, `2` = the suite could not run. With admin credentials or a setup code the suite creates its own retailers, API keys and upload keys. To test webhook delivery to a local receiver, run the node with `OBX_ALLOW_PRIVATE_URLS=true`.
+Profiles: `protocol` (read side, normative), `ingest` (write side, normative), `portal` (Node Admin + Portal API used by the shared admin UI), `security` (the observable parts of the spec's security.md: isolation, sessions, signed URLs, SSRF spellings, upload limits, CSV and link injection; `--rate-limit-test` adds login and token brute force) and `all`. Results are reported per test id (see the spec's [conformance.md](https://github.com/openbrandexchange/spec/blob/main/docs/conformance.md)) as text or `--json`. Exit code `0` = every required test passed, `1` = a required test failed, `2` = the suite could not run. With admin credentials or a setup code the suite creates its own retailers, API keys and upload keys. To test webhook delivery to a local receiver, run the node with `OBX_ALLOW_PRIVATE_URLS=true`.
 
 ### Interop: do all portals answer the same?
 
