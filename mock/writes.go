@@ -479,6 +479,9 @@ func (s *state) render(orig fileRef) (map[string]fileRef, *obx.Problem) {
 	if b == nil {
 		return nil, problemf(obx.ErrBlobMissing, "blob %s has not been uploaded", orig.SHA256)
 	}
+	if b.placeholder {
+		return map[string]fileRef{obx.RenditionOriginal: {SHA256: b.sha, Width: b.width, Height: b.height}}, nil
+	}
 	renderCacheMu.Lock()
 	set := renderCache[orig.SHA256]
 	renderCacheMu.Unlock()

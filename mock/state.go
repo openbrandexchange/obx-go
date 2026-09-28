@@ -60,6 +60,9 @@ type blob struct {
 	width       int
 	height      int
 	createdAt   time.Time
+	// placeholder stands in for an image a dry-run import names but the
+	// client has not uploaded; it has no bytes and is removed after the run.
+	placeholder bool
 }
 
 // entry is one change-log entry.

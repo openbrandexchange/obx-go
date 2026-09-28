@@ -225,6 +225,12 @@ func (c *Client) UploadResumable(ctx context.Context, r io.ReaderAt, size int64,
 // uploads only when missing, in one request or resumably for large files.
 // uploaded reports whether bytes were sent.
 func (c *Client) EnsureBlob(ctx context.Context, r io.ReaderAt, size int64, sha, contentType string, state UploadState) (uploaded bool, err error) {
+	return c.EnsureBlobProgress(ctx, r, size, sha, contentType, state, nil)
+}
+
+// EnsureBlobProgress is EnsureBlob that reports every chunk of bytes sent
+// (the whole file, or each part of a resumable upload) to progress.
+func (c *Client) EnsureBlobProgress(ctx context.Context, r io.ReaderAt, size int64, sha, contentType string, state UploadState, progress func(sent int64)) (uploaded bool, err error) {
 	ok, err := c.HasBlob(ctx, sha)
 	if err != nil {
 		return false, err
@@ -248,12 +254,21 @@ func (c *Client) EnsureBlob(ctx context.Context, r io.ReaderAt, size int64, sha,
 		if _, err := c.PutBlob(ctx, sha, contentType, buf); err != nil {
 			return false, err
 		}
+		if progress != nil {
+			progress(size)
+		}
 		return true, nil
 	}
 	if info.Limits.MaxObjectBytes > 0 && size > info.Limits.MaxObjectBytes {
 		return false, obx.Problemf(obx.ErrPayloadTooLarge, "file has %d bytes; the node accepts at most %d", size, info.Limits.MaxObjectBytes)
 	}
-	_, err = c.UploadResumable(ctx, r, size, sha, contentType, state, nil)
+	var reported int64
+	_, err = c.UploadResumable(ctx, r, size, sha, contentType, state, func(done, _ int64) {
+		if progress != nil {
+			progress(done - reported)
+		}
+		reported = done
+	})
 	return err == nil, err
 }
 
@@ -335,6 +350,8 @@ type Preparer struct {
 	Uploads UploadState    // optional
 	// ForceRenditions generates renditions even on nodes that render.
 	ForceRenditions bool
+	// OnBytes, when set, is told about every chunk of bytes uploaded.
+	OnBytes func(sent int64)
 }
 
 // Prepare makes one image available as a blob and returns its manifest entry.
@@ -356,7 +373,7 @@ func (p *Preparer) Prepare(ctx context.Context, src ImageSource) (*PreparedImage
 		return nil, fmt.Errorf("%s: the node does not accept %s images", src.Name, meta.ContentType)
 	}
 	out := &PreparedImage{Bytes: int64(len(data)), Manifest: obx.ManifestImage{File: filepath.Base(src.Name), SHA256: sha, Width: meta.Width, Height: meta.Height}}
-	up, err := p.Client.EnsureBlob(ctx, bytes.NewReader(data), int64(len(data)), sha, meta.ContentType, p.Uploads)
+	up, err := p.Client.EnsureBlobProgress(ctx, bytes.NewReader(data), int64(len(data)), sha, meta.ContentType, p.Uploads, p.OnBytes)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", src.Name, err)
 	}
@@ -387,7 +404,7 @@ func (p *Preparer) Prepare(ctx context.Context, src ImageSource) (*PreparedImage
 		return nil, fmt.Errorf("%s: %w", src.Name, err)
 	}
 	for _, f := range set.All() {
-		up, err := p.Client.EnsureBlob(ctx, bytes.NewReader(f.Data), int64(len(f.Data)), f.SHA256, f.ContentType, p.Uploads)
+		up, err := p.Client.EnsureBlobProgress(ctx, bytes.NewReader(f.Data), int64(len(f.Data)), f.SHA256, f.ContentType, p.Uploads, p.OnBytes)
 		if err != nil {
 			return nil, fmt.Errorf("%s (%s): %w", src.Name, f.Name, err)
 		}
