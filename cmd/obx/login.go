@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -15,70 +15,69 @@ import (
 	"github.com/openbrandexchange/obx-go/obx"
 )
 
-func cmdLogin(ctx context.Context, args []string, e *env) error {
-	fs := newFlags("login", "login <portal address> [--token obxi_…] [--email you@brand.example]", e)
-	token := fs.String("token", "", "an automatic upload key from your portal (starts with obxi_); read from OBX_TOKEN when empty")
-	email := fs.String("email", "", "sign in with your portal e-mail and password instead; obx then creates an upload key for this computer")
-	pos, err := parseFlags(fs, args)
-	if err != nil {
-		return err
+func defineLogin(e *env, fs *flag.FlagSet) func(context.Context, []string) (int, error) {
+	token := fs.String("token", "", e.t("login.flag_token"))
+	email := fs.String("email", "", e.t("login.flag_email"))
+	return func(ctx context.Context, pos []string) (int, error) {
+		return exitOK, login(ctx, e, pos, *token, *email)
 	}
-	addr := ""
+}
+
+func login(ctx context.Context, e *env, pos []string, token, email string) error {
+	addr := e.getenv("OBX_URL")
 	if len(pos) > 0 {
 		addr = pos[0]
-	} else {
-		addr = e.getenv("OBX_URL")
+	}
+	if len(pos) > 1 {
+		return usageError{e.t("login.one_address")}
 	}
 	if addr == "" {
-		fs.Usage()
-		return errors.New("give the address of your portal, for example: obx login https://brands.kestrel.example")
+		return usageError{e.t("config.no_address")}
 	}
-	base, err := client.NodeBase(addr)
+	base, err := e.portalBase(addr)
 	if err != nil {
 		return err
 	}
-	disc, err := (func() (*obx.DiscoveryDocument, error) {
-		c, err := client.New(client.Config{BaseURL: base, UserAgent: "obx-cli/" + Version})
-		if err != nil {
-			return nil, err
-		}
-		return c.Discovery(ctx)
-	})()
+	c, err := client.New(client.Config{BaseURL: base, UserAgent: "obx-cli/" + Version})
 	if err != nil {
-		return fmt.Errorf("%s does not look like an Open Brand Exchange portal (%s)", base, friendly(err))
+		return err
 	}
-	fmt.Fprintf(e.stderr, "Portal: %s (%s)\n", disc.Publisher.Name, base)
-	tok := *token
+	disc, err := c.Discovery(ctx)
+	if err != nil {
+		return userErr(e.t("login.not_a_portal", "portal", base, "reason", friendly(e, err)))
+	}
+	fmt.Fprintln(e.stderr, e.t("login.portal", "name", disc.Publisher.Name, "portal", base))
+	tok := token
 	if tok == "" {
 		tok = e.getenv("OBX_TOKEN")
 	}
 	var rd *bufio.Reader
-	if tok == "" && *email == "" {
+	if tok == "" && email == "" {
 		rd = bufio.NewReader(e.stdin)
-		fmt.Fprint(e.stderr, "Paste your automatic upload key (starts with obxi_),\nor press Enter to sign in with your portal e-mail and password: ")
+		fmt.Fprint(e.stderr, e.t("login.ask_key")+" ")
 		line, _ := rd.ReadString('\n')
 		tok = strings.TrimSpace(line)
 		if tok == "" {
-			fmt.Fprint(e.stderr, "E-mail: ")
+			fmt.Fprint(e.stderr, e.t("login.ask_email")+" ")
 			line, _ := rd.ReadString('\n')
-			*email = strings.TrimSpace(line)
+			email = strings.TrimSpace(line)
 		}
 	}
 	if tok == "" {
-		if *email == "" {
-			return errors.New("no upload key and no e-mail given")
+		if email == "" {
+			return userErr(e.t("login.nothing_given"))
 		}
 		pw := e.getenv("OBX_PASSWORD")
 		if f, isFile := e.stdin.(*os.File); pw == "" && rd != nil && !(isFile && isTerminal(f)) {
 			// Piped input (a script): the password is the next line of the same stream. A
 			// separate reader would miss what the buffered reader above already consumed.
-			fmt.Fprint(e.stderr, "Password: ")
+			fmt.Fprint(e.stderr, e.t("login.ask_password")+" ")
 			line, _ := rd.ReadString('\n')
 			pw = strings.TrimSpace(line)
 			fmt.Fprintln(e.stderr)
 		}
 		if pw == "" {
-			if pw, err = e.readPass("Password: "); err != nil {
+			if pw, err = e.readPass(e.t("login.ask_password") + " "); err != nil {
 				return err
 			}
 		}
@@ -86,21 +85,21 @@ func cmdLogin(ctx context.Context, args []string, e *env) error {
 		if err != nil {
 			return err
 		}
-		if _, err := adm.Login(ctx, *email, pw); err != nil {
-			return fmt.Errorf("sign in failed: %s", friendly(err))
+		if _, err := adm.Login(ctx, email, pw); err != nil {
+			return userErr(e.t("login.sign_in_failed", "reason", friendly(e, err)))
 		}
 		host, _ := os.Hostname()
 		if host == "" {
-			host = "this computer"
+			host = "obx"
 		}
 		created, err := adm.CreateIngestToken(ctx, nodeadmin.IngestTokenInput{Name: "obx on " + host + " (" + time.Now().Format("2006-01-02") + ")",
 			Scopes: []string{obx.IngestScopeRead, obx.IngestScopeWrite, obx.IngestScopeDelete}})
 		if err != nil {
-			return fmt.Errorf("creating an upload key failed: %s (only admins can create keys)", friendly(err))
+			return userErr(e.t("login.create_key_failed", "reason", friendly(e, err)))
 		}
 		adm.Logout(ctx)
 		tok = created.Secret
-		fmt.Fprintf(e.stderr, "Created upload key %q (you can switch it off in the portal under Automatic upload > Access keys).\n", created.Token.Name)
+		fmt.Fprintln(e.stderr, e.t("login.created_key", "name", created.Token.Name))
 	}
 	ic, err := e.ingestClient(base, tok)
 	if err != nil {
@@ -108,7 +107,7 @@ func cmdLogin(ctx context.Context, args []string, e *env) error {
 	}
 	info, err := ic.Info(ctx)
 	if err != nil {
-		return fmt.Errorf("the upload key does not work: %s", friendly(err))
+		return userErr(e.t("login.key_does_not_work", "reason", friendly(e, err)))
 	}
 	cfg, err := e.loadConfig()
 	if err != nil {
@@ -119,96 +118,126 @@ func cmdLogin(ctx context.Context, args []string, e *env) error {
 	if err := e.saveConfig(cfg); err != nil {
 		return err
 	}
-	fmt.Fprintf(e.stdout, "Connected to %s as %q. You can now run \"obx push\".\n", disc.Publisher.Name, info.Token.Name)
-	fmt.Fprintf(e.stderr, "The key is stored in %s (only readable by you).\n", e.configPath())
+	fmt.Fprintln(e.stdout, e.t("login.connected", "name", disc.Publisher.Name, "key", info.Token.Name))
+	fmt.Fprintln(e.stderr, e.t("login.stored", "path", e.configPath()))
 	return nil
 }
 
-func cmdLogout(args []string, e *env) error {
-	fs := newFlags("logout", "logout [<portal address>]", e)
-	pos, err := parseFlags(fs, args)
-	if err != nil {
-		return err
-	}
-	cfg, err := e.loadConfig()
-	if err != nil {
-		return err
-	}
-	base := cfg.Default
-	if len(pos) > 0 {
-		if base, err = client.NodeBase(pos[0]); err != nil {
-			return err
+func defineLogout(e *env, fs *flag.FlagSet) func(context.Context, []string) (int, error) {
+	return func(ctx context.Context, pos []string) (int, error) {
+		cfg, err := e.loadConfig()
+		if err != nil {
+			return exitFailed, err
 		}
+		base := cfg.Default
+		if len(pos) > 0 {
+			if base, err = e.portalBase(pos[0]); err != nil {
+				return exitFailed, err
+			}
+		}
+		if _, ok := cfg.Nodes[base]; !ok || base == "" {
+			fmt.Fprintln(e.stdout, e.t("logout.nothing", "portal", base))
+			return exitOK, nil
+		}
+		delete(cfg.Nodes, base)
+		if cfg.Default == base {
+			cfg.Default = ""
+		}
+		if err := e.saveConfig(cfg); err != nil {
+			return exitFailed, err
+		}
+		fmt.Fprintln(e.stdout, e.t("logout.done", "portal", base))
+		return exitOK, nil
 	}
-	if _, ok := cfg.Nodes[base]; !ok {
-		fmt.Fprintln(e.stdout, "Nothing stored for", base)
-		return nil
-	}
-	delete(cfg.Nodes, base)
-	if cfg.Default == base {
-		cfg.Default = ""
-	}
-	if err := e.saveConfig(cfg); err != nil {
-		return err
-	}
-	fmt.Fprintf(e.stdout, "Forgot the upload key for %s. It still works elsewhere until you revoke it in the portal.\n", base)
-	return nil
 }
 
-func cmdInfo(ctx context.Context, args []string, e *env) error {
-	fs := newFlags("info", "info [--url …] [--token …] [--json]", e)
-	u := fs.String("url", "", "portal address (default: OBX_URL or the one from obx login)")
-	tok := fs.String("token", "", "upload key (default: OBX_TOKEN or the stored key)")
-	asJSON := fs.Bool("json", false, "print the raw answer as JSON")
-	if _, err := parseFlags(fs, args); err != nil {
-		return err
+func defineInfo(e *env, fs *flag.FlagSet) func(context.Context, []string) (int, error) {
+	u := fs.String("url", "", e.t("flag.url"))
+	tok := fs.String("token", "", e.t("flag.token"))
+	asJSON := fs.Bool("json", false, e.t("flag.json"))
+	return func(ctx context.Context, pos []string) (int, error) {
+		if len(pos) > 0 {
+			return exitFailed, usageError{e.t("main.no_arguments")}
+		}
+		base, token, err := e.target(*u, *tok)
+		if err != nil {
+			return exitFailed, err
+		}
+		ic, err := e.ingestClient(base, token)
+		if err != nil {
+			return exitFailed, err
+		}
+		info, err := ic.Info(ctx)
+		if err != nil {
+			return exitFailed, err
+		}
+		if *asJSON {
+			enc := json.NewEncoder(e.stdout)
+			enc.SetIndent("", "  ")
+			return exitOK, enc.Encode(info)
+		}
+		w := e.stdout
+		var brands []string
+		for _, b := range info.Brands {
+			brands = append(brands, fmt.Sprintf("%s (%s)", b.Name, b.ExternalID))
+		}
+		rows := [][2]string{
+			{e.t("info.portal"), base},
+			{e.t("info.key"), info.Token.Name + " (" + strings.Join(info.Token.Scopes, ", ") + ")"},
+			{e.t("info.brands"), strings.Join(brands, ", ")},
+			{e.t("info.languages"), strings.Join(info.Languages, ", ")},
+		}
+		if info.Renditions.ServerGenerated {
+			rows = append(rows, [2]string{e.t("info.images"), e.t("info.images_portal")})
+		} else {
+			rows = append(rows, [2]string{e.t("info.images"), e.t("info.images_obx")})
+		}
+		rows = append(rows, [2]string{e.t("info.limits"), e.t("info.limits_value", "size", humanBytes(info.Limits.MaxUploadBytes), "rows", info.Limits.MaxBatchOperations)})
+		if info.Token.ExpiresAt != nil {
+			rows = append(rows, [2]string{e.t("info.expires"), info.Token.ExpiresAt.Format("2006-01-02")})
+		}
+		width := 0
+		for _, r := range rows {
+			width = max(width, len([]rune(r[0])))
+		}
+		for _, r := range rows {
+			fmt.Fprintf(w, "%s:%s %s\n", r[0], strings.Repeat(" ", width-len([]rune(r[0]))), r[1])
+		}
+		return exitOK, nil
 	}
-	base, token, err := e.target(*u, *tok)
-	if err != nil {
-		return err
-	}
-	ic, err := e.ingestClient(base, token)
-	if err != nil {
-		return err
-	}
-	info, err := ic.Info(ctx)
-	if err != nil {
-		return err
-	}
-	if *asJSON {
-		enc := json.NewEncoder(e.stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(info)
-	}
-	w := e.stdout
-	fmt.Fprintf(w, "Portal:     %s\n", base)
-	fmt.Fprintf(w, "Upload key: %s (%s)\n", info.Token.Name, strings.Join(info.Token.Scopes, ", "))
-	var brands []string
-	for _, b := range info.Brands {
-		brands = append(brands, fmt.Sprintf("%s (%s)", b.Name, b.ExternalID))
-	}
-	fmt.Fprintf(w, "Brands:     %s\n", strings.Join(brands, ", "))
-	fmt.Fprintf(w, "Languages:  %s\n", strings.Join(info.Languages, ", "))
-	if info.Renditions.ServerGenerated {
-		fmt.Fprintln(w, "Images:     the portal makes web and thumbnail versions itself")
-	} else {
-		fmt.Fprintln(w, "Images:     obx makes web and thumbnail versions before uploading")
-	}
-	fmt.Fprintf(w, "Limits:     %s per file, %d rows per batch\n", humanBytes(info.Limits.MaxUploadBytes), info.Limits.MaxBatchOperations)
-	if info.Token.ExpiresAt != nil {
-		fmt.Fprintf(w, "Key expires: %s\n", info.Token.ExpiresAt.Format("2006-01-02"))
-	}
-	return nil
 }
 
-func humanBytes(n int64) string {
-	switch {
-	case n >= 1<<30:
-		return fmt.Sprintf("%.1f GB", float64(n)/(1<<30))
-	case n >= 1<<20:
-		return fmt.Sprintf("%.0f MB", float64(n)/(1<<20))
-	case n >= 1<<10:
-		return fmt.Sprintf("%.0f kB", float64(n)/(1<<10))
-	}
-	return fmt.Sprintf("%d bytes", n)
-}
+var _ = register(map[string]string{
+	"cmd.login.about": "Connects this computer to your portal, so the other commands know where to publish. Paste an access key (in your portal: Automatic upload → Access keys → New access key), or sign in with your admin e-mail address and password and obx creates a key for this computer.\n" +
+		"The key is stored in your settings file, readable only by you (see \"obx config\"). In scripts and CI, set OBX_URL and OBX_TOKEN instead.",
+	"cmd.logout.about":        "Removes the stored access key for a portal from this computer. The key itself keeps working until you switch it off in your portal.",
+	"cmd.info.about":          "Checks that the portal address and access key work, and shows the brands, content languages and limits of the portal.",
+	"login.flag_token":        "an access key from your portal (starts with obxi_); read from OBX_TOKEN when empty",
+	"login.flag_email":        "sign in with your portal e-mail address and password instead; obx then creates an access key for this computer",
+	"login.one_address":       "give one portal address.",
+	"login.not_a_portal":      "{portal} does not look like an Open Brand Exchange portal: {reason}",
+	"login.portal":            "Portal: {name} ({portal})",
+	"login.ask_key":           "Paste your access key (starts with obxi_),\nor press Enter to sign in with your portal e-mail address and password:",
+	"login.ask_email":         "E-mail address:",
+	"login.ask_password":      "Password:",
+	"login.nothing_given":     "no access key and no e-mail address given.",
+	"login.sign_in_failed":    "signing in failed: {reason}",
+	"login.create_key_failed": "creating an access key failed: {reason} (only admins can create keys)",
+	"login.created_key":       "Created access key \"{name}\". You can switch it off in your portal under Automatic upload → Access keys.",
+	"login.key_does_not_work": "the access key does not work: {reason}",
+	"login.connected":         "Connected to {name} with access key \"{key}\". You can now run \"obx push\".",
+	"login.stored":            "The key is stored in {path} (readable only by you).",
+	"logout.nothing":          "Nothing stored for {portal}.",
+	"logout.done":             "Forgot the access key for {portal}. The key keeps working elsewhere until you switch it off in your portal.",
+	"main.no_arguments":       "this command takes no arguments.",
+	"info.portal":             "Portal",
+	"info.key":                "Access key",
+	"info.brands":             "Brands",
+	"info.languages":          "Languages",
+	"info.images":             "Images",
+	"info.images_portal":      "the portal makes the web and thumbnail versions itself",
+	"info.images_obx":         "obx makes the web and thumbnail versions before uploading",
+	"info.limits":             "Limits",
+	"info.limits_value":       "{size} per file, {rows} rows per batch",
+	"info.expires":            "Key valid until",
+})

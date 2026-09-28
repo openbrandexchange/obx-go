@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"strings"
 	"text/tabwriter"
@@ -11,106 +12,153 @@ import (
 	"github.com/openbrandexchange/obx-go/obx"
 )
 
-func cmdStatus(ctx context.Context, args []string, e *env) error {
-	fs := newFlags("status", "status [--job <id>] [--limit 10] [--json]", e)
-	u := fs.String("url", "", "portal address (default: OBX_URL or the one from obx login)")
-	tok := fs.String("token", "", "upload key (default: OBX_TOKEN or the stored key)")
-	jobID := fs.String("job", "", "show one upload with all its problems")
-	limit := fs.Int("limit", 10, "how many recent uploads to show")
-	asJSON := fs.Bool("json", false, "print JSON")
-	if _, err := parseFlags(fs, args); err != nil {
-		return err
-	}
-	base, token, err := e.target(*u, *tok)
-	if err != nil {
-		return err
-	}
-	ic, err := e.ingestClient(base, token)
-	if err != nil {
-		return err
-	}
-	if *jobID != "" {
-		job, err := ic.Job(ctx, *jobID)
-		if err != nil {
-			return err
+func defineStatus(e *env, fs *flag.FlagSet) func(context.Context, []string) (int, error) {
+	u := fs.String("url", "", e.t("flag.url"))
+	tok := fs.String("token", "", e.t("flag.token"))
+	jobID := fs.String("job", "", e.t("status.flag_job"))
+	limit := fs.Int("limit", 10, e.t("status.flag_limit"))
+	asJSON := fs.Bool("json", false, e.t("flag.json"))
+	return func(ctx context.Context, pos []string) (int, error) {
+		if len(pos) > 0 {
+			return exitFailed, usageError{e.t("main.no_arguments")}
 		}
-		var problems []obx.ImportRowError
-		var results []obx.IngestResult
-		err = ic.EachJobResult(ctx, job.ID, false, func(raw json.RawMessage) error {
-			if job.Kind == "import" {
-				var p obx.ImportRowError
-				json.Unmarshal(raw, &p)
-				problems = append(problems, p)
-			} else {
-				var r obx.IngestResult
-				json.Unmarshal(raw, &r)
-				results = append(results, r)
-			}
-			return nil
-		})
+		base, token, err := e.target(*u, *tok)
 		if err != nil {
-			return err
+			return exitFailed, err
+		}
+		ic, err := e.ingestClient(base, token)
+		if err != nil {
+			return exitFailed, err
+		}
+		if *jobID != "" {
+			return exitOK, showJob(ctx, e, ic, *jobID, *asJSON)
+		}
+		page, err := ic.Jobs(ctx, "", "", *limit)
+		if err != nil {
+			return exitFailed, err
 		}
 		if *asJSON {
-			return json.NewEncoder(e.stdout).Encode(map[string]any{"job": job, "problems": problems, "results": results})
+			return exitOK, json.NewEncoder(e.stdout).Encode(page.Items)
 		}
-		fmt.Fprintf(e.stdout, "Upload %s (%s): %s, started %s\n", job.ID, job.Kind, job.Status, job.CreatedAt.Local().Format("2006-01-02 15:04"))
-		if job.ImportRun != nil {
-			c := job.ImportRun.Counts
-			fmt.Fprintf(e.stdout, "  %d rows, %d images: %d new, %d updated, %d unchanged, %d taken offline, %d problems, %d warnings\n",
-				c.Rows, c.Files, c.Created, c.Updated, c.Unchanged, c.Unpublished, c.Errors, c.Warnings)
+		if len(page.Items) == 0 {
+			fmt.Fprintln(e.stdout, e.t("status.none"))
+			return exitOK, nil
 		}
-		for _, p := range problems {
-			fmt.Fprintf(e.stdout, "  - [%s] %s\n", p.Severity, describeProblem(p))
-		}
-		for _, r := range results {
-			if r.Result == obx.ResultError && r.Error != nil {
-				fmt.Fprintf(e.stdout, "  - %s %s: %s\n", r.Kind, r.ExternalID, friendly(r.Error))
+		tw := tabwriter.NewWriter(e.stdout, 2, 4, 2, ' ', 0)
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", strings.ToUpper(e.t("status.col_when")), strings.ToUpper(e.t("status.col_upload")), strings.ToUpper(e.t("status.col_status")), strings.ToUpper(e.t("status.col_result")))
+		for _, j := range page.Items {
+			result := ""
+			if j.ImportRun != nil {
+				c := j.ImportRun.Counts
+				result = countsText(e, c)
+				if c.Errors > 0 {
+					result += " · " + e.t("count.problems", "n", c.Errors)
+				}
+			} else if j.Summary != nil {
+				result = strings.Join([]string{e.t("count.new", "n", j.Summary.Created), e.t("count.updated", "n", j.Summary.Updated),
+					e.t("count.unchanged", "n", j.Summary.Unchanged), e.t("count.problems", "n", j.Summary.Errors)}, " · ")
 			}
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", ago(e, j.CreatedAt), j.ID, jobStatus(e, j.Status), result)
 		}
-		return nil
+		tw.Flush()
+		fmt.Fprintln(e.stdout)
+		fmt.Fprintln(e.stdout, e.t("status.details_hint"))
+		return exitOK, nil
 	}
-	page, err := ic.Jobs(ctx, "", "", *limit)
+}
+
+func showJob(ctx context.Context, e *env, ic interface {
+	Job(context.Context, string) (*obx.IngestJob, error)
+	EachJobResult(context.Context, string, bool, func(json.RawMessage) error) error
+}, id string, asJSON bool) error {
+	job, err := ic.Job(ctx, id)
 	if err != nil {
 		return err
 	}
-	if *asJSON {
-		return json.NewEncoder(e.stdout).Encode(page.Items)
-	}
-	if len(page.Items) == 0 {
-		fmt.Fprintln(e.stdout, "No uploads yet with this key.")
-		return nil
-	}
-	tw := tabwriter.NewWriter(e.stdout, 2, 4, 2, ' ', 0)
-	fmt.Fprintln(tw, "WHEN\tUPLOAD\tSTATUS\tRESULT")
-	for _, j := range page.Items {
-		result := ""
-		if j.ImportRun != nil {
-			c := j.ImportRun.Counts
-			parts := []string{fmt.Sprintf("%d new", c.Created), fmt.Sprintf("%d updated", c.Updated), fmt.Sprintf("%d unchanged", c.Unchanged)}
-			if c.Errors > 0 {
-				parts = append(parts, fmt.Sprintf("%d problems", c.Errors))
-			}
-			result = strings.Join(parts, ", ")
-		} else if j.Summary != nil {
-			result = fmt.Sprintf("%d created, %d updated, %d unchanged, %d errors", j.Summary.Created, j.Summary.Updated, j.Summary.Unchanged, j.Summary.Errors)
+	var problems []obx.ImportRowError
+	var results []obx.IngestResult
+	err = ic.EachJobResult(ctx, job.ID, false, func(raw json.RawMessage) error {
+		if job.Kind == "import" {
+			var p obx.ImportRowError
+			json.Unmarshal(raw, &p)
+			problems = append(problems, p)
+		} else {
+			var r obx.IngestResult
+			json.Unmarshal(raw, &r)
+			results = append(results, r)
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", ago(j.CreatedAt), j.ID, j.Status, result)
+		return nil
+	})
+	if err != nil {
+		return err
 	}
-	tw.Flush()
-	fmt.Fprintln(e.stdout, "\nDetails and problems: obx status --job <upload>")
+	if asJSON {
+		return json.NewEncoder(e.stdout).Encode(map[string]any{"job": job, "problems": problems, "results": results})
+	}
+	w := e.stdout
+	fmt.Fprintln(w, e.t("status.job_head", "job", job.ID, "status", jobStatus(e, job.Status), "time", job.CreatedAt.Local().Format("2006-01-02 15:04")))
+	if job.ImportRun != nil {
+		c := job.ImportRun.Counts
+		fmt.Fprintf(w, "  %s → %s · %s · %s\n", e.t("push.rows_images", "rows", c.Rows, "images", c.Files), countsText(e, c),
+			e.t("count.problems", "n", c.Errors), e.t("count.warnings", "n", c.Warnings))
+		if job.ImportRun.Error != nil {
+			fmt.Fprintln(w, "  "+e.t("push.failed", "reason", friendly(e, job.ImportRun.Error)))
+		}
+	}
+	for _, p := range problems {
+		sev := e.t("status.problem")
+		if p.Severity != obx.SeverityError {
+			sev = e.t("status.warning")
+		}
+		fmt.Fprintf(w, "  - [%s] %s\n", sev, problemText(e, p))
+	}
+	for _, r := range results {
+		if r.Result == obx.ResultError && r.Error != nil {
+			fmt.Fprintf(w, "  - %s %s: %s\n", r.Kind, r.ExternalID, friendly(e, r.Error))
+		}
+	}
 	return nil
 }
 
-func ago(t time.Time) string {
+func jobStatus(e *env, s string) string {
+	switch s {
+	case obx.JobQueued, obx.JobRunning, obx.JobSucceeded, obx.JobFailed:
+		return e.t("status.job_" + s)
+	}
+	return s
+}
+
+func ago(e *env, t time.Time) string {
 	d := time.Since(t)
 	switch {
 	case d < time.Minute:
-		return "just now"
+		return e.t("status.just_now")
 	case d < time.Hour:
-		return fmt.Sprintf("%d min ago", int(d.Minutes()))
+		return e.t("status.minutes_ago", "n", int(d.Minutes()))
 	case d < 24*time.Hour:
-		return fmt.Sprintf("%d h ago", int(d.Hours()))
+		return e.t("status.hours_ago", "n", int(d.Hours()))
 	}
 	return t.Local().Format("2006-01-02 15:04")
 }
+
+var _ = register(map[string]string{
+	"cmd.status.about":     "Shows the recent uploads made with this access key and how they went. With --job it lists every problem of one upload, with file, row and column.",
+	"status.flag_job":      "show one upload with all its problems",
+	"status.flag_limit":    "how many recent uploads to show",
+	"status.none":          "No uploads with this access key yet.",
+	"status.col_when":      "When",
+	"status.col_upload":    "Upload",
+	"status.col_status":    "Status",
+	"status.col_result":    "Result",
+	"status.details_hint":  "Details and problems: obx status --job <upload>",
+	"status.job_head":      "Upload {job}: {status}, started {time}",
+	"status.problem":       "problem",
+	"status.warning":       "warning",
+	"status.job_queued":    "waiting",
+	"status.job_running":   "busy",
+	"status.job_succeeded": "done",
+	"status.job_failed":    "failed",
+	"status.just_now":      "just now",
+	"status.minutes_ago":   "{n} min ago",
+	"status.hours_ago":     "{n} h ago",
+})

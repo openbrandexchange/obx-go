@@ -2,22 +2,23 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"golang.org/x/term"
 
 	"github.com/openbrandexchange/obx-go/client"
 	"github.com/openbrandexchange/obx-go/ingest"
-	"github.com/openbrandexchange/obx-go/obx"
 )
 
 // config is stored in <config dir>/config.json with mode 0600.
@@ -44,7 +45,7 @@ func (e *env) loadConfig() (*config, error) {
 		return nil, err
 	}
 	if err := json.Unmarshal(b, c); err != nil {
-		return nil, fmt.Errorf("%s is damaged: %w", e.configPath(), err)
+		return nil, userErr(e.t("config.damaged", "path", e.configPath()))
 	}
 	if c.Nodes == nil {
 		c.Nodes = map[string]nodeConfig{}
@@ -64,7 +65,19 @@ func (e *env) saveConfig(c *config) error {
 	return os.Rename(tmp, e.configPath())
 }
 
-// target resolves the portal address and upload key: flags, then OBX_URL /
+// portalBase checks and normalises a portal address.
+func (e *env) portalBase(addr string) (string, error) {
+	base, err := client.NodeBase(addr)
+	if err != nil {
+		if strings.TrimSpace(addr) == "" {
+			return "", usageError{e.t("config.no_address")}
+		}
+		return "", usageError{e.t("config.bad_address", "address", addr)}
+	}
+	return base, nil
+}
+
+// target resolves the portal address and access key: flags, then OBX_URL /
 // OBX_TOKEN, then what "obx login" stored.
 func (e *env) target(urlFlag, tokenFlag string) (string, string, error) {
 	u := urlFlag
@@ -79,9 +92,9 @@ func (e *env) target(urlFlag, tokenFlag string) (string, string, error) {
 		u = cfg.Default
 	}
 	if u == "" {
-		return "", "", errors.New("which portal? Run \"obx login <portal address>\" or set OBX_URL")
+		return "", "", userErr(e.t("config.which_portal"))
 	}
-	base, err := client.NodeBase(u)
+	base, err := e.portalBase(u)
 	if err != nil {
 		return "", "", err
 	}
@@ -93,7 +106,7 @@ func (e *env) target(urlFlag, tokenFlag string) (string, string, error) {
 		tok = cfg.Nodes[base].Token
 	}
 	if tok == "" {
-		return "", "", fmt.Errorf("no upload key for %s. Run \"obx login %s\" or set OBX_TOKEN", base, base)
+		return "", "", userErr(e.t("config.no_key", "portal", base))
 	}
 	return base, tok, nil
 }
@@ -101,42 +114,77 @@ func (e *env) target(urlFlag, tokenFlag string) (string, string, error) {
 func (e *env) ingestClient(base, token string) (*ingest.Client, error) {
 	return ingest.New(base, token, ingest.WithUserAgent("obx-cli/"+Version), ingest.WithRetryHook(func(_ *http.Request, status int, wait time.Duration) {
 		if status == 429 {
-			fmt.Fprintf(e.stderr, "  the portal asks to slow down; waiting %s\n", wait.Round(time.Second))
+			fmt.Fprintln(e.stderr, "  "+e.t("config.slow_down", "seconds", int(wait.Round(time.Second).Seconds())))
 		}
 	}))
 }
 
-// friendly turns API errors into sentences for people.
-func friendly(err error) string {
-	var p *obx.Problem
-	if errors.As(err, &p) {
-		switch p.ObxError {
-		case obx.ErrUnauthorized, obx.ErrInvalidToken:
-			return "the upload key is not valid. Create a new one in your portal (Automation → Upload keys) and run \"obx login\" again."
-		case obx.ErrAccessRevoked:
-			return "this upload key was revoked or has expired. Create a new one in your portal and run \"obx login\" again."
-		case obx.ErrInsufficientScope:
-			return "this upload key may not do that (" + p.DetailString() + "). Create a key with more rights in your portal."
-		case obx.ErrForbidden:
-			return "not allowed: " + p.DetailString()
-		case obx.ErrSetupRequired:
-			return "the portal has not been set up yet; open it in your browser first."
-		case obx.ErrMassUnpublishRefused:
-			return p.DetailString() + ". Nothing was changed. If this is really what you want, add --allow-mass-unpublish."
+// defineConfig: obx config [path].
+func defineConfig(e *env, fs *flag.FlagSet) func(context.Context, []string) (int, error) {
+	asJSON := fs.Bool("json", false, e.t("flag.json"))
+	return func(ctx context.Context, pos []string) (int, error) {
+		if len(pos) > 1 || (len(pos) == 1 && pos[0] != "path" && pos[0] != "show") {
+			return exitFailed, usageError{e.t("config.usage")}
 		}
-		if d := p.DetailString(); d != "" {
-			return d
+		if len(pos) == 1 && pos[0] == "path" {
+			fmt.Fprintln(e.stdout, e.configPath())
+			return exitOK, nil
 		}
-		return p.Title
+		cfg, err := e.loadConfig()
+		if err != nil {
+			return exitFailed, err
+		}
+		type portal struct {
+			Address string    `json:"address"`
+			Name    string    `json:"name,omitempty"`
+			Key     string    `json:"access_key"`
+			SavedAt time.Time `json:"saved_at"`
+			Default bool      `json:"default"`
+		}
+		var portals []portal
+		for base, n := range cfg.Nodes {
+			portals = append(portals, portal{Address: base, Name: n.Name, Key: maskKey(n.Token), SavedAt: n.SavedAt, Default: base == cfg.Default})
+		}
+		sort.Slice(portals, func(i, j int) bool { return portals[i].Address < portals[j].Address })
+		lang := e.language()
+		if *asJSON {
+			enc := json.NewEncoder(e.stdout)
+			enc.SetIndent("", "  ")
+			return exitOK, enc.Encode(map[string]any{"config_file": e.configPath(), "cache_dir": e.cacheDir, "language": lang, "portals": portals})
+		}
+		w := e.stdout
+		fmt.Fprintf(w, "%s: %s\n", e.t("config.file"), e.configPath())
+		fmt.Fprintf(w, "%s: %s\n", e.t("config.cache"), e.cacheDir)
+		fmt.Fprintf(w, "%s: %s\n", e.t("config.language"), lang)
+		if len(portals) == 0 {
+			fmt.Fprintln(w, e.t("config.no_portals"))
+		}
+		for _, p := range portals {
+			mark := ""
+			if p.Default {
+				mark = " (" + e.t("config.default_portal") + ")"
+			}
+			fmt.Fprintf(w, "  %s%s: %s, %s %s\n", p.Address, mark, p.Name, e.t("config.key"), p.Key)
+		}
+		for _, v := range []string{"OBX_URL", "OBX_TOKEN", "OBX_CLIENT_ID", "OBX_CLIENT_SECRET", "OBX_LANG", "OBX_CONFIG_DIR"} {
+			if val := e.getenv(v); val != "" {
+				if strings.Contains(v, "TOKEN") || strings.Contains(v, "SECRET") {
+					val = maskKey(val)
+				}
+				fmt.Fprintf(w, "%s: %s=%s\n", e.t("config.env_set"), v, val)
+			}
+		}
+		return exitOK, nil
 	}
-	var oe *obx.OAuthError
-	if errors.As(err, &oe) {
-		if oe.Code == "invalid_client" {
-			return "the API key (client id and secret) is not valid or was revoked."
-		}
-		return oe.Error()
+}
+
+// maskKey shows only the start and the last four characters of a secret.
+func maskKey(s string) string {
+	if len(s) <= 10 {
+		return strings.Repeat("•", len(s))
 	}
-	return err.Error()
+	prefix := s[:5]
+	return prefix + "…" + s[len(s)-4:]
 }
 
 // ---- terminal helpers
@@ -158,47 +206,24 @@ func readPassword(prompt string) (string, error) {
 	return string(b), err
 }
 
-// progress prints a status line that updates in place on a terminal and
-// every few seconds otherwise.
-type progress struct {
-	mu    sync.Mutex
-	w     io.Writer
-	tty   bool
-	last  time.Time
-	width int
-}
-
-func (p *progress) set(format string, args ...any) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	msg := fmt.Sprintf(format, args...)
-	if p.tty {
-		pad := ""
-		if n := p.width - len(msg); n > 0 {
-			pad = strings.Repeat(" ", n)
-		}
-		fmt.Fprintf(p.w, "\r%s%s", msg, pad)
-		p.width = len(msg)
-		return
-	}
-	if time.Since(p.last) >= 5*time.Second {
-		fmt.Fprintln(p.w, msg)
-		p.last = time.Now()
-	}
-}
-
-func (p *progress) done(format string, args ...any) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	msg := fmt.Sprintf(format, args...)
-	if p.tty {
-		pad := ""
-		if n := p.width - len(msg); n > 0 {
-			pad = strings.Repeat(" ", n)
-		}
-		fmt.Fprintf(p.w, "\r%s%s\n", msg, pad)
-		p.width = 0
-		return
-	}
-	fmt.Fprintln(p.w, msg)
-}
+var _ = register(map[string]string{
+	"cmd.config.about": "Shows where obx keeps its settings and cache on this computer, which portals it is connected to (access keys shortened) and which language it uses.\n" +
+		"Linux: ~/.config/obx/config.json (or $XDG_CONFIG_HOME/obx). macOS: ~/Library/Application Support/obx/config.json. Windows: %AppData%\\obx\\config.json. OBX_CONFIG_DIR sets another folder. \"obx config path\" prints only the file name.",
+	"config.usage":          "use \"obx config\" or \"obx config path\".",
+	"config.damaged":        "the settings file {path} is damaged. Delete it and run \"obx login\" again.",
+	"config.no_address":     "give the address of your portal, for example https://brands.kestrel.example",
+	"config.bad_address":    "\"{address}\" is not a web address. Use the address of your portal, for example https://brands.kestrel.example",
+	"config.which_portal":   "which portal? Run \"obx login <portal address>\" first, or set OBX_URL.",
+	"config.no_key":         "there is no access key for {portal}. Run \"obx login {portal}\", or set OBX_TOKEN.",
+	"config.slow_down":      "the portal asks obx to slow down; waiting {seconds} s",
+	"config.file":           "Settings file",
+	"config.cache":          "Cache folder",
+	"config.language":       "Language",
+	"config.no_portals":     "Not connected to a portal yet. Run \"obx login <portal address>\".",
+	"config.default_portal": "default",
+	"config.key":            "access key",
+	"config.env_set":        "Set in the environment",
+	"flag.json":             "print the result as JSON (for scripts)",
+	"flag.url":              "portal address (default: OBX_URL or the portal from \"obx login\")",
+	"flag.token":            "access key (default: OBX_TOKEN or the key stored by \"obx login\")",
+})
