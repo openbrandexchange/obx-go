@@ -243,7 +243,7 @@ func IgnoredPath(p string) bool {
 // ImageName is a parsed image file name.
 type ImageName struct {
 	Style    string  // style number as written
-	Color    string  // colour code as written
+	Color    string  // colour code as written; "" for {style}_ALL_{position} (all colours)
 	Position int     // 1–999
 	Role     string  // "packshot" unless a role qualifier says otherwise
 	View     *string // nil unless a view qualifier is present
@@ -251,16 +251,23 @@ type ImageName struct {
 	Ext      string  // lowercase extension without dot
 }
 
-// ExternalID returns {style}_{color}_{position}.
+// ExternalID returns {style}_{color}_{position} ({style}_ALL_{position} for
+// an image of all colours).
 func (n ImageName) ExternalID() string {
 	return AssetExternalID(n.Style, n.Color, n.Position)
 }
 
+// AllColours is the colour part of the file name of an image that belongs to
+// every colour of a product ({style}_ALL_{position}.jpg). It is reserved:
+// matched case-insensitively and never looked up as a colour code.
+const AllColours = "ALL"
+
 // AssetExternalID builds the asset external id convention. Without a colour
-// (an image for all colours) it is {style}_{position}.
+// (an image for all colours) it is {style}_ALL_{position}, the same name the
+// image file has.
 func AssetExternalID(style, color string, position int) string {
 	if color == "" {
-		return style + "_" + strconv.Itoa(position)
+		color = AllColours
 	}
 	return style + "_" + color + "_" + strconv.Itoa(position)
 }
@@ -312,6 +319,9 @@ func ParseImageName(name string) (ImageName, error) {
 	n.Style = strings.Join(parts[:len(parts)-2], "_")
 	if n.Style == "" || n.Color == "" {
 		return ImageName{}, fmt.Errorf("%q has an empty style number or colour code", base)
+	}
+	if strings.EqualFold(n.Color, AllColours) {
+		n.Color = "" // an image of every colour
 	}
 	if role != "" {
 		n.Role = role

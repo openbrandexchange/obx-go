@@ -134,6 +134,8 @@ func TestImageNames(t *testing.T) {
 		{name: "AB_12_34_BLK_2_packshot_back.JPG", style: "AB_12_34", color: "BLK", pos: 2, role: "packshot", view: "back"},
 		{name: "KO-1004_IND_3_detail.jpg", style: "KO-1004", color: "IND", pos: 3, role: "detail", view: "detail"},
 		{name: "folder/KO-1001_NVY_12.webp", style: "KO-1001", color: "NVY", pos: 12, role: "packshot"},
+		{name: "KO-1001_ALL_4_detail.jpg", style: "KO-1001", color: "", pos: 4, role: "detail", view: "detail"},
+		{name: "KO-1001_all_5.jpg", style: "KO-1001", color: "", pos: 5, role: "packshot"},
 		{name: "KO-1001_NVY_front.jpg", fail: true},
 		{name: "KO-1001_NVY_01.jpg", fail: true},
 		{name: "KO-1001_NVY_1000.jpg", fail: true},
@@ -291,6 +293,7 @@ func TestPlanImageProblems(t *testing.T) {
 		{Name: "random.jpg", SHA256: strings.Repeat("e", 64)},
 		{Name: "hero.jpg", SHA256: strings.Repeat("f", 64)},
 		{Name: "OLD_NVY_2.jpg", SHA256: strings.Repeat("1", 64)},
+		{Name: "S1_ALL_2_back.jpg", SHA256: strings.Repeat("2", 64)},
 	}
 	cat := fakeCatalog{brands: []canonicalcsv.CatalogBrand{{ExternalID: "b", Name: "B"}}, products: map[string]canonicalcsv.CatalogProduct{
 		"OLD": {ExternalID: "OLD", StyleNumber: "OLD", BrandID: "b", Colors: []string{"NVY"}}}}
@@ -305,7 +308,15 @@ func TestPlanImageProblems(t *testing.T) {
 			t.Errorf("missing problem %s in %v", want, codes)
 		}
 	}
-	if len(plan.Products) != 2 || len(plan.Products[0].Assets) != 1 || plan.Products[0].Assets[0].ExternalID != "S1_4" || plan.Products[0].Assets[0].Input.ColorCode != nil {
+	// hero.jpg (assets.csv, no colour) and S1_ALL_2_back.jpg are images of every colour.
+	ids := map[string]bool{}
+	for _, a := range plan.Products[0].Assets {
+		ids[a.ExternalID] = true
+		if a.Input.ColorCode != nil {
+			t.Errorf("%s has colour %q, want none", a.ExternalID, *a.Input.ColorCode)
+		}
+	}
+	if len(plan.Products) != 2 || len(plan.Products[0].Assets) != 2 || !ids["S1_ALL_4"] || !ids["S1_ALL_2"] {
 		t.Fatalf("S1 assets: %+v", plan.Products[0].Assets)
 	}
 	if p := plan.Products[1]; p.ExternalID != "OLD" || p.Input != nil || p.Assets[0].ExternalID != "OLD_NVY_2" {
