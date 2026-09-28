@@ -8,6 +8,12 @@ it reads stay compatible within a minor version.
 
 ## [Unreleased]
 
+### Changed
+
+- `obx push --csv products.csv` also sends the `assets.csv` in the same folder when
+  `--assets-csv` is not given, as a folder or package push already did. Before, the
+  embargo dates, rights and AI labels in it silently fell back to the portal defaults.
+
 ## [0.1.0] - unreleased
 
 First release, for Open Brand Exchange specification 0.1.0.

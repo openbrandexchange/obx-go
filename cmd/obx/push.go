@@ -140,6 +140,14 @@ func gather(e *env, o pushOptions) (*pushInput, error) {
 		if in.assets, err = readFile(o.assetsCSV); err != nil {
 			return nil, err
 		}
+	} else if o.csv != "" && in.assets == nil {
+		// An assets.csv next to products.csv belongs to it, as in a folder or a package: leaving it
+		// out would reset its embargo dates, rights and AI labels to the portal defaults.
+		if p := siblingAssetsCSV(o.csv); p != "" {
+			if in.assets, err = readFile(p); err != nil {
+				return nil, err
+			}
+		}
 	}
 	if o.images != "" {
 		st, err := os.Stat(o.images)
@@ -173,6 +181,23 @@ func gather(e *env, o pushOptions) (*pushInput, error) {
 		return nil, userErr(e.t("push.found_nothing"))
 	}
 	return in, nil
+}
+
+// siblingAssetsCSV returns the assets.csv (any case) in the folder of csvPath, or "".
+func siblingAssetsCSV(csvPath string) string {
+	if strings.EqualFold(filepath.Base(csvPath), "assets.csv") {
+		return ""
+	}
+	entries, err := os.ReadDir(filepath.Dir(csvPath))
+	if err != nil {
+		return ""
+	}
+	for _, en := range entries {
+		if !en.IsDir() && strings.EqualFold(en.Name(), "assets.csv") {
+			return filepath.Join(filepath.Dir(csvPath), en.Name())
+		}
+	}
+	return ""
 }
 
 func firstPath(images []imageFile, key string) string {

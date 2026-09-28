@@ -124,6 +124,12 @@ func TestLoginPushRerunStatus(t *testing.T) {
 	if code != 0 || !strings.Contains(out, "new: 0 · updated: 0") || !strings.Contains(errOut, "0 uploaded") {
 		t.Fatalf("second push should change nothing and upload nothing: %d\n%s\n%s", code, out, errOut)
 	}
+	// --csv without --assets-csv still sends the assets.csv next to it: otherwise the embargo and
+	// the AI label in it would silently fall back to the portal defaults.
+	code, out, errOut = h.run("push", "--csv", filepath.Join(dir, "products.csv"), "--images", filepath.Join(dir, "images"))
+	if code != 0 || !strings.Contains(out, "new: 0 · updated: 0") || !strings.Contains(errOut, "products.csv + assets.csv") {
+		t.Fatalf("push --csv should pick up the assets.csv next to it: %d\n%s\n%s", code, out, errOut)
+	}
 	csv, _ := os.ReadFile(filepath.Join(dir, "products.csv"))
 	bad := string(csv) + "Kestrel,KO-1001,Merino Crew Sweater,Merino trui met ronde hals,,,sweater,unisex,AW26,Highland,main: 100% merino_wool,,PT,,2000100109999,,NVY,Navy,Marineblauw,,XXL,INT\n"
 	os.WriteFile(filepath.Join(dir, "products.csv"), []byte(bad), 0o644)

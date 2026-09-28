@@ -74,7 +74,7 @@ The Homebrew formula and the release archives (`completions/`) include the bash,
 
 ```sh
 obx push ./export                                   # a folder: products.csv, optional assets.csv, images anywhere below it
-obx push --csv products.csv --images ./images       # separate files (images: a folder or a zip)
+obx push --csv products.csv --images ./images       # separate files (images: a folder or a zip); an assets.csv next to products.csv is sent too
 obx push --package export.zip                       # one zip with everything
 obx push ./export --dry-run                         # check only
 obx push ./export --mirror                          # also take offline what the file no longer contains
