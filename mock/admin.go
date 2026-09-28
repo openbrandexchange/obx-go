@@ -295,7 +295,7 @@ func (n *Node) completeSetup(in nodeadmin.SetupInput) (*user, *obx.Problem) {
 	}
 	s.settings.companyName = in.Company.Name
 	s.settings.displayName = in.Company.Name
-	if in.Company.Website != "" {
+	if in.Company.Website != "" && webURL(in.Company.Website) {
 		s.settings.website = ptr(in.Company.Website)
 	}
 	if in.Company.ContactEmail != "" {
@@ -562,6 +562,10 @@ func (n *Node) handleSettings(w http.ResponseWriter, r *http.Request, _ *adminCt
 		writeProblem(w, p)
 		return
 	}
+	if c := in.Company; c != nil && c.Website != nil && *c.Website != "" && !webURL(*c.Website) {
+		writeProblem(w, problem(obx.ErrValidationFailed, "company.website must be an http(s) address"))
+		return
+	}
 	s := n.st
 	st := &s.settings
 	origBefore := map[string]bool{}
@@ -705,6 +709,9 @@ func (n *Node) patchRetailer(rt *retailer, raw json.RawMessage) *obx.Problem {
 	}
 	str("reference", &rt.reference)
 	str("website", &rt.website)
+	if rt.website != nil && *rt.website != "" && !webURL(*rt.website) {
+		return problem(obx.ErrValidationFailed, "website must be an http(s) address")
+	}
 	str("vat_number", &rt.vat)
 	str("country", &rt.country)
 	str("notes", &rt.notes)
@@ -1460,3 +1467,10 @@ func (n *Node) handleStatsEvents(w http.ResponseWriter, r *http.Request, _ *admi
 }
 
 var _ = url.PathEscape
+
+// webURL reports whether s is an absolute http(s) URL: the admin UI shows
+// websites as links, so javascript: and data: URLs are refused.
+func webURL(s string) bool {
+	u, err := url.Parse(s)
+	return err == nil && (u.Scheme == "https" || u.Scheme == "http") && u.Host != ""
+}

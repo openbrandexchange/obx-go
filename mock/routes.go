@@ -174,6 +174,8 @@ func (n *Node) routes() {
 
 	m.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		w.Write([]byte(`<!doctype html><title>OBX mock node</title><p>This is an in-memory Open Brand Exchange mock node. Discovery: <a href="/.well-known/obx">/.well-known/obx</a></p>`))
 	})
 }
