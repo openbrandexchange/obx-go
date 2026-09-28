@@ -460,7 +460,10 @@ func (n *Node) handleForgot(w http.ResponseWriter, r *http.Request, _ *adminCtx)
 	var in struct {
 		Email string `json:"email"`
 	}
-	readJSON(r, &in)
+	if p := readJSON(r, &in); p != nil {
+		writeProblem(w, p)
+		return
+	}
 	if u := n.userByEmail(in.Email); u != nil && u.status == "active" {
 		n.newInvite(r, u, "password_reset")
 	}
@@ -975,7 +978,10 @@ func (n *Node) handleReject(w http.ResponseWriter, r *http.Request, _ *adminCtx)
 	var in struct {
 		Reason *string `json:"reason"`
 	}
-	readJSON(r, &in)
+	if p := readJSON(r, &in); p != nil {
+		writeProblem(w, p)
+		return
+	}
 	now := n.now()
 	ar.status, ar.decidedAt, ar.reason = "rejected", &now, in.Reason
 	n.email(ar.in.Contact.Email, "access_rejected", ar.language, "", nil)

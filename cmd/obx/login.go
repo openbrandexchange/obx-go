@@ -97,7 +97,7 @@ func login(ctx context.Context, e *env, pos []string, token, email string) error
 		if err != nil {
 			return userErr(e.t("login.create_key_failed", "reason", friendly(e, err)))
 		}
-		adm.Logout(ctx)
+		_ = adm.Logout(ctx) // the admin session is not needed any more; it expires anyway
 		tok = created.Secret
 		fmt.Fprintln(e.stderr, e.t("login.created_key", "name", created.Token.Name))
 	}

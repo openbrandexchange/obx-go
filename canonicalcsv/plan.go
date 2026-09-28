@@ -139,7 +139,7 @@ func BuildPlan(products *ProductsFile, assets *AssetsFile, images []Image, cat C
 	byID := map[string]*PlannedProduct{}
 	byStyle := map[string]*PlannedProduct{}
 	mirror := map[string]bool{}
-	file := "products.csv"
+	var file string
 	if products != nil {
 		file = products.File
 		for _, p := range products.Products {

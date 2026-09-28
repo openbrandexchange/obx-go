@@ -60,8 +60,8 @@ func loadTable(lang string) map[string]string {
 	}
 	t := map[string]string{}
 	if lang != "en" {
-		if b, err := localeFS.ReadFile("locales/" + lang + ".json"); err == nil {
-			json.Unmarshal(b, &t)
+		if b, err := localeFS.ReadFile("locales/" + lang + ".json"); err == nil && json.Unmarshal(b, &t) != nil {
+			t = map[string]string{} // English then; TestLocalesComplete keeps the files valid
 		}
 	}
 	tables[lang] = t

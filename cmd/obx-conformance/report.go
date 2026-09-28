@@ -68,10 +68,7 @@ func (c *profileCount) text() string {
 }
 
 func verdict(rep *conformance.Report) string {
-	names := make([]string, 0, len(rep.Profiles))
-	for _, p := range rep.Profiles {
-		names = append(names, p)
-	}
+	names := append([]string(nil), rep.Profiles...)
 	if rep.OK() && rep.Partial {
 		return "every selected check passed. Only some checks ran (--only), so this is not a conformance claim."
 	}

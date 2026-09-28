@@ -513,7 +513,7 @@ func (n *Node) exportCSV(r *http.Request, pc *portalCtx, products []*record) []b
 		delim = ';'
 	}
 	var buf bytes.Buffer
-	canonicalcsv.WriteExport(&buf, details, canonicalcsv.ExportOptions{Languages: s.settings.languages, Delimiter: delim, BrandNames: names, BOM: true})
+	_ = canonicalcsv.WriteExport(&buf, details, canonicalcsv.ExportOptions{Languages: s.settings.languages, Delimiter: delim, BrandNames: names, BOM: true})
 	return buf.Bytes()
 }
 

@@ -504,7 +504,10 @@ func (n *Node) handleRunSource(w http.ResponseWriter, r *http.Request, _ *adminC
 	var opts struct {
 		DryRun bool `json:"dry_run"`
 	}
-	readJSON(r, &opts)
+	if p := readJSON(r, &opts); p != nil {
+		writeProblem(w, p)
+		return
+	}
 	in, p := n.fetchSource(src)
 	if p != nil {
 		now := n.now()

@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"path"
 	"sort"
 	"strings"
 	"time"
@@ -698,5 +697,3 @@ func canonicalJSON(v any) json.RawMessage {
 	}
 	return b
 }
-
-func fileExt(name string) string { return strings.ToLower(strings.TrimPrefix(path.Ext(name), ".")) }

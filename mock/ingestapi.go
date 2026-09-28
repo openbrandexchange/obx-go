@@ -85,7 +85,7 @@ func validateSchema(name string, raw json.RawMessage) *obx.Problem {
 		var ve *jsonschema.ValidationError
 		if errors.As(err, &ve) {
 			for _, leaf := range leaves(ve) {
-				p.WithField("/"+strings.Join(leaf.InstanceLocation, "/"), obx.ErrValidationFailed, leaf.ErrorKind.LocalizedString(nil))
+				_ = p.WithField("/"+strings.Join(leaf.InstanceLocation, "/"), obx.ErrValidationFailed, leaf.ErrorKind.LocalizedString(nil))
 			}
 		}
 		return p

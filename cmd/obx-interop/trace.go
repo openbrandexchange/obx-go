@@ -270,10 +270,12 @@ func (tr *tracer) labelOf(id string) string {
 func (tr *tracer) rawChange(e obx.Change) map[string]any {
 	b, _ := json.Marshal(e)
 	var m map[string]any
-	json.Unmarshal(b, &m)
+	_ = json.Unmarshal(b, &m) // b was just marshalled
 	if len(e.Data) > 0 {
 		var d any
-		json.Unmarshal(e.Data, &d)
+		if err := json.Unmarshal(e.Data, &d); err != nil {
+			d = string(e.Data) // keep what the node sent; the comparison shows it
+		}
 		m["data"] = d
 	}
 	return m
@@ -337,7 +339,7 @@ func (tr *tracer) productWithFiles(ctx context.Context, id string) (any, map[str
 	}
 	var p obx.ProductDetail
 	b, _ := json.Marshal(raw)
-	json.Unmarshal(b, &p)
+	_ = json.Unmarshal(b, &p) // a round trip of a decoded document
 	files := map[string]any{}
 	saved := tr.derived
 	tr.derived = nil

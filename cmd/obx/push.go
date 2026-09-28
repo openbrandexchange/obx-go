@@ -630,18 +630,20 @@ type fileUploadState struct {
 
 func (f *fileUploadState) load() map[string]string {
 	m := map[string]string{}
-	if b, err := os.ReadFile(f.path); err == nil {
-		json.Unmarshal(b, &m)
+	if b, err := os.ReadFile(f.path); err == nil && json.Unmarshal(b, &m) != nil {
+		m = map[string]string{} // damaged: uploads start from the first part again
 	}
 	return m
 }
 
+// save is best effort: without the file, an interrupted upload simply starts
+// again from the first part on the next run.
 func (f *fileUploadState) save(m map[string]string) {
-	os.MkdirAll(filepath.Dir(f.path), 0o700)
+	_ = os.MkdirAll(filepath.Dir(f.path), 0o700)
 	b, _ := json.Marshal(m)
 	tmp := f.path + ".tmp"
 	if os.WriteFile(tmp, b, 0o600) == nil {
-		os.Rename(tmp, f.path)
+		_ = os.Rename(tmp, f.path)
 	}
 }
 

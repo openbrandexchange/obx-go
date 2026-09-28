@@ -111,7 +111,10 @@ func (m *pullMirror) open() error {
 	}
 	m.index.Files = map[string][]pulledFile{}
 	if b, err := os.ReadFile(filepath.Join(m.dir, ".obx", "index.json")); err == nil {
-		json.Unmarshal(b, &m.index)
+		if json.Unmarshal(b, &m.index) != nil {
+			// A damaged index only means files are downloaded again.
+			m.index.Files = nil
+		}
 		if m.index.Files == nil {
 			m.index.Files = map[string][]pulledFile{}
 		}
@@ -198,7 +201,10 @@ func (m *pullMirror) apply(ctx context.Context, ch *obx.Change) error {
 	}
 	m.stats.upserts++
 	var pretty bytes.Buffer
-	json.Indent(&pretty, ch.Data, "", "  ")
+	if json.Indent(&pretty, ch.Data, "", "  ") != nil {
+		pretty.Reset()
+		pretty.Write(ch.Data) // keep what the portal sent
+	}
 	if err := writeAtomic(m.objectPath(ch.Type, ch.ID), pretty.Bytes()); err != nil {
 		return err
 	}

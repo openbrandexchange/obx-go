@@ -80,11 +80,15 @@ func showJob(ctx context.Context, e *env, ic interface {
 	err = ic.EachJobResult(ctx, job.ID, false, func(raw json.RawMessage) error {
 		if job.Kind == "import" {
 			var p obx.ImportRowError
-			json.Unmarshal(raw, &p)
+			if err := json.Unmarshal(raw, &p); err != nil {
+				return err
+			}
 			problems = append(problems, p)
 		} else {
 			var r obx.IngestResult
-			json.Unmarshal(raw, &r)
+			if err := json.Unmarshal(raw, &r); err != nil {
+				return err
+			}
 			results = append(results, r)
 		}
 		return nil

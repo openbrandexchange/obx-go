@@ -123,7 +123,7 @@ func normaliseMirror(fsys fs.FS) (map[string]any, error) {
 		out[dir] = byLabel
 	}
 	images := map[string]any{}
-	fs.WalkDir(fsys, "images", func(p string, d fs.DirEntry, err error) error {
+	_ = fs.WalkDir(fsys, "images", func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
 		}

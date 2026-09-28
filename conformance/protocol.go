@@ -138,12 +138,6 @@ func (t *T) needAdmin(what string) {
 	}
 }
 
-func (t *T) needIngest(what string) {
-	if t.r.ing == nil {
-		t.Skip("%s needs an upload key (--token) or admin credentials", what)
-	}
-}
-
 func (t *T) productID(ext string) string {
 	id, ok := t.r.productIDs[ext]
 	if !ok {

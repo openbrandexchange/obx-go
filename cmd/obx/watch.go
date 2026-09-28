@@ -81,8 +81,10 @@ func watch(ctx context.Context, e *env, o pushOptions, interval, settle time.Dur
 					logf(e.t("watch.done") + " " + countsText(e, c) + " · " + e.t("count.problems", "n", c.Errors+len(res.LocalNotes)))
 				}
 				lastPublished = sig
-				os.MkdirAll(filepath.Dir(statePath), 0o700)
-				os.WriteFile(statePath, []byte(sig+"\n"), 0o600)
+				// Best effort: without the state file the next start publishes
+				// once more, which changes nothing at the portal.
+				_ = os.MkdirAll(filepath.Dir(statePath), 0o700)
+				_ = os.WriteFile(statePath, []byte(sig+"\n"), 0o600)
 			}
 			if once {
 				return perr

@@ -95,7 +95,7 @@ func validateInput(kind string, raw json.RawMessage) (json.RawMessage, []string,
 		if errors.As(err, &ve) {
 			for _, leaf := range leaves(ve) {
 				ptr := "/" + strings.Join(leaf.InstanceLocation, "/")
-				p.WithField(ptr, obx.ErrValidationFailed, leaf.ErrorKind.LocalizedString(nil))
+				_ = p.WithField(ptr, obx.ErrValidationFailed, leaf.ErrorKind.LocalizedString(nil))
 			}
 		}
 		return nil, warnings, p
@@ -742,7 +742,6 @@ func hashBytes(b []byte) string {
 // snapshotCatalog captures the catalog for a dry run.
 type catalogSnapshot struct {
 	brands, products, variants, assets map[string]*record
-	byID                               map[string]*record
 	gtins                              map[string]string
 	log                                []entry
 	seq                                int64
