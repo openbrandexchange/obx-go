@@ -3,6 +3,7 @@ package conformance
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -35,6 +36,7 @@ func init() {
 	register(p, "I-IMP-3", "mirror import unpublishes exactly what is missing; mass unpublish refused; zip slip refused", true, testMirror)
 	register(p, "I-IMP-4", "row problems carry file, row, column and code; the job still succeeds", true, testRowErrors)
 	register(p, "I-IMP-5", "an import without assets.csv keeps the images' embargo, credit, alt text and AI label", true, testImportKeepsImageFacts)
+	register(p, "I-IMP-6", "a column the file does not have keeps the field; an empty cell removes it", true, testImportKeepsAbsentColumns)
 }
 
 func testIngestInfo(t *T) {
@@ -704,6 +706,97 @@ func testImportKeepsImageFacts(t *T) {
 	get("KO-1001_NVY_1")
 	if c, _ := data.Rights["credit"].(string); c != credit {
 		t.Errorf("KO-1001_NVY_1 lost the credit set through the Ingest API: rights.credit is %v", data.Rights["credit"])
+	}
+}
+
+// testImportKeepsAbsentColumns: import-format.md rule 9. A products.csv with
+// only brand, style_number and name:en (the fixture's values) must keep every
+// other field of the products (name:nl, descriptions, materials, care); an
+// empty season cell in a file that has the column removes the season.
+func testImportKeepsAbsentColumns(t *T) {
+	data, err := t.r.fixture("kestrel/products.csv")
+	t.Check(err, "read kestrel/products.csv")
+	rows, err := csv.NewReader(bytes.NewReader(data)).ReadAll()
+	t.Check(err, "parse kestrel/products.csv")
+	col := func(name string) int {
+		for i, h := range rows[0] {
+			if h == name {
+				return i
+			}
+		}
+		t.Fatalf("kestrel/products.csv has no %s column", name)
+		return -1
+	}
+	brand, style, nameEN, season, nameNL := col("brand"), col("style_number"), col("name:en"), col("season"), col("name:nl")
+	var wantNL string
+	build := func(withSeason bool, emptySeasonFor string) []byte {
+		var buf bytes.Buffer
+		w := csv.NewWriter(&buf)
+		head := []string{"brand", "style_number", "name:en"}
+		if withSeason {
+			head = append(head, "season")
+		}
+		_ = w.Write(head)
+		seen := map[string]bool{}
+		for _, r := range rows[1:] {
+			if seen[r[style]] {
+				continue
+			}
+			seen[r[style]] = true
+			if r[style] == "KO-1001" {
+				wantNL = r[nameNL]
+			}
+			rec := []string{r[brand], r[style], r[nameEN]}
+			if withSeason {
+				v := r[season]
+				if r[style] == emptySeasonFor {
+					v = ""
+				}
+				rec = append(rec, v)
+			}
+			_ = w.Write(rec)
+		}
+		w.Flush()
+		return buf.Bytes()
+	}
+	defer func() {
+		// Put the fixture state back for the checks that follow, also when this one failed.
+		if req, err := t.r.fixtureImport(t.ctx, "files", nil); err == nil {
+			t.runImport(req)
+		}
+	}()
+	var product struct {
+		Name        map[string]string `json:"name"`
+		Description map[string]string `json:"description"`
+		Season      *string           `json:"season"`
+		Materials   []any             `json:"materials"`
+		Care        []any             `json:"care"`
+	}
+	get := func() {
+		product.Name, product.Description, product.Season, product.Materials, product.Care = nil, nil, nil, nil, nil
+		rec, err := t.r.ing.Get(t.ctx, obx.KindProduct, "KO-1001")
+		t.Check(err, "GET product KO-1001")
+		if err := json.Unmarshal(rec.Data, &product); err != nil {
+			t.Fatalf("KO-1001: data is not a product: %v", err)
+		}
+	}
+	only := &ingest.ImportRequest{Options: obx.ImportOptions{Mode: obx.ImportModeUpsert}, CSV: &ingest.File{Name: "products.csv", Data: build(false, "")}}
+	t.expectUnchangedImport("products.csv with only brand, style_number and name:en", only)
+	get()
+	if product.Name["nl"] != wantNL || product.Description["en"] == "" || len(product.Materials) == 0 || len(product.Care) == 0 {
+		t.Errorf("KO-1001 lost fields whose columns the file did not have: name %v, description %v, materials %d, care %d", product.Name, product.Description, len(product.Materials), len(product.Care))
+	}
+	withSeason := &ingest.ImportRequest{Options: obx.ImportOptions{Mode: obx.ImportModeUpsert}, CSV: &ingest.File{Name: "products.csv", Data: build(true, "KO-1001")}}
+	job, probs := t.runImport(withSeason)
+	if job.Status != obx.JobSucceeded || job.ImportRun == nil || job.ImportRun.Counts.Updated != 1 {
+		t.Errorf("an empty season cell for KO-1001: want succeeded with updated 1, got %s %s (%s)", job.Status, short(job.ImportRun), short(probs))
+	}
+	get()
+	if product.Season != nil && *product.Season != "" {
+		t.Errorf("an empty season cell must remove the season, KO-1001 still has %q", *product.Season)
+	}
+	if product.Name["nl"] != wantNL {
+		t.Errorf("KO-1001 lost name:nl in the season import: %v", product.Name)
 	}
 }
 

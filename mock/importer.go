@@ -423,7 +423,11 @@ func (n *Node) runImport(in *importInput, trigger string, wr writer) (*obx.Impor
 	}
 	for _, pp := range plan.Products {
 		if pp.Input != nil {
-			res, p := s.apply(wr, obx.IngestOpUpsert, obx.KindProduct, pp.ExternalID, canonicalJSON(pp.Input), "")
+			data := canonicalJSON(pp.Input)
+			if old := s.products[pp.ExternalID]; old != nil && old.product != nil && pf != nil {
+				data = keepAbsentColumns(data, canonicalJSON(old.product), productColumnFields, pf.Present)
+			}
+			res, p := s.apply(wr, obx.IngestOpUpsert, obx.KindProduct, pp.ExternalID, data, "")
 			if p != nil {
 				rowErr(csvFile, pp.Row, p)
 				continue
@@ -431,7 +435,11 @@ func (n *Node) runImport(in *importInput, trigger string, wr writer) (*obx.Impor
 			count(res.res.Result)
 		}
 		for _, v := range pp.Variants {
-			res, p := s.apply(wr, obx.IngestOpUpsert, obx.KindVariant, v.ExternalID, canonicalJSON(v.Input), "")
+			data := canonicalJSON(v.Input)
+			if old := s.variants[v.ExternalID]; old != nil && old.variant != nil && pf != nil {
+				data = keepAbsentColumns(data, canonicalJSON(old.variant), variantColumnFields, pf.Present)
+			}
+			res, p := s.apply(wr, obx.IngestOpUpsert, obx.KindVariant, v.ExternalID, data, "")
 			if p != nil {
 				rowErr(csvFile, v.Row, p)
 				continue
@@ -607,6 +615,91 @@ func keepImageFacts(data json.RawMessage, old *obx.AssetInput) json.RawMessage {
 			merged[f] = v
 		}
 		cur[k] = merged
+	}
+	return canonicalJSON(cur)
+}
+
+// columnField maps a field of the write model to the products.csv column it
+// comes from: path is the JSON path in the input ("color.name"), column the
+// canonical column name; text fields are kept per language, attributes per key.
+type columnField struct {
+	path, column string
+	text, attrs  bool
+}
+
+var productColumnFields = []columnField{
+	{path: "name", column: "name", text: true}, {path: "description", column: "description", text: true},
+	{path: "item_type", column: "item_type"}, {path: "target_group", column: "target_group"},
+	{path: "season", column: "season"}, {path: "collection", column: "collection"},
+	{path: "gpc_brick", column: "gpc_brick"}, {path: "materials", column: "materials"}, {path: "care", column: "care"},
+	{path: "country_of_origin", column: "country_of_origin"}, {path: "dpp_url", column: "dpp_url"},
+	{path: "attributes", attrs: true},
+}
+
+var variantColumnFields = []columnField{
+	{path: "gtin", column: "gtin"}, {path: "sku", column: "sku"}, {path: "size", column: "size"},
+	{path: "size_system", column: "size_system"}, {path: "color.name", column: "color_name", text: true},
+	{path: "color.supplier_color", column: "supplier_color"},
+}
+
+// keepAbsentColumns applies import-format.md rule 9 to a product or variant
+// the node already has: a field whose column the file does not have keeps
+// its stored value (texts per language, attributes per key). An empty cell in
+// a column the file has still removes the value.
+func keepAbsentColumns(data, stored json.RawMessage, fields []columnField, present canonicalcsv.Present) json.RawMessage {
+	var cur, old map[string]any
+	if json.Unmarshal(data, &cur) != nil || json.Unmarshal(stored, &old) != nil {
+		return data
+	}
+	for _, f := range fields {
+		parent, key := cur, f.path
+		oldParent := old
+		if i := strings.IndexByte(f.path, '.'); i > 0 {
+			p, _ := cur[f.path[:i]].(map[string]any)
+			op, _ := old[f.path[:i]].(map[string]any)
+			if p == nil || op == nil {
+				continue
+			}
+			parent, oldParent, key = p, op, f.path[i+1:]
+		}
+		was, ok := oldParent[key]
+		if !ok || was == nil {
+			continue
+		}
+		switch {
+		case f.attrs:
+			oldMap, _ := was.(map[string]any)
+			now, _ := parent[key].(map[string]any)
+			if now == nil {
+				now = map[string]any{}
+			}
+			for k, v := range oldMap {
+				if _, stated := now[k]; !stated && !present.Attrs[k] {
+					now[k] = v
+				}
+			}
+			if len(now) > 0 {
+				parent[key] = now
+			}
+		case f.text:
+			oldMap, _ := was.(map[string]any)
+			now, _ := parent[key].(map[string]any)
+			if now == nil {
+				now = map[string]any{}
+			}
+			for lang, v := range oldMap {
+				if _, stated := now[lang]; !stated && !present.Langs[f.column][lang] {
+					now[lang] = v
+				}
+			}
+			if len(now) > 0 {
+				parent[key] = now
+			}
+		default:
+			if _, stated := parent[key]; !stated && !present.Plain[f.column] {
+				parent[key] = was
+			}
+		}
 	}
 	return canonicalJSON(cur)
 }

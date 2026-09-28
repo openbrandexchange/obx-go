@@ -18,6 +18,9 @@ it reads stay compatible within a minor version.
 - The mock node follows import rule 8 of the specification: an import no longer takes
   away the alt text, rights, embargo or AI label of an image it does not state them for.
   New conformance check I-IMP-5 tests this on every portal.
+- The mock node follows import rule 9: a column that a products.csv does not have leaves that
+  field of an existing product or variant as it is (texts per language). New conformance check
+  I-IMP-6. `canonicalcsv.ProductsFile.Present` says which columns a file has.
 - The shared filename test vectors: `obx-conformance` and the mock read image names as
   the specification's `fixtures/expected/image-filenames.json` says.
 

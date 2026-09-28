@@ -48,6 +48,21 @@ type ProductsFile struct {
 	// Rows counts non-empty data rows.
 	Rows     int
 	Problems []obx.ImportRowError
+	// Present says which columns the file has. A node keeps the stored value
+	// of every field whose column is missing (import-format.md rule 9).
+	Present Present
+}
+
+// Present lists the columns of a products.csv, by canonical name.
+type Present struct {
+	// Plain holds the untagged columns (aliases resolved).
+	Plain map[string]bool
+	// Langs holds, per text column (name, description, color_name), the
+	// languages the file has a column for; the plain column counts as the
+	// import's default language.
+	Langs map[string]map[string]bool
+	// Attrs holds the keys of the attr:<key> columns.
+	Attrs map[string]bool
 }
 
 // Errors counts problems with severity error.
@@ -132,6 +147,23 @@ func ParseProducts(r io.Reader, file string, opts Options) (*ProductsFile, error
 			}
 			out.Problems = append(out.Problems, problem(file, noRow, c.raw, obx.ErrValidationFailed, obx.SeverityWarning, fmt.Sprintf("unknown column %q ignored", strings.TrimSpace(c.raw)), ""))
 		}
+	}
+	out.Present = Present{Plain: map[string]bool{}, Langs: map[string]map[string]bool{}, Attrs: map[string]bool{}}
+	for base := range idx {
+		out.Present.Plain[base] = true
+	}
+	for _, base := range []string{"name", "description", "color_name"} {
+		langs := map[string]bool{}
+		if _, ok := idx[base]; ok {
+			langs[defLang] = true
+		}
+		for _, lc := range langIdx[base] {
+			langs[lc.lang] = true
+		}
+		out.Present.Langs[base] = langs
+	}
+	for k := range attrIdx {
+		out.Present.Attrs[k] = true
 	}
 	col := func(name string) int {
 		if i, ok := idx[name]; ok {
