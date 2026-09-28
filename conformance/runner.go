@@ -100,6 +100,9 @@ type Report struct {
 	Skipped    int       `json:"skipped"`
 	Results    []Result  `json:"results"`
 	Setup      []string  `json:"setup,omitempty"`
+	// SetupError is set when the suite could not prepare the run (no
+	// connection, wrong credentials); every test then fails or is skipped.
+	SetupError string `json:"setup_error,omitempty"`
 }
 
 // OK reports whether every required test passed.
@@ -298,6 +301,9 @@ func Run(ctx context.Context, profiles []string, cfg Config) (*Report, error) {
 	r.raw = &httpx.Doer{HTTP: r.hc, MaxRetries: -1}
 	start := time.Now()
 	setupErr := r.bootstrap(ctx, want)
+	if setupErr != nil {
+		r.report.SetupError = setupErr.Error()
+	}
 	for _, tc := range registry() {
 		if !want[tc.profile] || !r.selected(tc.id) {
 			continue
