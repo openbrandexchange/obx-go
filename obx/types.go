@@ -615,3 +615,45 @@ func StrPtr(s string) *string {
 	}
 	return &s
 }
+
+// Pick returns the text for a reader who prefers lang, using the fallback
+// rule shared by every OBX node and UI: the exact language, then the same
+// base language ("nl" for "nl-BE" and the other way round), then English,
+// then the first available language in sorted tag order. It returns "" when
+// the text is empty.
+func (t LocalizedText) Pick(lang string) string {
+	if len(t) == 0 {
+		return ""
+	}
+	if v := t[lang]; v != "" {
+		return v
+	}
+	base := baseLang(lang)
+	if base != "" {
+		if v := t[base]; v != "" {
+			return v
+		}
+		best, bestTag := "", ""
+		for tag, v := range t {
+			if v != "" && baseLang(tag) == base && (bestTag == "" || tag < bestTag) {
+				best, bestTag = v, tag
+			}
+		}
+		if best != "" {
+			return best
+		}
+	}
+	if v := t["en"]; v != "" {
+		return v
+	}
+	return t.Get("")
+}
+
+func baseLang(tag string) string {
+	for i := 0; i < len(tag); i++ {
+		if tag[i] == '-' || tag[i] == '_' {
+			return tag[:i]
+		}
+	}
+	return tag
+}

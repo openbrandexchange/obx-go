@@ -70,3 +70,22 @@ func TestStatusFor(t *testing.T) {
 		t.Fatalf("want 39 error codes, got %d", len(ErrorCodes()))
 	}
 }
+
+func TestLocalizedTextPick(t *testing.T) {
+	txt := LocalizedText{"nl": "Trui", "en": "Sweater", "de": "Pullover"}
+	cases := map[string]string{"nl": "Trui", "nl-BE": "Trui", "fr": "Sweater", "": "Sweater", "de-AT": "Pullover"}
+	for lang, want := range cases {
+		if got := txt.Pick(lang); got != want {
+			t.Errorf("Pick(%q) = %q, want %q", lang, got, want)
+		}
+	}
+	if got := (LocalizedText{"fr": "Pull", "de": "Pullover"}).Pick("nl"); got != "Pullover" {
+		t.Errorf("first available: got %q", got)
+	}
+	if got := (LocalizedText{"en-GB": "Jumper"}).Pick("en"); got != "Jumper" {
+		t.Errorf("base match: got %q", got)
+	}
+	if (LocalizedText(nil)).Pick("nl") != "" {
+		t.Error("nil text")
+	}
+}
