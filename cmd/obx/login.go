@@ -52,8 +52,9 @@ func cmdLogin(ctx context.Context, args []string, e *env) error {
 	if tok == "" {
 		tok = e.getenv("OBX_TOKEN")
 	}
+	var rd *bufio.Reader
 	if tok == "" && *email == "" {
-		rd := bufio.NewReader(e.stdin)
+		rd = bufio.NewReader(e.stdin)
 		fmt.Fprint(e.stderr, "Paste your automatic upload key (starts with obxi_),\nor press Enter to sign in with your portal e-mail and password: ")
 		line, _ := rd.ReadString('\n')
 		tok = strings.TrimSpace(line)
@@ -68,6 +69,14 @@ func cmdLogin(ctx context.Context, args []string, e *env) error {
 			return errors.New("no upload key and no e-mail given")
 		}
 		pw := e.getenv("OBX_PASSWORD")
+		if f, isFile := e.stdin.(*os.File); pw == "" && rd != nil && !(isFile && isTerminal(f)) {
+			// Piped input (a script): the password is the next line of the same stream. A
+			// separate reader would miss what the buffered reader above already consumed.
+			fmt.Fprint(e.stderr, "Password: ")
+			line, _ := rd.ReadString('\n')
+			pw = strings.TrimSpace(line)
+			fmt.Fprintln(e.stderr)
+		}
 		if pw == "" {
 			if pw, err = e.readPass("Password: "); err != nil {
 				return err

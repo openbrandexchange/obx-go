@@ -192,6 +192,12 @@ func TestLoginWithPassword(t *testing.T) {
 	if code != 0 || !strings.Contains(errOut, "Created upload key") {
 		t.Fatalf("login with password: %d %s %s", code, out, errOut)
 	}
+	// A script can pipe all three answers; the password is read from the same stream.
+	delete(h.vars, "OBX_PASSWORD")
+	h.stdin = "\nadmin@kestrel.example\nadmin-password-1\n"
+	if code, out, errOut := h.run("login", h.srv.URL); code != 0 || !strings.Contains(errOut, "Created upload key") {
+		t.Fatalf("login with piped password: %d %s %s", code, out, errOut)
+	}
 	h.vars["OBX_PASSWORD"] = "wrong-password-1"
 	if code, _, _ := h.run("login", h.srv.URL, "--email", "admin@kestrel.example"); code != exitFailed {
 		t.Fatalf("wrong password: %d", code)
