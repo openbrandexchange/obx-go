@@ -1,0 +1,21 @@
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      golang-x:
+        patterns: ["golang.org/x/*"]
+  - package-ecosystem: docker
+    directories: ["/"]
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directories: ["/", "/push-action", "/conformance-action"]
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]

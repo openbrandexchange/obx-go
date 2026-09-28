@@ -4,3 +4,4 @@ completions/
 /obx-conformance
 /obx-interop
 *.test
+third-party-licenses/

@@ -1,0 +1,48 @@
+name: Bug report
+description: Something in obx, the GitHub Action, the SDK or obx-conformance does not work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Security problems: do **not** file an issue. E-mail security@openbrandexchange.com (see SECURITY.md).
+  - type: dropdown
+    id: part
+    attributes:
+      label: Which part?
+      options:
+        - obx command (push, watch, pull, login, …)
+        - GitHub Action (push-action)
+        - obx-conformance or the mock portal
+        - Go SDK (client, ingest, canonicalcsv, renditions, …)
+        - Release archive, container image or Homebrew formula
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The command you ran (replace keys with obxi_…), and the portal edition if you know it.
+      placeholder: "obx push ./export --dry-run"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "`obx version` or `obx-conformance version`, and your operating system."
+      placeholder: "obx 0.1.0 on Windows 11"
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: What obx printed (`--json` helps). Remove e-mail addresses, access keys and API keys.
+      render: text

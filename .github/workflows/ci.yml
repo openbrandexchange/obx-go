@@ -1,24 +1,131 @@
+# Checks every push and pull request. Everything here runs without secrets:
+# obx-go builds obx-conformance itself and tests against its own mock portal.
 name: CI
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  test:
+  lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; echo "run gofmt -w on the files above" >&2; exit 1; }
       - run: go vet ./...
-      - run: go test -count=1 ./...
-      - name: Conformance of the mock node (fresh node, all profiles)
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.12
+      - name: shellcheck
+        run: shellcheck scripts/*.sh push-action/*.sh conformance-action/*.sh
+      - name: actionlint
         run: |
-          go build -o obx-conformance ./cmd/obx-conformance
-          ./obx-conformance mock --fresh --addr 127.0.0.1:8099 --setup-code ci-setup-code &
-          sleep 2
-          ./obx-conformance all --url http://127.0.0.1:8099 --setup-code ci-setup-code
-      - name: Container image builds
-        run: docker build -t obx:ci .
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
+          ./actionlint -color
+      - name: GoReleaser configuration
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: check
+
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Shells for the completion syntax checks
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq zsh fish
+      - name: Unit, HTTP, CLI and conformance tests
+        run: go test -race -count=1 ./...
+      - name: Locales complete (25 languages)
+        run: go test -count=1 -run 'TestLocalesComplete|TestGlossaryWords' ./cmd/obx/
+
+  conformance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Start the mock portal (fresh, needs setup)
+        run: |
+          go build -o "$RUNNER_TEMP/obx-conformance" ./cmd/obx-conformance
+          "$RUNNER_TEMP/obx-conformance" mock --fresh --addr 127.0.0.1:8099 --setup-code ci-setup-code > "$RUNNER_TEMP/mock.log" 2>&1 &
+          for _ in $(seq 1 50); do curl -fsS -o /dev/null http://127.0.0.1:8099/admin/api/setup && break; sleep 0.2; done
+      - name: obx-conformance all (through the conformance action)
+        id: conformance
+        uses: ./conformance-action
+        with:
+          url: http://127.0.0.1:8099
+          setup-code: ci-setup-code
+      - name: The mock passes everything
+        run: test "${{ steps.conformance.outputs.failed }}" = "0"
+
+  push-action:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: push-action against a local release and the mock portal
+        run: scripts/test-push-action.sh
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Binaries for every release platform
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: build --snapshot --clean
+      - name: Container image from source
+        run: |
+          docker build -t obx:ci .
+          docker run --rm obx:ci version
+
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+      - name: Licenses of dependencies (Apache-2.0 compatible only)
+        run: |
+          go install github.com/google/go-licenses/v2@latest
+          GOROOT=$(go env GOROOT) go-licenses check ./... --allowed_licenses=Apache-2.0,BSD-2-Clause,BSD-3-Clause,MIT,ISC
+          PATH="$(go env GOPATH)/bin:$PATH" scripts/third-party-licenses.sh

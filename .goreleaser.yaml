@@ -17,6 +17,7 @@ before:
   hooks:
     - go mod download
     - ./scripts/completions.sh
+    - ./scripts/third-party-licenses.sh
     - go test -count=1 ./cmd/obx/ -run 'TestLocalesComplete|TestGlossaryWords|TestHelpForEveryCommand'
 
 builds:
@@ -49,7 +50,7 @@ archives:
     format_overrides:
       - goos: windows
         formats: [zip]
-    files: [LICENSE, NOTICE, README.md, CHANGELOG.md, completions/*]
+    files: [LICENSE, NOTICE, README.md, CHANGELOG.md, completions/*, third-party-licenses/**/*]
   - id: obx-conformance
     ids: [obx-conformance]
     name_template: "obx-conformance_{{ .Os }}_{{ .Arch }}"
@@ -57,7 +58,7 @@ archives:
     format_overrides:
       - goos: windows
         formats: [zip]
-    files: [LICENSE, NOTICE]
+    files: [LICENSE, NOTICE, third-party-licenses/**/*]
 
 checksum:
   name_template: checksums.txt
@@ -74,6 +75,7 @@ dockers_v2:
   - id: obx
     ids: [obx, obx-conformance]
     dockerfile: Dockerfile.release
+    extra_files: [LICENSE, NOTICE, third-party-licenses]
     images:
       - ghcr.io/openbrandexchange/obx
     tags:
