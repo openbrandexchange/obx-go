@@ -92,7 +92,7 @@ func (r *runner) bootstrap(ctx context.Context, want map[string]bool) error {
 		if err != nil {
 			return fmt.Errorf("the node has no brand with external id \"kestrel\" (first brand of the fixture setup): %w", err)
 		}
-		if cfg.IngestToken == "" && (want[ProfileIngest] || want[ProfileProtocol]) {
+		if cfg.IngestToken == "" && (want[ProfileIngest] || want[ProfileProtocol] || want[ProfileSecurity]) {
 			tok, err := r.admin.CreateIngestToken(ctx, nodeadmin.IngestTokenInput{Name: "OBX conformance", Scopes: []string{obx.IngestScopeRead, obx.IngestScopeWrite, obx.IngestScopeDelete}})
 			if err != nil {
 				return fmt.Errorf("create upload key: %w", err)
@@ -151,7 +151,7 @@ func (r *runner) bootstrap(ctx context.Context, want map[string]bool) error {
 	if want[ProfileIngest] && r.ing == nil {
 		return errors.New("the ingest profile needs an upload key (--token) or admin credentials")
 	}
-	if want[ProfilePortal] && r.admin == nil {
+	if (want[ProfilePortal] || want[ProfileSecurity]) && r.admin == nil {
 		return errors.New("the portal profile needs admin credentials or a setup code")
 	}
 	if r.full != nil || r.ing != nil {

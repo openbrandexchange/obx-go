@@ -272,18 +272,18 @@ func Run(ctx context.Context, profiles []string, cfg Config) (*Report, error) {
 	for _, p := range profiles {
 		switch p {
 		case ProfileAll:
-			want[ProfileProtocol], want[ProfileIngest], want[ProfilePortal] = true, true, true
-		case ProfileProtocol, ProfileIngest, ProfilePortal:
+			want[ProfileProtocol], want[ProfileIngest], want[ProfilePortal], want[ProfileSecurity] = true, true, true, true
+		case ProfileProtocol, ProfileIngest, ProfilePortal, ProfileSecurity:
 			want[p] = true
 		default:
-			return nil, fmt.Errorf("conformance: unknown profile %q (use protocol, ingest, portal or all)", p)
+			return nil, fmt.Errorf("conformance: unknown profile %q (use protocol, ingest, portal, security or all)", p)
 		}
 	}
 	r := &runner{cfg: cfg, fixtures: cfg.Fixtures, report: &Report{BaseURL: base, SpecCommit: specdata.SpecCommit(), StartedAt: time.Now().UTC()}}
 	if r.fixtures == nil {
 		r.fixtures = specdata.Fixtures()
 	}
-	for _, p := range []string{ProfileProtocol, ProfileIngest, ProfilePortal} {
+	for _, p := range []string{ProfileProtocol, ProfileIngest, ProfilePortal, ProfileSecurity} {
 		if want[p] {
 			r.report.Profiles = append(r.report.Profiles, p)
 		}
@@ -390,7 +390,7 @@ var (
 	tests []testCase
 )
 
-var phaseOf = map[string]int{ProfileProtocol: 0, ProfileIngest: 10, ProfilePortal: 20}
+var phaseOf = map[string]int{ProfileProtocol: 0, ProfileIngest: 10, ProfilePortal: 20, ProfileSecurity: 30}
 
 func register(profile, id, title string, required bool, run func(*T)) {
 	registerPhase(phaseOf[profile], profile, id, title, required, run)

@@ -37,7 +37,7 @@ var Version = "dev"
 const usage = `obx-conformance checks an Open Brand Exchange node against the specification.
 
 Usage:
-  obx-conformance <profile> --url <node> [options]   profile: protocol, ingest, portal or all
+  obx-conformance <profile> --url <node> [options]   profile: protocol, ingest, portal, security or all
   obx-conformance mock [--addr :8080]                run the in-memory mock node
   obx-conformance list                               list all tests
   obx-conformance version
@@ -85,7 +85,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, getenv fu
 		return 0
 	case "mock":
 		return runMock(ctx, args[1:], stdout, stderr, getenv)
-	case conformance.ProfileProtocol, conformance.ProfileIngest, conformance.ProfilePortal, conformance.ProfileAll:
+	case conformance.ProfileProtocol, conformance.ProfileIngest, conformance.ProfilePortal, conformance.ProfileSecurity, conformance.ProfileAll:
 		return runSuite(ctx, args[0], args[1:], stdout, stderr, getenv)
 	}
 	fmt.Fprintf(stderr, "unknown command %q\n\n%s", args[0], usage)
