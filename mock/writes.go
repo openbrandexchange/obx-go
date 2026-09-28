@@ -324,8 +324,28 @@ func (s *state) store(existing, nr *record) {
 	if nr.kind == obx.KindVariant && nr.gtin14 != "" {
 		s.gtins[nr.gtin14] = nr.extID
 	}
+	if existing != nil {
+		s.unindexChild(existing)
+	}
 	s.table(nr.kind)[nr.extID] = nr
 	s.byID[nr.id] = nr
+	s.indexChild(nr)
+	s.noteChange(nr)
+}
+
+// noteChange marks a stored record for the next commit. A brand change can
+// change everything below it; a product change the visibility of its
+// variants and assets.
+func (s *state) noteChange(r *record) {
+	switch r.kind {
+	case obx.KindBrand:
+		s.dirtyAll = true
+	case obx.KindProduct:
+		for id, c := range s.childIndex()[r.extID] {
+			s.markDirty(id, c)
+		}
+	}
+	s.markDirty(r.id, r)
 }
 
 func (s *state) result(r *record, op, res string, warnings []string) writeResult {
@@ -589,6 +609,16 @@ func (s *state) remove(r *record) {
 	if r.kind == obx.KindVariant && r.gtin14 != "" {
 		delete(s.gtins, r.gtin14)
 	}
+	s.unindexChild(r)
+	if r.kind == obx.KindBrand {
+		s.dirtyAll = true
+	}
+	if r.kind == obx.KindProduct {
+		for id, c := range s.childIndex()[r.extID] {
+			s.markDirty(id, c)
+		}
+	}
+	s.markDirty(r.id, nil)
 }
 
 // assetOrder assigns positions 1..n atomically.
@@ -786,4 +816,6 @@ func (s *state) restoreCatalog(cs *catalogSnapshot) {
 		}
 	}
 	s.gtins, s.log, s.seq, s.visible, s.lastSeq, s.counters = cs.gtins, cs.log, cs.seq, cs.visible, cs.lastSeq, cs.counters
+	// The catalog is back to the snapshot; compare everything once more.
+	s.children, s.dirty, s.dirtyAll = nil, nil, true
 }

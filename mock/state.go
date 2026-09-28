@@ -117,6 +117,16 @@ type state struct {
 	cursorEpoch int
 	nextExpiry  time.Time
 	holdCommits int // >0: commit is deferred (atomic asset groups)
+	// Incremental commits: store and remove note what changed, so a commit
+	// looks at those records (and the children of a changed product) instead
+	// of every record. dirtyAll forces a full comparison (settings, brands,
+	// expiry, a restored dry run). The result is the same either way.
+	dirty    map[string]*record // id → current record (nil: removed)
+	dirtyAll bool
+	// fullCommits compares every record on every commit (tests: proves the
+	// incremental commit writes the same log).
+	fullCommits bool
+	children    map[string]map[string]*record // product external id → its variants and assets (built on demand)
 
 	retailers      map[string]*retailer
 	clients        map[string]*apiClient // by id
@@ -585,11 +595,79 @@ var typeRank = map[string]int{obx.ChangeBrand: 0, obx.ChangeProduct: 1, obx.Chan
 
 // commit compares the visible set with the previous commit and appends the
 // resulting change entries (ingest.md section 8).
+// markDirty notes that r (or, when removed, its id) changed.
+func (s *state) markDirty(id string, r *record) {
+	if s.dirty == nil {
+		s.dirty = map[string]*record{}
+	}
+	s.dirty[id] = r
+}
+
+// childIndex returns the variants and assets per product external id.
+func (s *state) childIndex() map[string]map[string]*record {
+	if s.children == nil {
+		s.children = map[string]map[string]*record{}
+		for _, t := range []map[string]*record{s.variants, s.assets} {
+			for _, r := range t {
+				s.indexChild(r)
+			}
+		}
+	}
+	return s.children
+}
+
+func (s *state) indexChild(r *record) {
+	if s.children == nil || (r.kind != obx.KindVariant && r.kind != obx.KindAsset) {
+		return
+	}
+	m := s.children[r.parentExt]
+	if m == nil {
+		m = map[string]*record{}
+		s.children[r.parentExt] = m
+	}
+	m[r.id] = r
+}
+
+func (s *state) unindexChild(r *record) {
+	if s.children == nil || (r.kind != obx.KindVariant && r.kind != obx.KindAsset) {
+		return
+	}
+	if m := s.children[r.parentExt]; m != nil {
+		delete(m, r.id)
+	}
+}
+
+// visInfoOf builds the visibility entry of a visible record.
+func (s *state) visInfoOf(r *record, h string) visInfo {
+	vi := visInfo{kind: r.kind, id: r.id, extID: r.extID, hash: h}
+	if b := s.brandOf(r); b != nil {
+		vi.brandID = b.id
+	}
+	if p := s.productOf(r); p != nil && r.kind != obx.KindProduct {
+		vi.productID = p.id
+	}
+	if r.kind == obx.KindAsset {
+		vi.colorNull = r.asset.ColorCode == nil
+		vi.color = obx.Str(r.asset.ColorCode)
+		vi.position = r.asset.Position
+	}
+	return vi
+}
+
+// commit turns what changed since the last commit into change-log entries.
+// Normally only the records noted by store and remove are compared; a full
+// comparison of every record runs when dirtyAll is set, when rights may have
+// expired, and the first time.
 func (s *state) commit() {
 	if s.holdCommits > 0 {
 		return
 	}
 	now := s.n.now()
+	if !s.dirtyAll && !s.fullCommits && s.visible != nil && (s.nextExpiry.IsZero() || now.Before(s.nextExpiry)) {
+		s.commitDirty(now)
+		return
+	}
+	s.dirty, s.dirtyAll = nil, false
 	cur := map[string]visInfo{}
 	s.nextExpiry = time.Time{}
 	for _, t := range []map[string]*record{s.brands, s.products, s.variants, s.assets} {
@@ -602,17 +680,8 @@ func (s *state) commit() {
 			if !s.isVisible(r, now) {
 				continue
 			}
-			vi := visInfo{kind: r.kind, id: r.id, extID: r.extID, hash: h}
-			if b := s.brandOf(r); b != nil {
-				vi.brandID = b.id
-			}
-			if p := s.productOf(r); p != nil && r.kind != obx.KindProduct {
-				vi.productID = p.id
-			}
+			vi := s.visInfoOf(r, h)
 			if r.kind == obx.KindAsset {
-				vi.colorNull = r.asset.ColorCode == nil
-				vi.color = obx.Str(r.asset.ColorCode)
-				vi.position = r.asset.Position
 				if exp := s.effectiveRights(r).ExpiresAt; exp != nil && (s.nextExpiry.IsZero() || exp.Before(s.nextExpiry)) {
 					s.nextExpiry = *exp
 				}
@@ -639,6 +708,68 @@ func (s *state) commit() {
 		}
 		return s.visible[e.id]
 	}
+	s.emit(changes, info)
+	s.visible = cur
+}
+
+// commitDirty compares only the records that changed since the last commit.
+func (s *state) commitDirty(now time.Time) {
+	if len(s.dirty) == 0 {
+		return
+	}
+	dirty := s.dirty
+	s.dirty = nil
+	gone := map[string]visInfo{}
+	var changes []entry
+	for id, r := range dirty {
+		prev, had := s.visible[id]
+		if r == nil || s.byID[id] != r {
+			if cur := s.byID[id]; cur != nil {
+				r = cur // replaced again after it was noted
+			} else {
+				if had {
+					changes = append(changes, entry{typ: prev.kind, op: obx.OpDelete, id: id, extID: prev.extID, brandID: prev.brandID, productID: prev.productID, at: now})
+					gone[id] = prev
+					delete(s.visible, id)
+				}
+				continue
+			}
+		}
+		h := s.reprHash(r)
+		if h != r.protoHash {
+			r.protoHash = h
+			r.protoAt = now
+		}
+		if !s.isVisible(r, now) {
+			if had {
+				changes = append(changes, entry{typ: prev.kind, op: obx.OpDelete, id: id, extID: prev.extID, brandID: prev.brandID, productID: prev.productID, at: now})
+				gone[id] = prev
+				delete(s.visible, id)
+			}
+			continue
+		}
+		vi := s.visInfoOf(r, h)
+		if r.kind == obx.KindAsset {
+			if exp := s.effectiveRights(r).ExpiresAt; exp != nil && (s.nextExpiry.IsZero() || exp.Before(s.nextExpiry)) {
+				s.nextExpiry = *exp
+			}
+		}
+		if !had || prev.hash != h {
+			changes = append(changes, entry{typ: vi.kind, op: obx.OpUpsert, id: id, extID: vi.extID, brandID: vi.brandID, productID: vi.productID, at: r.protoAt})
+		}
+		s.visible[id] = vi
+	}
+	s.emit(changes, func(e entry) visInfo {
+		if v, ok := s.visible[e.id]; ok {
+			return v
+		}
+		return gone[e.id]
+	})
+}
+
+// emit appends change entries in the order of protocol.md 6.3: brands,
+// products, variants, then assets by colour (none first) and position.
+func (s *state) emit(changes []entry, info func(entry) visInfo) {
 	sort.Slice(changes, func(i, j int) bool {
 		a, b := changes[i], changes[j]
 		if typeRank[a.typ] != typeRank[b.typ] {
@@ -661,7 +792,6 @@ func (s *state) commit() {
 	for _, e := range changes {
 		s.appendEntry(e)
 	}
-	s.visible = cur
 	if len(changes) > 0 {
 		s.n.notifyChanges(s.seq)
 	}

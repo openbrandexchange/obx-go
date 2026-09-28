@@ -40,3 +40,17 @@ Choices made in obx-go where the specification (v0.1.0-draft, commit in `specdat
 25. Without admin credentials, tests that need the admin API (revoking a client in P-AUTH-2, approving in P-ACC-1, P-FEED-6, the portal profile) are skipped, not failed. `--rate-limit-test` provokes a 429 (P-RATE-1); otherwise only the headers are checked. Every other raw request honours a 429 with its Retry-After (up to 5 times), so a whole `all` run passes against a node with a lowered limit (node-go: `OBX_TEST_RATE_LIMIT=1000`).
 26. The suite assumes a node that holds exactly the Kestrel fixtures (plus what the suite itself creates and removes). The ingest tests clean up the brands and products they create; objects created by the portal tests (test retailers, users, keys) stay.
 27. **Report for people.** The text report opens with the verdict, a summary per area in plain words ("Reading by retailers' software", "Automatic upload", "Admin and retailer screens", "Security"), then what failed with why it matters, optional checks not met, skipped checks, and every check. `--format markdown` gives a table for issues and CI step summaries; `--json` (or `--format json`) the machine-readable report. A run with `--only` is marked `partial` and never says CONFORMANT.
+
+## Performance
+
+28. **The mock's change log is incremental.** A write marks the records it stored or removed (and the variants and assets of a changed product); a commit compares only those. Brand changes, settings changes, a restored dry run and rights that may have expired still compare every record. Before this, every write compared the whole catalog, so importing 2,000 products took 4 minutes; now 0.2 s. `TestIncrementalCommitEqualsFullCommit` proves that both ways write the same log.
+29. **Load test** (`OBX_LOAD=1 go test -run TestLoad -v ./cmd/obx/`): 10,000 products with 60,000 variants (each with an EAN) against the mock, measured on an Apple M-series laptop under load, 2026-09-28:
+
+    | step | time |
+    |---|---|
+    | `obx push` (first, 60,000 rows) | 1.4 s |
+    | `obx push` again (nothing changed) | 1.1 s |
+    | `obx pull` snapshot (70,000 objects, one JSON file each) | 18 s |
+    | `obx pull` again (no changes) | 2 ms |
+
+    `obx pull` time is almost all file system work (one file per object, written atomically); the CLI side of `push` is CSV parsing and planning (60,000 rows in about 0.1 s). Image uploads are bounded by the network: only new or changed images are sent, `--parallel` of them at a time. The rendition cache is written behind (at most every 2 s), not per image. The node side (catalog browse, `/changes` paging, EAN lookup at this size) is measured in each portal edition's own load test.

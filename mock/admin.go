@@ -654,6 +654,7 @@ func (n *Node) handleSettings(w http.ResponseWriter, r *http.Request, _ *adminCt
 			s.grantChanged(rt, true)
 		}
 	}
+	s.dirtyAll = true // default rights and publication status apply to every asset
 	s.commit()
 	writeJSON(w, http.StatusOK, n.settingsView(r))
 }
