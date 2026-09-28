@@ -1,14 +1,23 @@
-# Builds release archives with GoReleaser when a version tag is pushed.
-# Nothing is published until a maintainer pushes a tag.
+# Publishes a release when a maintainer pushes a version tag (vX.Y.Z):
+# archives for Linux, macOS and Windows, checksums, SBOMs, the multi-arch image
+# ghcr.io/openbrandexchange/obx and the Homebrew formula. The GitHub release is
+# created as a draft, so a maintainer reviews it before it becomes visible.
+# Nothing here runs on branches or pull requests.
 name: Release
 on:
   push:
-    tags: ["v*"]
+    tags: ["v*.*.*"]
+
 permissions:
   contents: write
+  packages: write
+  id-token: write
+  attestations: write
+
 jobs:
   release:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
@@ -16,9 +25,28 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Release notes from CHANGELOG.md
+        run: scripts/release-notes.sh "${GITHUB_REF_NAME#v}" > "$RUNNER_TEMP/notes.md"
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: anchore/sbom-action/download-syft@v0
       - uses: goreleaser/goreleaser-action@v6
         with:
           version: "~> v2"
-          args: release --clean
+          args: release --clean --release-notes=${{ runner.temp }}/notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Homebrew formula
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          scripts/homebrew-formula.sh "${GITHUB_REF_NAME#v}" dist/checksums.txt > dist/obx.rb
+          gh release upload "$GITHUB_REF_NAME" dist/obx.rb --clobber
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-checksums: dist/checksums.txt

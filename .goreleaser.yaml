@@ -1,13 +1,23 @@
-# GoReleaser configuration for the obx and obx-conformance binaries.
-# Not published yet: run locally with `goreleaser release --snapshot --clean`
-# to produce the archives in dist/. The archive names match the download URL
-# used in the spec's automation recipes (obx_linux_amd64.tar.gz).
+# GoReleaser configuration for the obx and obx-conformance binaries, the
+# container image and the Homebrew formula.
+#
+# Nothing is published until a maintainer pushes a version tag (vX.Y.Z); the
+# release workflow (.github/workflows/release.yml) then runs
+# `goreleaser release --clean`. Try it locally without publishing:
+#
+#   goreleaser release --snapshot --clean            # archives, checksums, SBOMs, images in dist/
+#   goreleaser release --snapshot --clean --skip=docker
+#
+# The archive names match the download URL used by push-action and the spec's
+# automation recipes (obx_linux_amd64.tar.gz).
 version: 2
 project_name: obx
 
 before:
   hooks:
     - go mod download
+    - ./scripts/completions.sh
+    - go test -count=1 ./cmd/obx/ -run 'TestLocalesComplete|TestGlossaryWords|TestHelpForEveryCommand'
 
 builds:
   - id: obx
@@ -17,6 +27,7 @@ builds:
     goos: [linux, darwin, windows]
     goarch: [amd64, arm64]
     flags: [-trimpath]
+    mod_timestamp: "{{ .CommitTimestamp }}"
     ldflags:
       - -s -w -X main.Version={{ .Version }}
   - id: obx-conformance
@@ -26,6 +37,7 @@ builds:
     goos: [linux, darwin, windows]
     goarch: [amd64, arm64]
     flags: [-trimpath]
+    mod_timestamp: "{{ .CommitTimestamp }}"
     ldflags:
       - -s -w -X main.Version={{ .Version }}
 
@@ -37,7 +49,7 @@ archives:
     format_overrides:
       - goos: windows
         formats: [zip]
-    files: [LICENSE, NOTICE, README.md]
+    files: [LICENSE, NOTICE, README.md, CHANGELOG.md, completions/*]
   - id: obx-conformance
     ids: [obx-conformance]
     name_template: "obx-conformance_{{ .Os }}_{{ .Arch }}"
@@ -49,15 +61,51 @@ archives:
 
 checksum:
   name_template: checksums.txt
+  algorithm: sha256
+
+# A software bill of materials (SPDX JSON, made by syft) for every archive.
+sboms:
+  - artifacts: archive
+    documents: ["{{ .ArtifactName }}.sbom.spdx.json"]
+
+# Multi-arch image ghcr.io/openbrandexchange/obx (linux/amd64 and linux/arm64),
+# built from the release binaries with Dockerfile.release.
+dockers_v2:
+  - id: obx
+    ids: [obx, obx-conformance]
+    dockerfile: Dockerfile.release
+    images:
+      - ghcr.io/openbrandexchange/obx
+    tags:
+      - "{{ .Version }}"
+      - "v{{ .Major }}"
+      - "{{ if not .Prerelease }}latest{{ end }}"
+    platforms: [linux/amd64, linux/arm64]
+    sbom: true
+    labels:
+      org.opencontainers.image.title: obx
+      org.opencontainers.image.description: Publish product content to an Open Brand Exchange portal
+      org.opencontainers.image.source: https://github.com/openbrandexchange/obx-go
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.created: "{{ .Date }}"
+      org.opencontainers.image.licenses: Apache-2.0
+      org.opencontainers.image.vendor: Open Brand Exchange Foundation (in formation)
 
 snapshot:
   version_template: "{{ incpatch .Version }}-snapshot"
 
 changelog:
-  sort: asc
+  # The curated notes come from CHANGELOG.md (release workflow, --release-notes).
+  disable: true
 
 release:
   github:
     owner: openbrandexchange
     name: obx-go
   draft: true
+  prerelease: auto
+  footer: |
+    Verify a download: `sha256sum --check --ignore-missing checksums.txt`.
+    Container image: `ghcr.io/openbrandexchange/obx:{{ .Version }}` (linux/amd64, linux/arm64).
+    Homebrew: see packaging/homebrew in the repository.

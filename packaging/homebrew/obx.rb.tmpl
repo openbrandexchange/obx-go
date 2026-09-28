@@ -1,0 +1,44 @@
+# Homebrew formula for obx, rendered by scripts/homebrew-formula.sh from a
+# release's checksums.txt. Publish it in a tap repository
+# (github.com/openbrandexchange/homebrew-tap, Formula/obx.rb); then:
+#   brew install openbrandexchange/tap/obx
+class Obx < Formula
+  desc "Publish product images and article data to an Open Brand Exchange portal"
+  homepage "https://openbrandexchange.com"
+  version "@VERSION@"
+  license "Apache-2.0"
+
+  on_macos do
+    on_arm do
+      url "https://github.com/openbrandexchange/obx-go/releases/download/v@VERSION@/obx_darwin_arm64.tar.gz"
+      sha256 "@SHA_DARWIN_ARM64@"
+    end
+    on_intel do
+      url "https://github.com/openbrandexchange/obx-go/releases/download/v@VERSION@/obx_darwin_amd64.tar.gz"
+      sha256 "@SHA_DARWIN_AMD64@"
+    end
+  end
+
+  on_linux do
+    on_arm do
+      url "https://github.com/openbrandexchange/obx-go/releases/download/v@VERSION@/obx_linux_arm64.tar.gz"
+      sha256 "@SHA_LINUX_ARM64@"
+    end
+    on_intel do
+      url "https://github.com/openbrandexchange/obx-go/releases/download/v@VERSION@/obx_linux_amd64.tar.gz"
+      sha256 "@SHA_LINUX_AMD64@"
+    end
+  end
+
+  def install
+    bin.install "obx"
+    bash_completion.install "completions/obx.bash" => "obx"
+    zsh_completion.install "completions/obx.zsh" => "_obx"
+    fish_completion.install "completions/obx.fish"
+  end
+
+  test do
+    assert_match "obx #{version}", shell_output("#{bin}/obx version")
+    assert_match "obx push", shell_output("#{bin}/obx help")
+  end
+end

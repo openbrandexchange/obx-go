@@ -1,0 +1,11 @@
+# Image built by GoReleaser from the release binaries (see .goreleaser.yaml,
+# dockers_v2). For a local build from source use Dockerfile.
+FROM alpine:3.22
+ARG TARGETPLATFORM
+RUN apk add --no-cache ca-certificates tzdata && adduser -D -u 10001 obx
+COPY ${TARGETPLATFORM}/obx ${TARGETPLATFORM}/obx-conformance /usr/local/bin/
+USER obx
+ENV OBX_CONFIG_DIR=/home/obx/.obx
+WORKDIR /home/obx
+ENTRYPOINT ["obx"]
+CMD ["help"]
