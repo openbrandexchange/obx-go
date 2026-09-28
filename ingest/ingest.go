@@ -13,7 +13,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -464,16 +463,4 @@ func (c *Client) ImportProblems(ctx context.Context, jobID string) ([]obx.Import
 		return nil
 	})
 	return out, err
-}
-
-// readAllLimit reads r up to max bytes.
-func readAllLimit(r io.Reader, max int64) ([]byte, error) {
-	b, err := io.ReadAll(io.LimitReader(r, max+1))
-	if err != nil {
-		return nil, err
-	}
-	if int64(len(b)) > max {
-		return nil, fmt.Errorf("obx: file is larger than %d bytes", max)
-	}
-	return b, nil
 }
