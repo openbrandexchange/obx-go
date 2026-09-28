@@ -143,6 +143,7 @@
   "push.done_head": "Gotovo:",
   "push.dry_run_head": "Provjereno (proba, ništa nije promijenjeno):",
   "push.dry_run_note": "proba: ništa se ne učitava niti mijenja",
+  "push.dry_run_unchecked": "Ovaj portal provjerava nove slike tek kad se učitaju, pa nisu u brojkama iznad: {count}.",
   "push.dry_run_uploads": "Pravo pokretanje učitalo bi nove ili promijenjene slike: {count}.",
   "push.failed": "Nije uspjelo: {reason}",
   "push.failed_generic": "učitavanje nije uspjelo",

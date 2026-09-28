@@ -143,6 +143,7 @@
   "push.done_head": "Gata:",
   "push.dry_run_head": "Verificat (probă, nimic modificat):",
   "push.dry_run_note": "probă: nu se încarcă și nu se modifică nimic",
+  "push.dry_run_unchecked": "Acest portal verifică imaginile noi doar după ce sunt încărcate, deci nu sunt în numerele de mai sus: {count}.",
   "push.dry_run_uploads": "O rulare reală ar încărca imagini noi sau modificate: {count}.",
   "push.failed": "Eșuat: {reason}",
   "push.failed_generic": "încărcarea a eșuat",

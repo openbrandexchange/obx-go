@@ -302,6 +302,7 @@ type pushResult struct {
 	Images      int                  `json:"images"`
 	Uploaded    int                  `json:"uploaded_files"`
 	WouldUpload int                  `json:"would_upload_images,omitempty"`
+	Unchecked   int                  `json:"unchecked_images,omitempty"` // dry run: images the portal only checks once uploaded
 	LocalNotes  []string             `json:"local_problems,omitempty"`
 	exitCode    int
 }
@@ -478,15 +479,20 @@ feed:
 	if err != nil {
 		return nil, err
 	}
+	unchecked := map[string]bool{}
 	for _, p := range problems {
 		// A dry run does not upload, so the portal cannot know the new images
 		// yet; a real run uploads them first.
 		if o.dryRun && (p.ObxError == obx.ErrBlobMissing || p.ObxError == obx.ErrFilesMissing) &&
 			(missing[strings.ToLower(filepath.Base(p.File))] || p.Value != nil && missing[strings.ToLower(filepath.Base(*p.Value))]) {
+			if p.ObxError == obx.ErrBlobMissing {
+				unchecked[strings.ToLower(filepath.Base(p.File))] = true
+			}
 			continue
 		}
 		out.Problems = append(out.Problems, p)
 	}
+	out.Unchecked = len(unchecked)
 	out.exitCode = exitOK
 	errorsN := len(out.LocalNotes)
 	for _, p := range out.Problems {
@@ -594,6 +600,9 @@ func printSummary(e *env, w io.Writer, out *pushResult, o pushOptions) {
 		fmt.Fprintf(w, "%s %s → %s\n", head, e.t("push.rows_images", "rows", c.Rows, "images", c.Files), countsText(e, c))
 		if o.dryRun && out.WouldUpload > 0 {
 			fmt.Fprintln(w, e.t("push.dry_run_uploads", "count", out.WouldUpload))
+		}
+		if o.dryRun && out.Unchecked > 0 {
+			fmt.Fprintln(w, e.t("push.dry_run_unchecked", "count", out.Unchecked))
 		}
 	}
 	var errs, warns []string
@@ -705,6 +714,7 @@ var _ = register(map[string]string{
 	"push.dry_run_head":       "Checked (dry run, nothing changed):",
 	"push.rows_images":        "rows: {rows}, images: {images}",
 	"push.dry_run_uploads":    "A real run would upload new or changed images: {count}.",
+	"push.dry_run_unchecked":  "This portal checks new images only once they are uploaded, so these are not in the counts above: {count}.",
 	"push.and_more":           "… and {count} more (\"obx status --job {job}\" shows all)",
 	"push.problems_title":     "Problems, these rows or images were skipped",
 	"push.warnings_title":     "Warnings",

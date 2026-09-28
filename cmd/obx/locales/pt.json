@@ -143,6 +143,7 @@
   "push.done_head": "Concluído:",
   "push.dry_run_head": "Verificado (ensaio, nada alterado):",
   "push.dry_run_note": "ensaio: nada é enviado nem alterado",
+  "push.dry_run_unchecked": "Este portal só verifica as imagens novas depois de enviadas, por isso não estão nos números acima: {count}.",
   "push.dry_run_uploads": "Uma execução real enviaria imagens novas ou alteradas: {count}.",
   "push.failed": "Falhou: {reason}",
   "push.failed_generic": "o envio falhou",

@@ -143,6 +143,7 @@
   "push.done_head": "Klart:",
   "push.dry_run_head": "Kontrollerat (provkörning, inget ändrat):",
   "push.dry_run_note": "provkörning: inget laddas upp och inget ändras",
+  "push.dry_run_unchecked": "Den här portalen kontrollerar nya bilder först när de är uppladdade, så de finns inte med i siffrorna ovan: {count}.",
   "push.dry_run_uploads": "En riktig körning skulle ladda upp nya eller ändrade bilder: {count}.",
   "push.failed": "Misslyckades: {reason}",
   "push.failed_generic": "uppladdningen misslyckades",

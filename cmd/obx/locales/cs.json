@@ -143,6 +143,7 @@
   "push.done_head": "Hotovo:",
   "push.dry_run_head": "Zkontrolováno (zkouška, nic se nezměnilo):",
   "push.dry_run_note": "zkouška: nic se nenahrává ani nemění",
+  "push.dry_run_unchecked": "Tento portál kontroluje nové obrázky až po nahrání, proto nejsou v počtech výše: {count}.",
   "push.dry_run_uploads": "Skutečné spuštění by nahrálo nové nebo změněné obrázky: {count}.",
   "push.failed": "Nezdařilo se: {reason}",
   "push.failed_generic": "nahrání se nezdařilo",

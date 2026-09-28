@@ -143,6 +143,7 @@
   "push.done_head": "Klaar:",
   "push.dry_run_head": "Gecontroleerd (proefrun, niets gewijzigd):",
   "push.dry_run_note": "proefrun: er wordt niets geüpload of gewijzigd",
+  "push.dry_run_unchecked": "Deze beeldbank controleert nieuwe beelden pas als ze geüpload zijn, dus ze staan niet in de aantallen hierboven: {count}.",
   "push.dry_run_uploads": "Een echte run zou nieuwe of gewijzigde beelden uploaden: {count}.",
   "push.failed": "Mislukt: {reason}",
   "push.failed_generic": "de upload is mislukt",

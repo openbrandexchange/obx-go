@@ -143,6 +143,7 @@
   "push.done_head": "Valmis:",
   "push.dry_run_head": "Tarkistettu (koeajo, mitään ei muutettu):",
   "push.dry_run_note": "koeajo: mitään ei ladata eikä muuteta",
+  "push.dry_run_unchecked": "Tämä portaali tarkistaa uudet kuvat vasta, kun ne on ladattu, joten ne eivät ole yllä olevissa luvuissa: {count}.",
   "push.dry_run_uploads": "Oikea ajo lataisi uusia tai muuttuneita kuvia: {count}.",
   "push.failed": "Epäonnistui: {reason}",
   "push.failed_generic": "lataus epäonnistui",

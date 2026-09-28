@@ -318,7 +318,7 @@ func (n *Node) runImport(in *importInput, trigger string, wr writer) (*obx.Impor
 	}
 	for _, m := range in.manifest {
 		b := s.blobs[strings.ToLower(m.SHA256)]
-		if b == nil && in.options.DryRun {
+		if b == nil && in.options.DryRun && !n.opts.DryRunNeedsBlobs {
 			// A dry run checks what the import would do once the client has
 			// uploaded its images (obx push --dry-run uploads nothing): a
 			// placeholder stands in for the bytes until the run ends.

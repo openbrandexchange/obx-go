@@ -143,6 +143,7 @@
   "push.done_head": "Gatavs:",
   "push.dry_run_head": "Pārbaudīts (izmēģinājums, nekas nav mainīts):",
   "push.dry_run_note": "izmēģinājums: nekas netiek augšupielādēts vai mainīts",
+  "push.dry_run_unchecked": "Šis portāls jaunos attēlus pārbauda tikai pēc augšupielādes, tāpēc tie nav iekļauti skaitļos augstāk: {count}.",
   "push.dry_run_uploads": "Īsta palaišana augšupielādētu jaunus vai mainītus attēlus: {count}.",
   "push.failed": "Neizdevās: {reason}",
   "push.failed_generic": "augšupielāde neizdevās",

@@ -71,8 +71,10 @@ func (b *bar) render(done int64, extra string, now time.Time) string {
 			left := time.Duration(float64(elapsed) * float64(b.total-done) / float64(done))
 			sb.WriteString("  ·  " + b.e.t("progress.left", "time", humanDuration(left)))
 		}
-	} else {
+	} else if done > 0 {
 		fmt.Fprintf(&sb, "%d", done)
+	} else {
+		sb.WriteString("…")
 	}
 	if extra != "" {
 		sb.WriteString("  ·  " + extra)

@@ -143,6 +143,7 @@
   "push.done_head": "Kész:",
   "push.dry_run_head": "Ellenőrizve (próbafuttatás, semmi sem változott):",
   "push.dry_run_note": "próbafuttatás: semmi sem töltődik fel és semmi sem változik",
+  "push.dry_run_unchecked": "Ez a portál csak a feltöltés után ellenőrzi az új képeket, ezért ezek nincsenek benne a fenti számokban: {count}.",
   "push.dry_run_uploads": "Egy valódi futtatás új vagy módosított képeket töltene fel: {count}.",
   "push.failed": "Sikertelen: {reason}",
   "push.failed_generic": "a feltöltés sikertelen",

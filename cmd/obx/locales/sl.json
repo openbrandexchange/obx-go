@@ -143,6 +143,7 @@
   "push.done_head": "Končano:",
   "push.dry_run_head": "Preverjeno (poskus, nič spremenjeno):",
   "push.dry_run_note": "poskus: nič se ne naloži in nič ne spremeni",
+  "push.dry_run_unchecked": "Ta portal preveri nove slike šele, ko so naložene, zato niso v številkah zgoraj: {count}.",
   "push.dry_run_uploads": "Pravi zagon bi naložil nove ali spremenjene slike: {count}.",
   "push.failed": "Ni uspelo: {reason}",
   "push.failed_generic": "nalaganje ni uspelo",

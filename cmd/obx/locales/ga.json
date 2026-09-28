@@ -143,6 +143,7 @@
   "push.done_head": "Críochnaithe:",
   "push.dry_run_head": "Seiceáilte (triail, níor athraíodh faic):",
   "push.dry_run_note": "triail: ní uaslódáiltear ná ní athraítear faic",
+  "push.dry_run_unchecked": "Ní sheiceálann an tairseach seo íomhánna nua go dtí go mbíonn siad uaslódáilte, mar sin níl siad sna huimhreacha thuas: {count}.",
   "push.dry_run_uploads": "D'uaslódálfadh rith fíor íomhánna nua nó athraithe: {count}.",
   "push.failed": "Theip air: {reason}",
   "push.failed_generic": "theip ar an uaslódáil",

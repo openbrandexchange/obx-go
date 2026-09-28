@@ -143,6 +143,7 @@
   "push.done_head": "Lest:",
   "push.dry_run_head": "Iċċekkjat (prova, xejn ma nbidel):",
   "push.dry_run_note": "prova: xejn ma jitla' u xejn ma jinbidel",
+  "push.dry_run_unchecked": "Dan il-portal jiċċekkja stampi ġodda biss wara li jitilgħu, għalhekk mhumiex fin-numri ta' hawn fuq: {count}.",
   "push.dry_run_uploads": "Tħaddim reali kien itella' stampi ġodda jew mibdula: {count}.",
   "push.failed": "Falla: {reason}",
   "push.failed_generic": "it-tlugħ falla",

@@ -143,6 +143,7 @@
   "push.done_head": "Listo:",
   "push.dry_run_head": "Comprobado (prueba, sin cambios):",
   "push.dry_run_note": "prueba: no se sube ni cambia nada",
+  "push.dry_run_unchecked": "Este portal solo comprueba las imágenes nuevas cuando se han subido, así que no están en los números de arriba: {count}.",
   "push.dry_run_uploads": "Una ejecución real subiría imágenes nuevas o cambiadas: {count}.",
   "push.failed": "Error: {reason}",
   "push.failed_generic": "la subida falló",

@@ -143,6 +143,7 @@
   "push.done_head": "Terminé :",
   "push.dry_run_head": "Vérifié (essai, rien n'a été modifié) :",
   "push.dry_run_note": "essai : rien n'est envoyé ni modifié",
+  "push.dry_run_unchecked": "Cet espace ne vérifie les nouvelles images qu'une fois envoyées ; elles ne sont donc pas dans les chiffres ci-dessus : {count}.",
   "push.dry_run_uploads": "Un vrai passage enverrait des images nouvelles ou modifiées : {count}.",
   "push.failed": "Échec : {reason}",
   "push.failed_generic": "l'envoi a échoué",

@@ -191,6 +191,17 @@ func TestPushDryRunChangesNothing(t *testing.T) {
 	}
 }
 
+// On a portal that only checks uploaded images in a dry run, obx says which
+// images the counts leave out instead of listing them as problems.
+func TestDryRunOnPortalThatNeedsBlobs(t *testing.T) {
+	h, tok := freshNode(t, mock.Options{DryRunNeedsBlobs: true})
+	h.vars["OBX_URL"], h.vars["OBX_TOKEN"] = h.srv.URL, tok
+	code, out, errOut := h.run("push", fixtureFolder(t), "--dry-run")
+	if code != exitOK || !strings.Contains(out, "not in the counts above: 27") || strings.Contains(out, "Problems") {
+		t.Fatalf("dry run: %d\n%s\n%s", code, out, errOut)
+	}
+}
+
 // bigPNG is a valid PNG of more than 3 MiB (padding after the image data).
 func bigPNG(t *testing.T) []byte {
 	var buf bytes.Buffer

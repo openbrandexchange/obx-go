@@ -143,6 +143,7 @@
   "push.done_head": "Gotowe:",
   "push.dry_run_head": "Sprawdzono (próba, nic nie zmieniono):",
   "push.dry_run_note": "próba: nic nie jest przesyłane ani zmieniane",
+  "push.dry_run_unchecked": "Ten portal sprawdza nowe zdjęcia dopiero po przesłaniu, więc nie ma ich w liczbach powyżej: {count}.",
   "push.dry_run_uploads": "Prawdziwe uruchomienie przesłałoby nowe lub zmienione zdjęcia: {count}.",
   "push.failed": "Niepowodzenie: {reason}",
   "push.failed_generic": "przesyłanie nie powiodło się",

@@ -143,6 +143,7 @@
   "push.done_head": "Valmis:",
   "push.dry_run_head": "Kontrollitud (proovikäivitus, midagi ei muudetud):",
   "push.dry_run_note": "proovikäivitus: midagi ei laadita üles ega muudeta",
+  "push.dry_run_unchecked": "See portaal kontrollib uusi pilte alles pärast üleslaadimist, seega pole need ülaltoodud arvudes: {count}.",
   "push.dry_run_uploads": "Päris käivitus laadiks üles uusi või muudetud pilte: {count}.",
   "push.failed": "Ebaõnnestus: {reason}",
   "push.failed_generic": "üleslaadimine ebaõnnestus",

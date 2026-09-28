@@ -143,6 +143,7 @@
   "push.done_head": "Baigta:",
   "push.dry_run_head": "Patikrinta (bandomasis paleidimas, niekas nepakeista):",
   "push.dry_run_note": "bandomasis paleidimas: niekas neįkeliama ir nekeičiama",
+  "push.dry_run_unchecked": "Šis portalas naujus vaizdus tikrina tik juos įkėlus, todėl jų nėra aukščiau pateiktuose skaičiuose: {count}.",
   "push.dry_run_uploads": "Tikras paleidimas įkeltų naujus ar pakeistus vaizdus: {count}.",
   "push.failed": "Nepavyko: {reason}",
   "push.failed_generic": "įkėlimas nepavyko",

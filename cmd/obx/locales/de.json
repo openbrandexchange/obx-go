@@ -143,6 +143,7 @@
   "push.done_head": "Fertig:",
   "push.dry_run_head": "Geprüft (Probelauf, nichts geändert):",
   "push.dry_run_note": "Probelauf: es wird nichts hochgeladen oder geändert",
+  "push.dry_run_unchecked": "Dieses Portal prüft neue Bilder erst nach dem Hochladen, daher fehlen sie in den Zahlen oben: {count}.",
   "push.dry_run_uploads": "Ein echter Lauf würde neue oder geänderte Bilder hochladen: {count}.",
   "push.failed": "Fehlgeschlagen: {reason}",
   "push.failed_generic": "der Upload ist fehlgeschlagen",

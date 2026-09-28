@@ -45,6 +45,9 @@ type Options struct {
 	// ClientRenditions makes the node behave like a node without an image
 	// library: server_generated=false, clients upload web/square/thumb.
 	ClientRenditions bool
+	// DryRunNeedsBlobs makes a dry-run import report blob_missing for images
+	// it was not sent, like a portal that only plans uploaded bytes.
+	DryRunNeedsBlobs bool
 	// AllowPrivateURLs allows loopback and private webhook/import URLs and
 	// plain http (like OBX_ALLOW_PRIVATE_URLS=true). Link-local addresses
 	// (cloud metadata) stay refused.

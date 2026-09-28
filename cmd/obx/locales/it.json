@@ -143,6 +143,7 @@
   "push.done_head": "Fatto:",
   "push.dry_run_head": "Controllato (prova, nulla è cambiato):",
   "push.dry_run_note": "prova: non si carica né si modifica nulla",
+  "push.dry_run_unchecked": "Quest'area controlla le nuove immagini solo dopo il caricamento, quindi non sono nei numeri qui sopra: {count}.",
   "push.dry_run_uploads": "Un'esecuzione reale caricherebbe immagini nuove o modificate: {count}.",
   "push.failed": "Non riuscito: {reason}",
   "push.failed_generic": "il caricamento non è riuscito",

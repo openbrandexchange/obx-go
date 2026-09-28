@@ -143,6 +143,7 @@
   "push.done_head": "Ferdig:",
   "push.dry_run_head": "Sjekket (prøvekjøring, ingenting endret):",
   "push.dry_run_note": "prøvekjøring: ingenting lastes opp eller endres",
+  "push.dry_run_unchecked": "Denne portalen sjekker nye bilder først når de er lastet opp, så de er ikke med i tallene over: {count}.",
   "push.dry_run_uploads": "En ekte kjøring ville lastet opp nye eller endrede bilder: {count}.",
   "push.failed": "Mislyktes: {reason}",
   "push.failed_generic": "opplastingen mislyktes",
