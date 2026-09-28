@@ -1,6 +1,24 @@
-Open Brand Exchange Go SDK, CLI and conformance suite (obx-go)
-Copyright 2026 The Open Brand Exchange contributors
+Open Brand Exchange · Go SDK, obx command and conformance suite (obx-go)
+Copyright 2026 Richard Lindhout and contributors
 
-This product includes the JSON Schemas and fixtures of the Open Brand
-Exchange specification (https://github.com/openbrandexchange/spec),
-licensed under CC-BY-4.0, in the specdata directory.
+An initiative of Richard Lindhout · Open Brand Exchange Foundation (in formation)
+Contact: hello@openbrandexchange.com · Security reports: security@openbrandexchange.com
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+The copyright of the publisher and the name "Open Brand Exchange" are to be
+transferred to the Open Brand Exchange Foundation, a Dutch stichting that is
+being set up (see https://github.com/openbrandexchange/spec/blob/main/docs/governance.md).
+Contributions by others remain the copyright of their authors and are licensed
+under the same licence (Developer Certificate of Origin, see CONTRIBUTING.md).
+
+This product includes:
+
+- The JSON Schemas and fixtures of the Open Brand Exchange specification
+  (specdata/), CC-BY-4.0, "Open Brand Exchange specification, © Richard
+  Lindhout and contributors", https://github.com/openbrandexchange/spec.
+- Go modules compiled into the binaries, under permissive licences:
+  github.com/santhosh-tekuri/jsonschema/v6 (Apache-2.0) and
+  golang.org/x/{crypto,image,sys,term,text} (BSD-3-Clause).
+- The container image is based on Alpine Linux (packages under their own
+  licences).
