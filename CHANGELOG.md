@@ -38,8 +38,12 @@ First release, for Open Brand Exchange specification 0.1.0.
   (in-memory portal with the Kestrel fixtures and edge-case knobs).
 - **`obx-conformance`**: protocol, ingest, portal and security profiles
   against any portal, with a report for people (verdict, summary per area,
-  what failed and why it matters), `--format markdown` and `--json`; also runs
-  the mock portal.
+  what failed and why it matters), `--format markdown`, `--json` and
+  `report` to show a saved JSON report; also runs the mock portal.
+- **`conformance-action`**: the conformance check as a GitHub Action for
+  portal repositories, with the report in the job summary.
+- The mock portal's change log is incremental, so large test catalogs import
+  in seconds (10,000 products, 60,000 EANs: `obx push` in about 1.4 s).
 - `obx-interop` and `scripts/interop.sh`: the same automation against every
   portal edition, with a normalised comparison.
 - Release tooling: GoReleaser archives for Linux, macOS and Windows (amd64,
