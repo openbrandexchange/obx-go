@@ -141,8 +141,9 @@ func gather(e *env, o pushOptions) (*pushInput, error) {
 			return nil, err
 		}
 	} else if o.csv != "" && in.assets == nil {
-		// An assets.csv next to products.csv belongs to it, as in a folder or a package: leaving it
-		// out would reset its embargo dates, rights and AI labels to the portal defaults.
+		// An assets.csv next to products.csv belongs to it, as in a folder or a package, so its
+		// embargo dates, rights and AI labels arrive with the images (new images would otherwise
+		// get the portal defaults; images the portal has keep theirs, import rule 8).
 		if p := siblingAssetsCSV(o.csv); p != "" {
 			if in.assets, err = readFile(p); err != nil {
 				return nil, err

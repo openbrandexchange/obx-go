@@ -9,6 +9,7 @@ Everything here is **fictional**: "Kestrel Outfitters" is not a real company, th
 | `kestrel/images/*.png` | 27 placeholder images following `{style}_{color}_{position}_{qualifier}.png`; `KO-1002_OLV_1_front.png` is 2400×3000 to exercise downscaling, the rest 1200×1500 |
 | `kestrel/images.json` | sha256, bytes, dimensions of every original |
 | `expected/*.json` | expected protocol objects after importing `kestrel/` into a fresh node (placeholders: see [docs/conformance.md](../docs/conformance.md#fixture-conventions)) |
+| `expected/image-filenames.json` | test vectors for the image filename rule: style, colour (`null` for `ALL`), position, role, view and external id per name, or `error` |
 | `ingest/script.ndjson` | 18 ingest operations: upserts, an idempotent repeat, an image replacement, a position conflict, an asset unpublish, an invalid GTIN, a product unpublish + republish, deletes |
 | `ingest/expected-results.json` | expected `result` (and `obx_error`) per operation |
 | `ingest/expected-changes.json` | expected live `/changes` entries per operation (`after_op`), in order |

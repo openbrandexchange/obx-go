@@ -323,3 +323,51 @@ func TestPlanImageProblems(t *testing.T) {
 		t.Fatalf("catalog product images: %+v", p)
 	}
 }
+
+// TestImageNameVectors runs the specification's shared filename test vectors
+// (fixtures/expected/image-filenames.json, embedded in specdata).
+func TestImageNameVectors(t *testing.T) {
+	data, err := fs.ReadFile(specdata.Fixtures(), "expected/image-filenames.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Cases []struct {
+			Name       string  `json:"name"`
+			Style      string  `json:"style"`
+			Color      *string `json:"color"`
+			Position   int     `json:"position"`
+			Role       string  `json:"role"`
+			View       *string `json:"view"`
+			ExternalID string  `json:"external_id"`
+			Error      string  `json:"error"`
+		} `json:"cases"`
+	}
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Cases) < 20 {
+		t.Fatalf("only %d vectors", len(doc.Cases))
+	}
+	for _, c := range doc.Cases {
+		n, err := canonicalcsv.ParseImageName(c.Name)
+		if c.Error != "" {
+			if err == nil {
+				t.Errorf("%s: want an error, got %+v", c.Name, n)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("%s: %v", c.Name, err)
+			continue
+		}
+		wantColor := ""
+		if c.Color != nil {
+			wantColor = *c.Color
+		}
+		if n.Style != c.Style || n.Color != wantColor || n.Position != c.Position || n.Role != c.Role || obx.Str(n.View) != obx.Str(c.View) ||
+			canonicalcsv.AssetExternalID(n.Style, n.Color, n.Position) != c.ExternalID {
+			t.Errorf("%s: got style %s colour %q position %d role %s view %q id %s", c.Name, n.Style, n.Color, n.Position, n.Role, obx.Str(n.View), canonicalcsv.AssetExternalID(n.Style, n.Color, n.Position))
+		}
+	}
+}

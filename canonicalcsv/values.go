@@ -284,28 +284,29 @@ func ParseImageName(name string) (ImageName, error) {
 	stem := base[:len(base)-len(ext)-1]
 	parts := strings.Split(stem, "_")
 	n := ImageName{Role: obx.RolePackshot, Ext: ext}
-	var role, view string
-	for len(parts) > 3 {
-		last := strings.ToLower(parts[len(parts)-1])
-		isRole, isView := obx.IsRole(last), obx.IsView(last)
-		if !isRole && !isView {
-			break
-		}
-		if last == "detail" {
-			role, view = "detail", "detail"
-		} else {
-			if isRole && role == "" {
-				role = last
-			} else if isView && view == "" {
-				view = last
-			} else if isRole {
-				role = last
-			} else {
-				view = last
+	// Pop qualifiers while more than three parts remain (a two-part key such as
+	// size_chart first), then apply them right to left, each filling only what
+	// is still empty: the rightmost role or view wins.
+	isQualifier := func(k string) bool { return obx.IsRole(k) || obx.IsView(k) }
+	var quals []string // left to right
+	for {
+		if len(parts) > 4 {
+			if two := strings.ToLower(parts[len(parts)-2] + "_" + parts[len(parts)-1]); isQualifier(two) {
+				quals = append([]string{two}, quals...)
+				parts = parts[:len(parts)-2]
+				continue
 			}
 		}
-		parts = parts[:len(parts)-1]
+		if len(parts) > 3 {
+			if last := strings.ToLower(parts[len(parts)-1]); isQualifier(last) {
+				quals = append([]string{last}, quals...)
+				parts = parts[:len(parts)-1]
+				continue
+			}
+		}
+		break
 	}
+	role, view := roleAndView(quals)
 	if len(parts) < 3 {
 		return ImageName{}, fmt.Errorf("%q does not follow {style}_{colour}_{position}.jpg (for example KO-1001_NVY_1.jpg)", base)
 	}
@@ -332,6 +333,44 @@ func ParseImageName(name string) (ImageName, error) {
 		n.View = &v
 	}
 	return n, nil
+}
+
+// roleAndView applies qualifiers right to left, each filling only what is
+// still empty. "other" is the view when the name also has another role,
+// otherwise the role; "detail" sets both.
+func roleAndView(quals []string) (role, view string) {
+	otherIsView := false
+	for _, q := range quals {
+		if q != "other" && obx.IsRole(q) {
+			otherIsView = true
+		}
+	}
+	for i := len(quals) - 1; i >= 0; i-- {
+		switch q := quals[i]; {
+		case q == "detail":
+			if role == "" {
+				role = "detail"
+			}
+			if view == "" {
+				view = "detail"
+			}
+		case q == "other":
+			if otherIsView {
+				if view == "" {
+					view = "other"
+				}
+			} else if role == "" {
+				role = "other"
+			}
+		case obx.IsRole(q):
+			if role == "" {
+				role = q
+			}
+		case view == "":
+			view = q
+		}
+	}
+	return role, view
 }
 
 // RenditionFilename returns the download name of a rendition: the original

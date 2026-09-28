@@ -34,6 +34,7 @@ func init() {
 	register(p, "I-IMP-2", "import with an images_manifest gives the same result", true, testManifestImport)
 	register(p, "I-IMP-3", "mirror import unpublishes exactly what is missing; mass unpublish refused; zip slip refused", true, testMirror)
 	register(p, "I-IMP-4", "row problems carry file, row, column and code; the job still succeeds", true, testRowErrors)
+	register(p, "I-IMP-5", "an import without assets.csv keeps the images' embargo, credit, alt text and AI label", true, testImportKeepsImageFacts)
 }
 
 func testIngestInfo(t *T) {
@@ -647,6 +648,62 @@ func testReimport(t *T) {
 	t.Check(err, "GET imported asset")
 	if rec.Visibility != obx.VisibilityVisible {
 		t.Errorf("imported asset KO-1003_RST_3 is %s", rec.Visibility)
+	}
+}
+
+// testImportKeepsImageFacts: import-format.md rule 8. An import of products.csv
+// and the images without assets.csv must not take away what the images have:
+// the embargo and credit of KO-1002_BLK_2 and the alt text and AI label of
+// KO-1003_RST_3 (both from the fixture's assets.csv), and a credit set on
+// KO-1001_NVY_1 through the Ingest API, as the admin would.
+func testImportKeepsImageFacts(t *T) {
+	const credit = "Photo: Conformance Studio"
+	_, err := t.r.ing.Patch(t.ctx, obx.KindAsset, "KO-1001_NVY_1", map[string]any{"rights": map[string]any{"credit": credit}}, nil)
+	t.Check(err, "PATCH a credit onto KO-1001_NVY_1")
+	defer func() {
+		// Put the fixture state back for the checks that follow, also when this one failed.
+		if _, err := t.r.ing.Patch(t.ctx, obx.KindAsset, "KO-1001_NVY_1", map[string]any{"rights": map[string]any{"credit": nil}}, nil); err != nil {
+			t.Errorf("could not remove the test credit again: %v", err)
+		}
+		if req, err := t.r.fixtureImport(t.ctx, "files", nil); err == nil {
+			t.runImport(req)
+		}
+	}()
+	req, err := t.r.fixtureImport(t.ctx, "files", nil)
+	t.Check(err, "build import")
+	req.AssetsCSV = nil
+	t.expectUnchangedImport("import of products.csv and the images without assets.csv", req)
+
+	var data struct {
+		AltText    map[string]string `json:"alt_text"`
+		Rights     map[string]any    `json:"rights"`
+		Provenance map[string]any    `json:"provenance"`
+	}
+	get := func(ext string) {
+		data.AltText, data.Rights, data.Provenance = nil, nil, nil
+		rec, err := t.r.ing.Get(t.ctx, obx.KindAsset, ext)
+		t.Check(err, "GET "+ext)
+		if err := json.Unmarshal(rec.Data, &data); err != nil {
+			t.Fatalf("%s: data is not an asset: %v", ext, err)
+		}
+	}
+	get("KO-1002_BLK_2")
+	if e, _ := data.Rights["embargo_until"].(string); !strings.HasPrefix(e, "2030-01-01") {
+		t.Errorf("KO-1002_BLK_2 lost its embargo: rights.embargo_until is %v, want 2030-01-01", data.Rights["embargo_until"])
+	}
+	if c, _ := data.Rights["credit"].(string); c != "Photo: Kestrel Studio" {
+		t.Errorf("KO-1002_BLK_2 lost its credit: rights.credit is %v", data.Rights["credit"])
+	}
+	get("KO-1003_RST_3")
+	if ai, _ := data.Provenance["ai_generated"].(bool); !ai {
+		t.Errorf("KO-1003_RST_3 lost its AI label: provenance.ai_generated is %v", data.Provenance["ai_generated"])
+	}
+	if data.AltText["nl"] == "" || data.AltText["en"] == "" {
+		t.Errorf("KO-1003_RST_3 lost its alt text: %v", data.AltText)
+	}
+	get("KO-1001_NVY_1")
+	if c, _ := data.Rights["credit"].(string); c != credit {
+		t.Errorf("KO-1001_NVY_1 lost the credit set through the Ingest API: rights.credit is %v", data.Rights["credit"])
 	}
 }
 

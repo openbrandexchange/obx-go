@@ -447,7 +447,11 @@ func (n *Node) runImport(in *importInput, trigger string, wr writer) (*obx.Impor
 		s.holdCommits++
 		restore := n.freePositions(pp)
 		for _, a := range pp.Assets {
-			res, p := s.apply(wr, obx.IngestOpUpsert, obx.KindAsset, a.ExternalID, canonicalJSON(a.Input), "")
+			data := canonicalJSON(a.Input)
+			if old := s.assets[a.ExternalID]; old != nil && old.asset != nil {
+				data = keepImageFacts(data, old.asset)
+			}
+			res, p := s.apply(wr, obx.IngestOpUpsert, obx.KindAsset, a.ExternalID, data, "")
 			if p != nil {
 				rowErr(a.Image.Name, 0, p)
 				continue
@@ -577,4 +581,32 @@ func (n *Node) handleIngestImport(w http.ResponseWriter, r *http.Request) {
 	n.notifyAdmin(obx.EventIngestJobCompleted, map[string]string{"job_id": j.ID, "status": j.Status})
 	w.Header().Set("Location", n.baseURL(r)+obx.PathIngest+"/jobs/"+j.ID)
 	writeJSON(w, http.StatusAccepted, n.jobView(r, j))
+}
+
+// keepImageFacts applies import-format.md rule 8 to an image the node already
+// has: alt text (per language), rights and provenance fields that the import
+// does not state keep their stored values. The file name and the assets.csv
+// row still decide the file, product, colour, position, role and view, and a
+// PUT without status keeps the stored status anyway.
+func keepImageFacts(data json.RawMessage, old *obx.AssetInput) json.RawMessage {
+	var cur, prev map[string]any
+	if json.Unmarshal(data, &cur) != nil || json.Unmarshal(canonicalJSON(old), &prev) != nil {
+		return data
+	}
+	for _, k := range []string{"alt_text", "rights", "provenance"} {
+		stored, _ := prev[k].(map[string]any)
+		if len(stored) == 0 {
+			continue
+		}
+		merged := map[string]any{}
+		for f, v := range stored {
+			merged[f] = v
+		}
+		stated, _ := cur[k].(map[string]any)
+		for f, v := range stated {
+			merged[f] = v
+		}
+		cur[k] = merged
+	}
+	return canonicalJSON(cur)
 }

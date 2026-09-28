@@ -15,6 +15,11 @@ it reads stay compatible within a minor version.
   embargo dates, rights and AI labels in it silently fell back to the portal defaults.
 - `obx status` labels a `--dry-run` upload as a dry run; it read like an upload that had
   changed the catalog.
+- The mock node follows import rule 8 of the specification: an import no longer takes
+  away the alt text, rights, embargo or AI label of an image it does not state them for.
+  New conformance check I-IMP-5 tests this on every portal.
+- The shared filename test vectors: `obx-conformance` and the mock read image names as
+  the specification's `fixtures/expected/image-filenames.json` says.
 
 ## [0.1.0] - unreleased
 

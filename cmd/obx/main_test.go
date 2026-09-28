@@ -333,9 +333,11 @@ func TestWatchOnce(t *testing.T) {
 	if code != 0 || !strings.Contains(errOut, "nothing changed") {
 		t.Fatalf("second watch: %d %s", code, errOut)
 	}
+	// Only the image with the new alt text changes: the images that lost their
+	// assets.csv row keep their embargo, credit and AI label (import rule 8).
 	os.WriteFile(filepath.Join(dir, "assets.csv"), []byte("file,alt_text:en\nKO-1001_NVY_1_front.png,Navy sweater seen from the front\n"), 0o644)
 	code, _, errOut = h.run("watch", dir, "--once")
-	if code != 0 || !strings.Contains(errOut, "updated: 3") {
+	if code != 0 || !strings.Contains(errOut, "updated: 1 ") {
 		t.Fatalf("watch after a change: %d %s", code, errOut)
 	}
 }
