@@ -1,6 +1,6 @@
 # Implementation notes
 
-Choices made in obx-go where the specification (v0.1.0-draft, commit in `specdata/SPEC_COMMIT`) is silent, ambiguous or contradicts itself. Each is the simplest reading; the ones marked **spec** should be settled in the spec repository.
+Choices made in obx-go where the specification (v0.1.0, commit in `specdata/SPEC_COMMIT`) is silent, ambiguous or contradicts itself. Each is the simplest reading; the ones marked **spec** should be settled in the spec repository.
 
 ## Protocol and ingest behaviour (mock node and conformance suite)
 
