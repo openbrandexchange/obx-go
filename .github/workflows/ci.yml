@@ -56,8 +56,15 @@ jobs:
       - name: Shells for the completion syntax checks
         if: runner.os == 'Linux'
         run: sudo apt-get update -qq && sudo apt-get install -y -qq zsh fish
-      - name: Unit, HTTP, CLI and conformance tests
-        run: go test -race -count=1 ./...
+      - name: Unit, HTTP and CLI tests with the race detector
+        # The conformance package renders every fixture image in the mock; under
+        # the race detector that takes longer than the suite's HTTP timeouts, so
+        # it runs without -race here and again in the conformance job.
+        run: |
+          # shellcheck disable=SC2046 # package paths contain no spaces
+          go test -race -count=1 -timeout 30m $(go list ./... | grep -v '/conformance$')
+      - name: Conformance suite against the mock (both image modes)
+        run: go test -count=1 -timeout 20m ./conformance/
       - name: Locales complete (25 languages)
         run: go test -count=1 -run 'TestLocalesComplete|TestGlossaryWords' ./cmd/obx/
 
