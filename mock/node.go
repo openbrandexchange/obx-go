@@ -330,20 +330,26 @@ func problemf(code, format string, args ...any) *obx.Problem {
 
 // readJSON decodes a JSON body (max 10 MiB) into v.
 func readJSON(r *http.Request, v any) *obx.Problem {
+	_, p := readJSONBody(r, v)
+	return p
+}
+
+// readJSONBody is readJSON that also returns the raw body.
+func readJSONBody(r *http.Request, v any) ([]byte, *obx.Problem) {
 	body, err := io.ReadAll(io.LimitReader(r.Body, 10<<20+1))
 	if err != nil {
-		return problem(obx.ErrInvalidRequest, "could not read the body")
+		return nil, problem(obx.ErrInvalidRequest, "could not read the body")
 	}
 	if len(body) > 10<<20 {
-		return problem(obx.ErrPayloadTooLarge, "body larger than 10 MiB")
+		return nil, problem(obx.ErrPayloadTooLarge, "body larger than 10 MiB")
 	}
 	if len(strings.TrimSpace(string(body))) == 0 {
 		body = []byte("{}")
 	}
 	if err := json.Unmarshal(body, v); err != nil {
-		return problemf(obx.ErrInvalidRequest, "body is not valid JSON: %v", err)
+		return nil, problemf(obx.ErrInvalidRequest, "body is not valid JSON: %v", err)
 	}
-	return nil
+	return body, nil
 }
 
 // ---- ids and secrets

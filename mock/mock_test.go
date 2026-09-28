@@ -12,6 +12,7 @@ import (
 	"github.com/openbrandexchange/obx-go/client"
 	"github.com/openbrandexchange/obx-go/ingest"
 	"github.com/openbrandexchange/obx-go/mock"
+	"github.com/openbrandexchange/obx-go/nodeadmin"
 	"github.com/openbrandexchange/obx-go/obx"
 )
 
@@ -143,5 +144,57 @@ func TestIngestRecordShape(t *testing.T) {
 	}
 	if v, ok := p["data"].(map[string]any)["dpp_url"]; !ok || v != nil {
 		t.Errorf("unsent nullable fields are null: %v", p["data"])
+	}
+}
+
+// A brand's own portal word (branding.portal_name) is stored per language,
+// shown on the public branding and cleared with null.
+func TestPortalName(t *testing.T) {
+	n := mock.New(mock.Options{Fixtures: true})
+	srv := httptest.NewServer(n)
+	defer srv.Close()
+	ctx := context.Background()
+	creds := n.Credentials()
+	adm, _ := nodeadmin.New(srv.URL, nil)
+	if _, err := adm.Login(ctx, creds.AdminEmail, creds.AdminPassword); err != nil {
+		t.Fatal(err)
+	}
+	s, err := adm.PatchSettings(ctx, map[string]any{"branding": map[string]any{"portal_name": map[string]string{"nl": "Merkbeeldbank", "de": ""}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Branding.PortalName; len(got) != 1 || got["nl"] != "Merkbeeldbank" {
+		t.Fatalf("settings portal_name: %v", got)
+	}
+	public := func() nodeadmin.PublicBranding {
+		var b nodeadmin.PublicBranding
+		if err := adm.Call(ctx, http.MethodGet, obx.PathAdminAPI+"/public/branding", nil, &b); err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+	if b := public(); b.PortalName["nl"] != "Merkbeeldbank" {
+		t.Fatalf("public branding portal_name: %v", b.PortalName)
+	}
+	// Changing another setting keeps it; null clears it.
+	if _, err := adm.PatchSettings(ctx, map[string]any{"branding": map[string]any{"accent_color": "#123456"}}); err != nil {
+		t.Fatal(err)
+	}
+	if b := public(); b.PortalName["nl"] != "Merkbeeldbank" {
+		t.Fatalf("portal_name lost by an unrelated change: %v", b.PortalName)
+	}
+	s, err = adm.PatchSettings(ctx, json.RawMessage(`{"branding":{"portal_name":null}}`))
+	if err != nil || s.Branding.PortalName != nil {
+		t.Fatalf("clear portal_name: %v %v", s, err)
+	}
+	resp, err := http.Get(srv.URL + obx.PathAdminAPI + "/public/branding")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raw map[string]json.RawMessage
+	json.NewDecoder(resp.Body).Decode(&raw)
+	resp.Body.Close()
+	if string(raw["portal_name"]) != "null" {
+		t.Fatalf("public branding without a portal word: portal_name = %s, want null", raw["portal_name"])
 	}
 }

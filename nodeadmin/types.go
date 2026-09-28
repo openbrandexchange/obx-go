@@ -14,10 +14,13 @@ import (
 
 // PublicBranding is shown on the login and request-access pages.
 type PublicBranding struct {
-	Name                  string            `json:"name"`
-	LogoURL               *string           `json:"logo_url"`
-	AccentColor           *string           `json:"accent_color"`
-	WelcomeText           obx.LocalizedText `json:"welcome_text"`
+	Name        string            `json:"name"`
+	LogoURL     *string           `json:"logo_url"`
+	AccentColor *string           `json:"accent_color"`
+	WelcomeText obx.LocalizedText `json:"welcome_text"`
+	// PortalName is the brand's own word for its portal per language (null:
+	// the UI uses the glossary word of the reader's language).
+	PortalName            obx.LocalizedText `json:"portal_name"`
 	Languages             []string          `json:"languages"`
 	DefaultLanguage       string            `json:"default_language"`
 	AccessRequestsEnabled bool              `json:"access_requests_enabled"`
@@ -108,6 +111,9 @@ type SettingsBranding struct {
 	LogoURL     *string           `json:"logo_url,omitempty"`
 	AccentColor *string           `json:"accent_color,omitempty"`
 	WelcomeText obx.LocalizedText `json:"welcome_text,omitempty"`
+	// PortalName overrides the portal word ("Beeldbank", "Händlerportal" …)
+	// per language. In a PATCH, an empty object or JSON null clears it.
+	PortalName obx.LocalizedText `json:"portal_name,omitempty"`
 }
 
 // SettingsPortal are the portal switches.

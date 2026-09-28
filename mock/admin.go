@@ -194,7 +194,8 @@ func (n *Node) endSessionsOf(userID string) {
 func (n *Node) publicBranding(r *http.Request) nodeadmin.PublicBranding {
 	s := n.st
 	b := nodeadmin.PublicBranding{Name: s.settings.displayName, AccentColor: s.settings.accent, WelcomeText: nilIfEmpty(s.settings.welcome),
-		Languages: s.settings.languages, DefaultLanguage: s.settings.defaultLang, AccessRequestsEnabled: s.settings.accessRequests,
+		PortalName: nilIfEmpty(s.settings.portalName),
+		Languages:  s.settings.languages, DefaultLanguage: s.settings.defaultLang, AccessRequestsEnabled: s.settings.accessRequests,
 		SetupRequired: !s.setupDone, Brands: []nodeadmin.IDName{}}
 	if s.settings.logo != nil {
 		b.LogoURL = ptr(n.baseURL(r) + obx.PathAdminAPI + "/public/logo")
@@ -538,7 +539,7 @@ func (n *Node) settingsView(r *http.Request) nodeadmin.Settings {
 	base := n.baseURL(r)
 	out := nodeadmin.Settings{
 		Company:  &nodeadmin.SettingsCompany{Name: st.companyName, Website: st.website, ContactEmail: st.contactEmail, Country: st.country},
-		Branding: &nodeadmin.SettingsBranding{DisplayName: st.displayName, AccentColor: st.accent, WelcomeText: st.welcome},
+		Branding: &nodeadmin.SettingsBranding{DisplayName: st.displayName, AccentColor: st.accent, WelcomeText: st.welcome, PortalName: st.portalName},
 		Portal: &nodeadmin.SettingsPortal{AccessRequestsEnabled: ptr(st.accessRequests), AllowOriginalDownload: ptr(st.allowOriginal),
 			AllowArticleDataExport: ptr(st.allowDataExport), RetailerAPISelfService: ptr(st.apiSelfService), Languages: st.languages, DefaultLanguage: st.defaultLang},
 		Defaults: &nodeadmin.SettingsDefaults{Rights: ptr(st.defaultRights), IngestStatus: st.defaultIngestStatus},
@@ -558,9 +559,20 @@ func (n *Node) handleSettings(w http.ResponseWriter, r *http.Request, _ *adminCt
 		return
 	}
 	var in nodeadmin.Settings
-	if p := readJSON(r, &in); p != nil {
+	body, p := readJSONBody(r, &in)
+	if p != nil {
 		writeProblem(w, p)
 		return
+	}
+	// JSON null cannot be told apart from an absent field after decoding into
+	// a map type, so look at the raw body for the texts that null clears.
+	var raw struct {
+		Branding map[string]json.RawMessage `json:"branding"`
+	}
+	json.Unmarshal(body, &raw)
+	isNull := func(key string) bool {
+		v, ok := raw.Branding[key]
+		return ok && strings.TrimSpace(string(v)) == "null"
 	}
 	if c := in.Company; c != nil && c.Website != nil && *c.Website != "" && !webURL(*c.Website) {
 		writeProblem(w, problem(obx.ErrValidationFailed, "company.website must be an http(s) address"))
@@ -594,8 +606,17 @@ func (n *Node) handleSettings(w http.ResponseWriter, r *http.Request, _ *adminCt
 			st.accent = b.AccentColor
 		}
 		if b.WelcomeText != nil {
-			st.welcome = b.WelcomeText
+			st.welcome = cleanText(b.WelcomeText)
 		}
+		if b.PortalName != nil {
+			st.portalName = cleanText(b.PortalName)
+		}
+	}
+	if isNull("welcome_text") {
+		st.welcome = nil
+	}
+	if isNull("portal_name") {
+		st.portalName = nil
 	}
 	if p := in.Portal; p != nil {
 		if p.AccessRequestsEnabled != nil {
