@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -452,8 +453,34 @@ func (r *response) code() string {
 
 func (r *response) decode(v any) error { return json.Unmarshal(r.body, v) }
 
-// do sends a request without retries and reads the whole answer.
+// noRateRetry marks a context whose requests must see a 429 as it is.
+type noRateRetry struct{}
+
+// do sends a request and reads the whole answer. A 429 is retried after its
+// Retry-After (a node may rate-limit the suite's heavy tests), except under
+// a context from withoutRateRetry; nothing else is retried.
 func (r *runner) do(ctx context.Context, method, url string, body []byte, header http.Header) (*response, error) {
+	for attempt := 0; ; attempt++ {
+		res, err := r.doOnce(ctx, method, url, body, header)
+		if err != nil || res.status != http.StatusTooManyRequests || attempt >= 5 || ctx.Value(noRateRetry{}) != nil {
+			return res, err
+		}
+		wait, _ := strconv.Atoi(res.header.Get("Retry-After"))
+		wait = min(max(wait, 1), 65)
+		select {
+		case <-time.After(time.Duration(wait) * time.Second):
+		case <-ctx.Done():
+			return res, nil
+		}
+	}
+}
+
+// withoutRateRetry returns a context whose requests are not retried on 429.
+func withoutRateRetry(ctx context.Context) context.Context {
+	return context.WithValue(ctx, noRateRetry{}, true)
+}
+
+func (r *runner) doOnce(ctx context.Context, method, url string, body []byte, header http.Header) (*response, error) {
 	var rd io.Reader
 	if body != nil {
 		rd = bytes.NewReader(body)

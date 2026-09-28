@@ -1130,8 +1130,15 @@ func testRateLimit(t *T) {
 		t.Notef("429 not provoked (use --rate-limit-test against a node with a low limit)")
 		return
 	}
+	tok, err := t.r.full.Token(t.ctx)
+	t.Check(err, "token")
+	ctx := withoutRateRetry(t.ctx)
 	for i := 0; i < 5000; i++ {
-		res := t.get(t.r.full, "/grant")
+		res, err := t.r.do(ctx, http.MethodGet, t.r.cfg.BaseURL+obx.PathAPIBase+"/grant", nil, bearerHeader(tok))
+		if err != nil {
+			t.Errorf("GET /grant: %v", err)
+			return
+		}
 		if res.status == http.StatusTooManyRequests {
 			if res.header.Get("Retry-After") == "" {
 				t.Errorf("429 without Retry-After")
