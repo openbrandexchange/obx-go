@@ -722,11 +722,12 @@ func (n *Node) lookupGTINs(inputs []string, rt *retailer, signer *urlSigner) obx
 			continue
 		}
 		seen[key] = true
+		echo := strings.TrimSpace(in)
 		if !ok {
-			res.Results = append(res.Results, obx.GTINResult{Input: in, Status: obx.GTINInvalid})
+			res.Results = append(res.Results, obx.GTINResult{Input: echo, Status: obx.GTINInvalid})
 			continue
 		}
-		out := obx.GTINResult{Input: in, GTIN: ptr(g), Status: obx.GTINUnmatched}
+		out := obx.GTINResult{Input: echo, GTIN: ptr(g), Status: obx.GTINUnmatched}
 		if ext, found := s.gtins[g]; found {
 			v := s.variants[ext]
 			if s.visibleTo(v, rt, now) {

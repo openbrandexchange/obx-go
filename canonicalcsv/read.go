@@ -169,8 +169,9 @@ func emptyRow(row []string) bool {
 // noRow marks a problem that belongs to a whole file (row null).
 const noRow = -1
 
-// problem builds an ImportRowError. row is the 1-based data row, 0 for the
-// header and noRow for file-level problems.
+// problem builds an ImportRowError. row is the 1-based data row, or noRow
+// for problems of the header or the whole file (row null: ImportRowError.row
+// has minimum 1).
 func problem(file string, row int, col, code, severity, detail, value string) obx.ImportRowError {
 	e := obx.ImportRowError{File: file, Severity: severity, ObxError: code, Detail: detail}
 	if row >= 0 {

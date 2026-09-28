@@ -186,7 +186,7 @@ func TestProductRowProblems(t *testing.T) {
 		got[key{r, obx.Str(p.Column), p.ObxError, p.Severity}] = true
 	}
 	want := []key{
-		{0, "Mystery", obx.ErrValidationFailed, obx.SeverityWarning},
+		{-1, "Mystery", obx.ErrValidationFailed, obx.SeverityWarning},
 		{2, "gtin", obx.ErrInvalidGTIN, obx.SeverityError},
 		{3, "gtin", obx.ErrGTINConflict, obx.SeverityError},
 		{4, "color_code", obx.ErrValidationFailed, obx.SeverityError},

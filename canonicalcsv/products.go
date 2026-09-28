@@ -114,7 +114,7 @@ func ParseProducts(r io.Reader, file string, opts Options) (*ProductsFile, error
 		case base == "attr" && c.lang != "":
 			key := c.lang
 			if !IsKey(key) {
-				out.Problems = append(out.Problems, problem(file, 0, c.raw, obx.ErrValidationFailed, obx.SeverityWarning, fmt.Sprintf("attribute key %q must be lowercase letters, digits and _; column ignored", key), ""))
+				out.Problems = append(out.Problems, problem(file, noRow, c.raw, obx.ErrValidationFailed, obx.SeverityWarning, fmt.Sprintf("attribute key %q must be lowercase letters, digits and _; column ignored", key), ""))
 				continue
 			}
 			attrIdx[key] = i
@@ -122,7 +122,7 @@ func ParseProducts(r io.Reader, file string, opts Options) (*ProductsFile, error
 			langIdx[base] = append(langIdx[base], langCol{c.lang, i})
 		case (productColumns[base] || variantColumns[base]) && c.lang == "":
 			if _, dup := idx[base]; dup {
-				out.Problems = append(out.Problems, problem(file, 0, c.raw, obx.ErrValidationFailed, obx.SeverityWarning, fmt.Sprintf("column %q appears twice; the first one is used", base), ""))
+				out.Problems = append(out.Problems, problem(file, noRow, c.raw, obx.ErrValidationFailed, obx.SeverityWarning, fmt.Sprintf("column %q appears twice; the first one is used", base), ""))
 				continue
 			}
 			idx[base] = i
@@ -130,7 +130,7 @@ func ParseProducts(r io.Reader, file string, opts Options) (*ProductsFile, error
 			if strings.TrimSpace(c.raw) == "" {
 				continue
 			}
-			out.Problems = append(out.Problems, problem(file, 0, c.raw, obx.ErrValidationFailed, obx.SeverityWarning, fmt.Sprintf("unknown column %q ignored", strings.TrimSpace(c.raw)), ""))
+			out.Problems = append(out.Problems, problem(file, noRow, c.raw, obx.ErrValidationFailed, obx.SeverityWarning, fmt.Sprintf("unknown column %q ignored", strings.TrimSpace(c.raw)), ""))
 		}
 	}
 	col := func(name string) int {
@@ -140,11 +140,11 @@ func ParseProducts(r io.Reader, file string, opts Options) (*ProductsFile, error
 		return -1
 	}
 	if col("style_number") < 0 {
-		out.Problems = append(out.Problems, problem(file, 0, "style_number", obx.ErrImportInvalid, obx.SeverityError, "the header has no style_number column", ""))
+		out.Problems = append(out.Problems, problem(file, noRow, "style_number", obx.ErrImportInvalid, obx.SeverityError, "the header has no style_number column", ""))
 		return out, nil
 	}
 	if col("name") < 0 && len(langIdx["name"]) == 0 {
-		out.Problems = append(out.Problems, problem(file, 0, "name", obx.ErrImportInvalid, obx.SeverityError, "the header has no name column (name or name:<language>)", ""))
+		out.Problems = append(out.Problems, problem(file, noRow, "name", obx.ErrImportInvalid, obx.SeverityError, "the header has no name column (name or name:<language>)", ""))
 		return out, nil
 	}
 	attrKeys := make([]string, 0, len(attrIdx))

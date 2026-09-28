@@ -73,7 +73,7 @@ func ParseAssets(r io.Reader, file string, opts Options) (*AssetsFile, error) {
 			}
 		default:
 			if strings.TrimSpace(c.raw) != "" {
-				out.Problems = append(out.Problems, problem(file, 0, c.raw, obx.ErrValidationFailed, obx.SeverityWarning, fmt.Sprintf("unknown column %q ignored", strings.TrimSpace(c.raw)), ""))
+				out.Problems = append(out.Problems, problem(file, noRow, c.raw, obx.ErrValidationFailed, obx.SeverityWarning, fmt.Sprintf("unknown column %q ignored", strings.TrimSpace(c.raw)), ""))
 			}
 		}
 	}
@@ -84,7 +84,7 @@ func ParseAssets(r io.Reader, file string, opts Options) (*AssetsFile, error) {
 		return -1
 	}
 	if col("file") < 0 {
-		out.Problems = append(out.Problems, problem(file, 0, "file", obx.ErrImportInvalid, obx.SeverityError, "the header has no file column", ""))
+		out.Problems = append(out.Problems, problem(file, noRow, "file", obx.ErrImportInvalid, obx.SeverityError, "the header has no file column", ""))
 		return out, nil
 	}
 	seen := map[string]int{}

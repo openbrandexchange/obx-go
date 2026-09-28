@@ -435,4 +435,3 @@ func (c *Client) TestWebhook(ctx context.Context, id string) (*obx.WebhookTestRe
 	var r obx.WebhookTestResult
 	return &r, c.sendJSON(ctx, http.MethodPost, "/webhooks/"+url.PathEscape(id)+"/test", map[string]any{}, &r, nil)
 }
-
