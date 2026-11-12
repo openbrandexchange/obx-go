@@ -33,7 +33,7 @@ jobs:
         run: shellcheck scripts/*.sh push-action/*.sh conformance-action/*.sh
       - name: actionlint
         run: |
-          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12
           ./actionlint -color
       - name: GoReleaser configuration
         uses: goreleaser/goreleaser-action@v6
