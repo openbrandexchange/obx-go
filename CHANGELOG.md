@@ -6,6 +6,66 @@ All notable changes to obx-go are listed here. The format follows
 change the Go API; the `obx` command line, its exit codes and the file formats
 it reads stay compatible within a minor version.
 
+## [0.2.0] - 2026-11-12
+
+For Open Brand Exchange specification 0.2.0: product data for fashion, shoes,
+bags and luggage (spec proposal 0002). Additive: every new field is optional,
+and clients and portals written for 0.1 keep working.
+
+### Added
+
+- **Article data in the `obx` types**: product `ItemSubtype`,
+  `ContainsAnimalOrigin`, `FootwearMaterials`, `Features` and
+  `Certifications`; variant `Measurements` and `SizeLength`; `Color.Family`;
+  fibre flags `Fiber.Recycled` and `Fiber.Organic`. Protocol objects always
+  carry the new properties (`null` when not stated); inside `measurements` and
+  `features` only stated members are written, and the fibre flags only when
+  true. `Features` has typed fields for the registry keys and keeps every
+  other key as sent (`Features.Other`); `Features.Validate` checks the registry.
+- `obx.NormalizeFiber` and `Materials.Normalized` turn the 0.1 fibre keys
+  `recycled_<fibre>` and `organic_<fibre>` into the fibre with its flag.
+- **Label completeness warnings** with stable codes
+  (`fibre_composition_missing`, `animal_origin_unknown`,
+  `footwear_materials_missing`, `fibre_percentages_not_100`):
+  `obx.LabelWarnings`, `IngestResult.WarningDetails`. The mock portal reports
+  them on product writes and per product in imports; they never block
+  publishing. `obx push` lists them in the user's language.
+- **`canonicalcsv`** reads and writes the 0.2 columns: `item_subtype`,
+  `contains_animal_origin`, `footwear_materials`, `certifications` (with
+  `(material)` / `(product)`), `feature:<key>`, `color_family`, `size_length`
+  and the measurement columns (decimal comma accepted; `strap_length_cm` as
+  `min-max` or one number), and the materials flags `(recycled)` /
+  `(organic)`. Exports have a column for every registry feature.
+  `Present.Features` says which feature columns a file has.
+- The mock portal stores and serves all new fields, normalises 0.1 fibre
+  keys on every write, stores an empty `features` or `measurements` object as
+  `null`, and applies import rule 9 per feature key and per measurement column.
+- **Conformance**: P-CAT-1 checks the 0.2 article data of KO-1001 and KO-1005;
+  new P-CAT-5 (article data round trip of KO-1008, KO-1009, KO-1010, KT-2001),
+  P-CAT-6 (article data shape over the whole snapshot), I-IMP-7 (the new CSV
+  columns, `fixtures/imports`) and I-IMP-8 (label completeness warnings).
+
+### Changed
+
+- `obx.Version` is `0.2` and `obx.SpecVersion` `0.2.0`; the embedded schemas
+  are the 0.2 schemas at `/schemas/v0.2/`, and the frozen 0.1 schemas are
+  embedded too (`specdata.SchemaBaseV01`, `Validator.Schema("v0.1/Product")`).
+- The Kestrel fixtures have 11 products, 46 variants and 35 images; the
+  conformance counts follow `expected/counts.json`.
+- `canonicalcsv.ParseMaterials` no longer warns when percentages do not sum
+  to 100: the portal reports that as the label warning
+  `fibre_percentages_not_100` for the product as stored.
+- P-DISC-1 notes an `obx_version` other than `0.2` instead of failing; the
+  specification does not ask for a version there.
+- I-IMP-3 speaks of the nine Kestrel products; I-IMP-4 uses EANs that are not
+  in the fixtures (one of them now belongs to KO-1009).
+
+### Fixed
+
+- The mock portal no longer panics while describing a schema `pattern`
+  violation (for example a `javascript:` web address); it answers
+  `422 validation_failed` with the field.
+
 ## [0.1.0] - 2026-11-12
 
 First release, for Open Brand Exchange specification 0.1.0.
@@ -74,4 +134,5 @@ First release, for Open Brand Exchange specification 0.1.0.
 - The shared filename test vectors: `obx-conformance` and the mock read image names as
   the specification's `fixtures/expected/image-filenames.json` says.
 
+[0.2.0]: https://github.com/openbrandexchange/obx-go/releases/tag/v0.2.0
 [0.1.0]: https://github.com/openbrandexchange/obx-go/releases/tag/v0.1.0

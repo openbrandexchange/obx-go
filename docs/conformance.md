@@ -51,6 +51,25 @@ portal's own code; see `conformance/operator_test.go`. API keys you pass with `-
 `--second-client` and `--no-original-client` are used instead of asking the operator for them.
 P-FEED-5 (the ingest replay) is skipped on such portals.
 
+## The tests
+
+`obx-conformance list` prints every test id with its profile and whether it is required. The ids
+and what they check are in the spec's
+[conformance.md](https://github.com/openbrandexchange/spec/blob/main/docs/conformance.md). Added
+for specification 0.2 (article data for fashion, shoes, bags and luggage):
+
+| Test | Profile | Checks |
+|---|---|---|
+| P-CAT-1 | protocol | KO-1001 and KO-1005 match the expected fixtures, now including the 0.2 article data (`contains_animal_origin`, `features`, certifications, colour families, `item_subtype`, `strap_length_cm`) |
+| P-CAT-5 | protocol | the article data round trip: KO-1008 (suitcase), KO-1009 (laptop bag), KO-1010 (Chelsea boot) and KT-2001 (imported with the 0.1 fibre key `recycled_polyester`) match the expected fixtures |
+| P-CAT-6 | protocol | over the whole snapshot: every product and variant has the 0.2 properties (`null` when not stated) and validates against the 0.2 schemas; no 0.1 fibre key, no fibre flag `false`, no empty `measurements` or `features`, `footwear_materials` with all three parts; KO-1004 and KO-1003 as listed in the spec |
+| I-IMP-7 | ingest | `fixtures/imports/1-feature-update.csv` to `6-restore.csv`, imported in order on a portal that holds exactly the Kestrel import (the suite restores it first): counts, error rows, change entries and fields as in `fixtures/imports/expected.json` (import rule 9 per feature key and measurement column) |
+| I-IMP-8 | ingest | `fixtures/imports/label-warnings.csv` as a dry run: no errors, nothing written, and exactly the label completeness warnings of `label-warnings.expected.json`; the Kestrel import has none |
+
+I-IMP-3 now refers to the nine Kestrel products. A portal written for 0.1 fails P-CAT-1, P-CAT-5
+and P-CAT-6 until it stores and returns the new fields; P-DISC-1 only notes an `obx_version` other
+than `0.2`.
+
 ## Reading the report
 
 The text report is written for someone who does not read API specs:

@@ -96,6 +96,12 @@ On a terminal the progress bar shows percentage, uploaded bytes and the time lef
 CI it prints a line every few seconds. `--parallel 8` checks and uploads more images at the same
 time (default 4, at most 16).
 
+**Label warnings.** The portal checks every product for what an EU label needs (the fibre
+composition of textile products, whether they contain non-textile parts of animal origin, the
+materials of the upper, lining and sole of footwear, percentages that add up to 100) and obx lists
+what is missing under "Warnings", with the row and column. A warning never stops the product from
+being published; fill in the column and push again.
+
 **Dry run.** `--dry-run` uploads nothing and changes nothing. obx hashes the images, asks the portal
 which it already has, and asks the portal to check the import without writing. The summary shows
 the same counts and problems as a real run, plus how many images a real run would upload.

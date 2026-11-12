@@ -1,6 +1,6 @@
 # Implementation notes
 
-Choices made in obx-go where the specification (v0.1.0, commit in `specdata/SPEC_COMMIT`) is silent, ambiguous or contradicts itself. Each is the simplest reading; the ones marked **spec** should be settled in the spec repository.
+Choices made in obx-go where the specification (v0.2.0, commit in `specdata/SPEC_COMMIT`) is silent, ambiguous or contradicts itself. Each is the simplest reading; the ones marked **spec** should be settled in the spec repository.
 
 ## Protocol and ingest behaviour (mock node and conformance suite)
 
@@ -54,6 +54,18 @@ Choices made in obx-go where the specification (v0.1.0, commit in `specdata/SPEC
     | `obx pull` again (no changes) | 2 ms |
 
     `obx pull` time is almost all file system work (one file per object, written atomically); the CLI side of `push` is CSV parsing and planning (60,000 rows in about 0.1 s). Image uploads are bounded by the network: only new or changed images are sent, `--parallel` of them at a time. The rendition cache is written behind (at most every 2 s), not per image. The node side (catalog browse, `/changes` paging, EAN lookup at this size) is measured in each portal edition's own load test.
+
+## Article data (specification 0.2)
+
+30. **spec: an empty `features` or `measurements` object.** ingest.md §3.4 says an empty object is stored as `null`, but `Features.json` and `Measurements.json` have `minProperties: 1`, so `ProductInput`/`VariantInput` reject `{}`. The mock follows ingest.md: it replaces an empty `features` (product) or `measurements` (variant) object with `null` before validating. An empty `certifications` list is stored as `null` too ("`null` when none are stated").
+31. **spec: which products get `fibre_percentages_not_100`.** import-format.md §1.4 says percentages of a part that do not sum to 100 give the warning `fibre_percentages_not_100`; rule 10 says only textile item types get label warnings and other and unknown item types get none. obx-go follows rule 10: the warning is for textile item types only (footwear gets only `footwear_materials_missing`). `canonicalcsv.ParseMaterials` no longer warns about the sum itself (it did in 0.1 for every product); the node reports it for the product as stored.
+32. **spec: `strap_length_cm` with min larger than max.** import-format.md §1.6 asks for `min-max`; `130-80` is refused as `validation_failed` ("the shortest setting comes first"). Through the Ingest API the schema decides (it has no such rule), so the mock accepts it there.
+33. **Warnings without a code of their own** use `validation_failed` with severity `warning`, as in 0.1: a feature column outside the registry (one warning per column, on the header: `row` null), a colour family that differs between rows of one colour, and a `color_family`, `size_length` or measurement cell on a row without variant columns (ignored, one warning per cell).
+34. **Label warnings in imports** are checked once per product per import, after its first row is applied, on the product as stored (rule 9 kept values included), at the product's first row; they count in `counts.warnings`. In an IngestResult each is in `warning_details` and as `"<code>: <detail>"` in `warnings`. A dry run reports them too.
+35. **Animal fibres** for `animal_origin_unknown`: the list of rule 10 (`leather`, `suede`, `fur`, `down`, `feather`, `wool`, `merino_wool`, `lambswool`, `cashmere`, `alpaca`, `mohair`, `silk`) and every key ending in `_wool`.
+36. **`obx.Features` decoding never fails on content.** Registry keys get typed fields; a registry key whose value has the wrong type (`"wheels": "four"`) and every key outside the registry are kept in `Features.Other`, so a document round-trips unchanged. `Features.Validate` reports what a node must refuse; the mock relies on the schema and calls it as a second check. `wheels` `4.0` is the integer 4 (JSON Schema `integer`).
+37. **P-DISC-1 and `obx_version`.** The spec's P-DISC-1 does not check the version; obx-go notes an `obx_version` other than `0.2` instead of failing, and the article data tests show what a 0.1 node misses.
+38. **I-IMP-7 restores the Kestrel import first** (the full fixture import, as after I-IMP-1) and again at the end. Without a protocol client it compares the listed fields with the Ingest API records, whose field names are the same, and skips the change entries.
 
 ## Production-readiness checklist: what applies to obx-go
 

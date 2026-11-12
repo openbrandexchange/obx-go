@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Installs obx for the push action: downloads the release archive for this
 # runner, checks it against the release's checksums.txt and puts obx on PATH.
-# Env: OBX_VERSION ("latest" or a tag such as v0.1.0), RUNNER_OS, RUNNER_ARCH,
+# Env: OBX_VERSION ("latest" or a tag such as v0.2.0), RUNNER_OS, RUNNER_ARCH,
 # RUNNER_TEMP, GITHUB_PATH; OBX_RELEASE_BASE overrides the download location
 # (a mirror, or a local folder served over HTTP in tests).
 set -euo pipefail

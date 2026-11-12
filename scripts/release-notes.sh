@@ -1,6 +1,6 @@
 #!/bin/sh
 # Prints the CHANGELOG.md section of one version (the release notes).
-#   scripts/release-notes.sh 0.1.0
+#   scripts/release-notes.sh 0.2.0
 set -eu
 version=${1:?usage: release-notes.sh <version without v>}
 notes=$(awk -v v="$version" '

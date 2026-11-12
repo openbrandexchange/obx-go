@@ -71,7 +71,7 @@ obx version:
           images: exports/images
           mirror: true          # also take offline what the file no longer contains
           lang: nl
-          version: v0.1.0
+          version: v0.2.0
 ```
 
 Keep going when some rows have problems, and use the result in a later step:
@@ -105,7 +105,7 @@ Keep going when some rows have problems, and use the result in a later step:
 | `language` | | portal's first language | Language of columns without a language suffix. |
 | `fail-on-problems` | | `true` | Fail the step when some rows or images had problems (exit code 2). |
 | `lang` | | `en` | Language of the log and the job summary (any of the 25 languages, for example `nl`, `de`, `fr`). |
-| `version` | | `latest` | obx version: `latest` or a release tag such as `v0.1.0`. Pin a tag for reproducible runs. |
+| `version` | | `latest` | obx version: `latest` or a release tag such as `v0.2.0`. Pin a tag for reproducible runs. |
 
 ## Outputs
 
