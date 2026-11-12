@@ -45,9 +45,20 @@ external ids (`kestrel`, `kestrel-trail`) or `all`; products are fixture externa
 | `set_grant` | `client_id`, `brands` | |
 | `update_product` | `external_id`, `field` (`season`), `value` | |
 | `unpublish_product`, `publish_product` | `external_id` | |
+| `simulate_spec_upgrade` (optional) | | `simulated` (`true`) |
+
+`simulate_spec_upgrade` is for P-FEED-7 (spec protocol.md §6.4): do to the portal what an upgrade
+from spec 0.2 to 0.3 does to its cursors, so every cursor issued so far answers
+`410 cursor_expired` (for example by bumping a cursor epoch that every cursor carries). Print
+`{"simulated": "true"}` when done. The action is optional: a hook that prints nothing for it, a
+person who presses Enter at the prompt, or a Go operator that returns
+`conformance.ErrActionNotSupported` makes P-FEED-7 skip instead of fail. A hook that exits non-zero
+still fails the test. Admin credentials alone do not run it (the Node Admin API has no such
+call), so to cover P-FEED-7 also pass an operator; the other steps keep using the admin API.
 
 In Go tests, set `conformance.Config.Operator` to a `conformance.OperatorFunc` that calls the
-portal's own code; see `conformance/operator_test.go`. API keys you pass with `--client`,
+portal's own code; see `conformance/operator_test.go`. The mock node offers
+`mock.Node.SimulateSpecUpgrade`, which `TestMockPassesAll` calls through such an operator. API keys you pass with `--client`,
 `--second-client` and `--no-original-client` are used instead of asking the operator for them.
 P-FEED-5 (the ingest replay) is skipped on such portals.
 
@@ -56,13 +67,15 @@ P-FEED-5 (the ingest replay) is skipped on such portals.
 `obx-conformance list` prints every test id with its profile and whether it is required. The ids
 and what they check are in the spec's
 [conformance.md](https://github.com/openbrandexchange/spec/blob/main/docs/conformance.md). Added
-for specification 0.2 (article data for fashion, shoes, bags and luggage):
+for specification 0.2 (article data for fashion, shoes, bags and luggage) and changed for 0.3
+(materials and care as terms with names):
 
 | Test | Profile | Checks |
 |---|---|---|
-| P-CAT-1 | protocol | KO-1001 and KO-1005 match the expected fixtures, now including the 0.2 article data (`contains_animal_origin`, `features`, certifications, colour families, `item_subtype`, `strap_length_cm`) |
-| P-CAT-5 | protocol | the article data round trip: KO-1008 (suitcase), KO-1009 (laptop bag), KO-1010 (Chelsea boot) and KT-2001 (imported with the 0.1 fibre key `recycled_polyester`) match the expected fixtures |
-| P-CAT-6 | protocol | over the whole snapshot: every product and variant has the 0.2 properties (`null` when not stated) and validates against the 0.2 schemas; no 0.1 fibre key, no fibre flag `false`, no empty `measurements` or `features`, `footwear_materials` with all three parts; KO-1004 and KO-1003 as listed in the spec |
+| P-FEED-7 | protocol | cursors from before a spec upgrade expire (protocol.md §6.4): a live cursor of a new API key works, the operator runs `simulate_spec_upgrade`, then `/changes` with the old cursor answers `410 cursor_expired` (problem+json), and `/changes` without a cursor gives a snapshot and a new cursor that works. Skipped when the operator does not offer the action, without an operator, and in the online check |
+| P-CAT-1 | protocol | KO-1001 and KO-1005 match the expected fixtures, now including the article data (materials and care with their names, `contains_animal_origin`, `features`, certifications, colour families, `item_subtype`, `strap_length_cm`) |
+| P-CAT-5 | protocol | the article data round trip: KO-1008 (suitcase), KO-1009 (laptop bag), KO-1010 (Chelsea boot) and KT-2001 (imported with the 0.1 fibre key `recycled_polyester`) match the expected fixtures, with the vocabulary's names for parts, materials, qualifiers and care codes |
+| P-CAT-6 | protocol | over the whole snapshot: every product and variant has the article data properties (`null` when not stated) and validates against the 0.3 schemas; no material code starting with `recycled_` or `organic_` and no 0.2 fibre properties; every part, material and qualifier whose code is in the spec's `vocabularies/` has a name, the part `main` has the name `null`, every care code of `vocabularies/care.json` has exactly its `category` and `symbol` and a name, no name has an empty string; no empty `measurements` or `features`, `footwear_materials` with all three parts; KO-1004 and KO-1003 as listed in the spec |
 | I-IMP-7 | ingest | `fixtures/imports/1-feature-update.csv` to `6-restore.csv`, imported in order on a portal that holds exactly the Kestrel import (the suite restores it first): counts, error rows, change entries and fields as in `fixtures/imports/expected.json` (import rule 9 per feature key and measurement column) |
 | I-IMP-8 | ingest | `fixtures/imports/label-warnings.csv` as a dry run: no errors, nothing written, and exactly the label completeness warnings of `label-warnings.expected.json`; the Kestrel import has none |
 
@@ -75,9 +88,9 @@ both are skipped when the portal answers a workbook with `unsupported_media_type
 | I-IMP-9 | ingest | each converting workbook of `fixtures/imports/xlsx/expected.json` sent as `products.xlsx` (or `assets.xlsx`, with the images its `send.images_manifest` names) as a dry run: the run succeeds, the error rows are exactly `import_errors` (Excel row numbers, `column`, `value`, a `detail` starting with `detail_prefix`), the conversion `warnings` are there, and nothing is written; `products-template.xlsx` and `assets-template.xlsx` imported for real are all unchanged with no change entries |
 | I-IMP-10 | ingest | each workbook of `expected.json` with an `error` (macros, an external link, a zip bomb, too many rows, a renamed CSV, an encrypted file, a `DOCTYPE`, a macro part next to a broken `[Content_Types].xml`, a number out of Excel's range, no products sheet) sent as `products.xlsx`: the run fails with that `workbook_*` code in `ImportRun.error`, its results hold exactly one ImportRowError with `row` and `column` null and that code, and nothing is written. A portal that refuses the upload at once with a problem of that code passes too |
 
-I-IMP-3 now refers to the nine Kestrel products. A portal written for 0.1 fails P-CAT-1, P-CAT-5
-and P-CAT-6 until it stores and returns the new fields; P-DISC-1 only notes an `obx_version` other
-than `0.2`.
+I-IMP-3 now refers to the nine Kestrel products. A portal written for 0.1 or 0.2 fails P-CAT-1, P-CAT-5
+and P-CAT-6 until it returns materials and care as 0.3 terms; P-DISC-1 only notes an `obx_version`
+other than `0.3`.
 
 ## Reading the report
 

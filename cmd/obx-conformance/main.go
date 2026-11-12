@@ -60,7 +60,8 @@ suite creates retailers, API keys and upload keys itself):
 Nodes without the admin or ingest API (only the protocol is the standard):
 load fixtures/kestrel with the node's own import, then let an operator do the
 brand-side steps (create, restrict and revoke API keys, approve an access
-request, change and unpublish a product):
+request, change and unpublish a product, and optionally simulate a spec
+upgrade for P-FEED-7):
   --operator-hook     program run for every step: action as argument, JSON on
                       stdin, JSON result on stdout (see docs/conformance.md)
   --operator-prompt   ask on the terminal to do each step by hand

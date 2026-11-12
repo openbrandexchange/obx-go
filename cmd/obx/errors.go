@@ -201,7 +201,7 @@ var _ = register(map[string]string{
 	"err.server":              "the portal had a problem (error {status}). Try again later; if it keeps happening, tell the portal's administrator.",
 
 	"problem.row": "row {row}",
-	// Label completeness warnings (0.2): the portal still publishes the product.
+	// Label completeness warnings: the portal still publishes the product.
 	"problem.fibre_composition_missing":  "the fibre composition is missing; EU law requires it on the label of textile products",
 	"problem.animal_origin_unknown":      "state whether the product contains non-textile parts of animal origin (yes or no)",
 	"problem.footwear_materials_missing": "the material of the upper, the lining and sock or the outer sole is missing; EU law requires it on footwear labels",

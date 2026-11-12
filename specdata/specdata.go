@@ -16,14 +16,43 @@ import (
 	"sync"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
+
+	"github.com/openbrandexchange/obx-go/obx"
 )
 
-//go:embed schemas/*.json schemas/v0.1/*.json fixtures SPEC_COMMIT
+//go:embed schemas/*.json vocabularies/*.json fixtures SPEC_COMMIT
 var files embed.FS
 
-// FS returns the embedded tree: schemas/*.json (0.2), schemas/v0.1/*.json
-// (the frozen 0.1 schemas) and fixtures/{kestrel,expected,ingest,examples,imports}.
+// FS returns the embedded tree: schemas/*.json (0.3), vocabularies/*.json
+// (parts, materials, qualifiers and care codes with their names) and
+// fixtures/{kestrel,expected,ingest,examples,imports}.
 func FS() fs.FS { return files }
+
+var (
+	vocabulary     *obx.Vocabulary
+	vocabularyOnce sync.Once
+)
+
+// Vocabulary returns the embedded vocabularies of the specification: the
+// names of part, material and qualifier codes and the category, symbol and
+// name of care codes, as a node returns them (docs/protocol.md 5.9.1).
+func Vocabulary() *obx.Vocabulary {
+	vocabularyOnce.Do(func() {
+		read := func(name string) []byte {
+			b, err := files.ReadFile("vocabularies/" + name + ".json")
+			if err != nil {
+				panic(err)
+			}
+			return b
+		}
+		v, err := obx.ParseVocabulary(read("parts"), read("materials"), read("qualifiers"), read("care"))
+		if err != nil {
+			panic(err)
+		}
+		vocabulary = v
+	})
+	return vocabulary
+}
 
 // Fixtures returns the fixtures directory as an fs.FS.
 func Fixtures() fs.FS {
@@ -40,12 +69,8 @@ func SpecCommit() string {
 	return strings.TrimSpace(string(b))
 }
 
-// SchemaBase is the $id prefix of the current (0.2) schemas.
-const SchemaBase = "https://openbrandexchange.com/schemas/v0.2/"
-
-// SchemaBaseV01 is the $id prefix of the frozen 0.1 schemas, which the spec
-// keeps unchanged so their $ids keep resolving.
-const SchemaBaseV01 = "https://openbrandexchange.com/schemas/v0.1/"
+// SchemaBase is the $id prefix of the current (0.3) schemas.
+const SchemaBase = "https://openbrandexchange.com/schemas/v0.3/"
 
 // Validator validates JSON documents against the OBX schemas.
 type Validator struct {
@@ -60,8 +85,8 @@ var (
 	defaultValidatorOnce sync.Once
 )
 
-// DefaultValidator returns a validator over the embedded schemas: the 0.2
-// schemas at their /schemas/v0.2/ $ids and the 0.1 schemas at /schemas/v0.1/.
+// DefaultValidator returns a validator over the embedded 0.3 schemas at
+// their /schemas/v0.3/ $ids.
 func DefaultValidator() (*Validator, error) {
 	defaultValidatorOnce.Do(func() {
 		defaultValidator, defaultValidatorErr = NewValidator(files, "schemas")
@@ -69,8 +94,7 @@ func DefaultValidator() (*Validator, error) {
 	return defaultValidator, defaultValidatorErr
 }
 
-// NewValidator loads every *.json schema in dir of fsys, and in its
-// subdirectory v0.1 when there is one. Each schema is registered under its
+// NewValidator loads every *.json schema in dir of fsys. Each schema is registered under its
 // own $id (a schema without one under SchemaBase plus its path below dir),
 // so relative $refs resolve within its version.
 func NewValidator(fsys fs.FS, dir string) (*Validator, error) {
@@ -108,17 +132,11 @@ func NewValidator(fsys fs.FS, dir string) (*Validator, error) {
 	if err := add("", SchemaBase); err != nil {
 		return nil, err
 	}
-	if _, err := fs.Stat(fsys, path.Join(dir, "v0.1")); err == nil {
-		if err := add("v0.1", SchemaBaseV01); err != nil {
-			return nil, err
-		}
-	}
 	return &Validator{compiler: c, cache: map[string]*jsonschema.Schema{}}, nil
 }
 
 // Schema returns the compiled schema by file name ("Asset.json" or "Asset"),
-// optionally with a JSON pointer fragment ("Common.json#/$defs/Id"). Names
-// are the 0.2 schemas; "v0.1/Asset.json" names a frozen 0.1 schema.
+// optionally with a JSON pointer fragment ("Common.json#/$defs/Id").
 func (v *Validator) Schema(name string) (*jsonschema.Schema, error) {
 	if !strings.Contains(name, ".json") {
 		name += ".json"
@@ -129,9 +147,6 @@ func (v *Validator) Schema(name string) (*jsonschema.Schema, error) {
 		return s, nil
 	}
 	url := SchemaBase + name
-	if rest, ok := strings.CutPrefix(name, "v0.1/"); ok {
-		url = SchemaBaseV01 + rest
-	}
 	s, err := v.compiler.Compile(url)
 	if err != nil {
 		return nil, err

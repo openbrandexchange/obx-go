@@ -120,11 +120,15 @@ func emptyToNull(doc map[string]any, key string) {
 	}
 }
 
-// normalizeProduct applies the 0.2 write rules (ingest.md 3.4) to a valid
-// product input: 0.1 fibre keys become the fibre with its flag, and empty
-// features or certifications are stored as null.
+// normalizeProduct applies the write rules (ingest.md 3.4) to a valid
+// product input: 0.1 fibre keys become the material with its qualifier,
+// parts, materials, qualifiers and care codes of the vocabularies get the
+// vocabulary's names (and for care its category and symbol; other codes keep
+// what was written), and empty features or certifications are stored as null.
 func normalizeProduct(in *obx.ProductInput) {
-	in.Materials = in.Materials.Normalized()
+	v := specdata.Vocabulary()
+	in.Materials = in.Materials.WithNames(v)
+	in.Care = in.Care.WithNames(v)
 	if in.Features.IsEmpty() {
 		in.Features = nil
 	}

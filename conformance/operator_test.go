@@ -20,7 +20,8 @@ import (
 // mockOperator does the brand-side steps the way a node without the Node
 // Admin and Ingest APIs would do them internally. Here that happens to be the
 // mock's own admin and ingest APIs, which the suite itself is not given.
-func mockOperator(t *testing.T, base string, creds mock.Credentials) conformance.Operator {
+func mockOperator(t *testing.T, n *mock.Node, base string) conformance.Operator {
+	creds := n.Credentials()
 	ctx := context.Background()
 	admin, err := nodeadmin.New(base, http.DefaultClient)
 	if err != nil {
@@ -110,6 +111,9 @@ func mockOperator(t *testing.T, base string, creds mock.Credentials) conformance
 		case conformance.ActPublishProduct:
 			_, err := ing.Publish(ctx, obx.KindProduct, p["external_id"])
 			return nil, err
+		case conformance.ActSimulateSpecUpgrade:
+			n.SimulateSpecUpgrade()
+			return map[string]string{"simulated": "true"}, nil
 		}
 		return nil, errors.New("unknown action " + a.Name)
 	})
@@ -123,7 +127,7 @@ func TestProtocolWithOperatorOnly(t *testing.T) {
 	srv := httptest.NewServer(n)
 	defer srv.Close()
 	var actions []string
-	op := mockOperator(t, srv.URL, n.Credentials())
+	op := mockOperator(t, n, srv.URL)
 	counted := conformance.OperatorFunc(func(ctx context.Context, a conformance.Action) (map[string]string, error) {
 		actions = append(actions, a.Name)
 		return op.Do(ctx, a)
@@ -145,7 +149,7 @@ func TestProtocolWithOperatorOnly(t *testing.T) {
 			t.Errorf("%s %s: %s\n    %s", r.ID, r.Status, r.Title, strings.Join(r.Messages, "\n    "))
 		}
 	}
-	for _, want := range []string{conformance.ActCreateAPIKey, conformance.ActRevokeAPIKey, conformance.ActApproveAccessRequest, conformance.ActSetGrant, conformance.ActUpdateProduct, conformance.ActUnpublishProduct, conformance.ActPublishProduct} {
+	for _, want := range []string{conformance.ActCreateAPIKey, conformance.ActRevokeAPIKey, conformance.ActApproveAccessRequest, conformance.ActSetGrant, conformance.ActUpdateProduct, conformance.ActUnpublishProduct, conformance.ActPublishProduct, conformance.ActSimulateSpecUpgrade} {
 		found := false
 		for _, a := range actions {
 			found = found || a == want
@@ -181,7 +185,7 @@ func TestProtocolWithoutOperatorSkips(t *testing.T) {
 			skipped[r.ID] = true
 		}
 	}
-	for _, id := range []string{"P-AUTH-2", "P-ACC-1", "P-FEED-6"} {
+	for _, id := range []string{"P-AUTH-2", "P-ACC-1", "P-FEED-6", "P-FEED-7"} {
 		if !skipped[id] {
 			t.Errorf("%s should be skipped without an operator", id)
 		}
@@ -204,5 +208,51 @@ func TestHookOperator(t *testing.T) {
 	}
 	if _, err := h.Do(context.Background(), conformance.Action{Name: conformance.ActRevokeAPIKey}); err == nil {
 		t.Fatal("a failing hook must return an error")
+	}
+}
+
+// P-FEED-7 is skipped when the operator does not offer simulate_spec_upgrade
+// (ErrActionNotSupported, or no simulated: true as from a hook that prints
+// nothing), passes when it expires the cursors and fails when old cursors
+// keep working.
+func TestSpecUpgradeCursor(t *testing.T) {
+	cases := []struct {
+		name string
+		do   func(n *mock.Node) (map[string]string, error)
+		want string
+	}{
+		{"not offered", func(*mock.Node) (map[string]string, error) { return nil, conformance.ErrActionNotSupported }, conformance.StatusSkip},
+		{"no result", func(*mock.Node) (map[string]string, error) { return nil, nil }, conformance.StatusSkip},
+		{"upgraded", func(n *mock.Node) (map[string]string, error) {
+			n.SimulateSpecUpgrade()
+			return map[string]string{"simulated": "true"}, nil
+		}, conformance.StatusPass},
+		{"cursors survive", func(*mock.Node) (map[string]string, error) { return map[string]string{"simulated": "true"}, nil }, conformance.StatusFail},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			n := mock.New(mock.Options{AllowPrivateURLs: true})
+			srv := httptest.NewServer(n)
+			defer srv.Close()
+			op := conformance.OperatorFunc(func(_ context.Context, a conformance.Action) (map[string]string, error) {
+				if a.Name != conformance.ActSimulateSpecUpgrade {
+					return nil, conformance.ErrActionNotSupported
+				}
+				return tc.do(n)
+			})
+			rep, err := conformance.Run(context.Background(), []string{conformance.ProfileProtocol}, conformance.Config{BaseURL: srv.URL, SetupCode: n.SetupCode(), Operator: op, Only: []string{"P-FEED-7"}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, r := range rep.Results {
+				if r.ID == "P-FEED-7" {
+					if r.Status != tc.want {
+						t.Errorf("P-FEED-7 %s, want %s: %s", r.Status, tc.want, strings.Join(r.Messages, "; "))
+					}
+					return
+				}
+			}
+			t.Fatal("P-FEED-7 did not run")
+		})
 	}
 }

@@ -447,7 +447,7 @@ func TestPull(t *testing.T) {
 			}
 		}
 	}
-	if suitcase == nil || suitcase.Features == nil || obx.Str(suitcase.Features.Lock) != "tsa_combination" || suitcase.Materials[1].Fibers[0] != (obx.Fiber{Fiber: "polyester", Percentage: 100, Recycled: true}) {
+	if suitcase == nil || suitcase.Features == nil || obx.Str(suitcase.Features.Lock) != "tsa_combination" || !recycledPolyester(suitcase.Materials[1].Fibers[0]) {
 		t.Fatalf("pulled KO-1008 lacks its article data: %+v", suitcase)
 	}
 	variants, _ := os.ReadDir(filepath.Join(out, "variants"))
@@ -710,4 +710,11 @@ func TestPushShowsLabelWarnings(t *testing.T) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}
 	}
+}
+
+// recycledPolyester: the KO-1008 lining fibre as a 0.3 node returns it, with
+// the vocabulary's names.
+func recycledPolyester(f obx.Fiber) bool {
+	return f.Material.Code == "polyester" && f.Material.Name["nl"] == "Polyester" && f.Percentage == 100 &&
+		f.Qualifier != nil && f.Qualifier.Code == "recycled" && f.Qualifier.Name["nl"] == "Gerecycled"
 }

@@ -274,7 +274,7 @@ type IngestResult struct {
 	ETag       *string  `json:"etag"`
 	Error      *Problem `json:"error"`
 	Warnings   []string `json:"warnings"`
-	// WarningDetails are the warnings with a stable code (0.2: label
+	// WarningDetails are the warnings with a stable code (label
 	// completeness); each is also in Warnings as text. Present only when
 	// there are any.
 	WarningDetails []WarningDetail `json:"warning_details,omitempty"`

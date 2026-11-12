@@ -37,7 +37,7 @@ func init() {
 	register(p, "I-IMP-4", "row problems carry file, row, column and code; the job still succeeds", true, testRowErrors)
 	register(p, "I-IMP-5", "an import without assets.csv keeps the images' embargo, credit, alt text and AI label", true, testImportKeepsImageFacts)
 	register(p, "I-IMP-6", "a column the file does not have keeps the field; an empty cell removes it", true, testImportKeepsAbsentColumns)
-	register(p, "I-IMP-7", "the 0.2 columns: fixtures/imports 1 to 6 give the expected counts, errors, change entries and fields (rule 9 per key)", true, testImportArticleColumns)
+	register(p, "I-IMP-7", "the article data columns: fixtures/imports 1 to 6 give the expected counts, errors, change entries and fields (rule 9 per key)", true, testImportArticleColumns)
 	register(p, "I-IMP-8", "label completeness warnings: label-warnings.csv as a dry run gives exactly the expected codes; fixtures/kestrel none", true, testLabelWarnings)
 }
 

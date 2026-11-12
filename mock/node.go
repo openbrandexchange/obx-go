@@ -193,6 +193,13 @@ func (n *Node) ExpireCursors() {
 	n.mu.Unlock()
 }
 
+// SimulateSpecUpgrade does to the cursors what an upgrade to a spec version
+// with incompatible shapes (0.2 → 0.3) does (protocol.md 6.4): it bumps the
+// cursor epoch, so every cursor issued before answers 410 cursor_expired and
+// consumers restart without one. The conformance operator action
+// simulate_spec_upgrade (P-FEED-7) calls it.
+func (n *Node) SimulateSpecUpgrade() { n.ExpireCursors() }
+
 // RevokeClient revokes an API client by its client_id (obxc_…).
 func (n *Node) RevokeClient(clientID string) bool {
 	n.mu.Lock()

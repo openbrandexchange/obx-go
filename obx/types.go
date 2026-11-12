@@ -42,29 +42,55 @@ type Brand struct {
 	UpdatedAt   time.Time     `json:"updated_at"`
 }
 
-// Fiber is one fibre with its percentage. Recycled and Organic are flags
-// (0.2), present in JSON only when true; see NormalizeFiber for the 0.1 keys
-// recycled_<fibre> and organic_<fibre>.
+// Term is a stable code with its name per language (schemas/Materials.json
+// $defs/term): a part, a material or a qualifier of materials. Name is nil
+// (JSON null) for the part "main" and for codes the node has no name for; a
+// language without a name is omitted, never an empty string. On write paths
+// Name may be left out: a node fills it from the vocabularies of the
+// specification for known codes (see Vocabulary).
+type Term struct {
+	Code string        `json:"code"`
+	Name LocalizedText `json:"name"`
+}
+
+// Fiber is one material of a part with its percentage. Qualifier is what
+// the fibre is apart from which fibre (organic, recycled, regenerative or
+// another code), nil when it has none; one qualifier per fibre. See
+// NormalizeFiber for the 0.1 keys recycled_<fibre> and organic_<fibre>.
 type Fiber struct {
-	Fiber      string  `json:"fiber"`
+	Material   Term    `json:"material"`
 	Percentage float64 `json:"percentage"`
-	Recycled   bool    `json:"recycled,omitempty"`
-	Organic    bool    `json:"organic,omitempty"`
+	Qualifier  *Term   `json:"qualifier"`
 }
 
 // MaterialPart is the composition of one part of the article (schemas/Materials.json).
 type MaterialPart struct {
-	Part   string  `json:"part"`
+	Part   Term    `json:"part"`
 	Fibers []Fiber `json:"fibers"`
 }
 
 // Materials is the fibre composition per part.
 type Materials []MaterialPart
 
+// Care categories: the ISO 3758 symbol groups (schemas/Care.json), in label order.
+const (
+	CareWashing          = "washing"
+	CareBleaching        = "bleaching"
+	CareDrying           = "drying"
+	CareIroning          = "ironing"
+	CareProfessionalCare = "professional_care"
+)
+
 // CareInstruction is one ISO 3758 aligned care code (schemas/Care.json).
+// Category, Symbol (GINETEX notation such as 1_C_40) and Name come from the
+// care vocabulary for known codes, otherwise from what was written (nil when
+// nothing was). Text is the brand's own extra text for the instruction.
 type CareInstruction struct {
-	Code string        `json:"code"`
-	Text LocalizedText `json:"text"`
+	Code     string        `json:"code"`
+	Category *string       `json:"category"`
+	Symbol   *string       `json:"symbol"`
+	Name     LocalizedText `json:"name"`
+	Text     LocalizedText `json:"text"`
 }
 
 // Care is an ordered list of care instructions.

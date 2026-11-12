@@ -10,7 +10,7 @@ import (
 	"github.com/openbrandexchange/obx-go/obx"
 )
 
-// The article data columns of 0.2 (docs/import-format.md section 1.6).
+// The article data columns (docs/import-format.md section 1.6).
 
 // ItemSubtypes are the recommended item_subtype keys per item type
 // (docs/protocol.md 5.2).

@@ -8,6 +8,7 @@ import (
 	"encoding/csv"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
 	_ "image/jpeg"
@@ -43,12 +44,13 @@ func init() {
 	register(p, "P-FEED-4", "restricted retailer only sees brand kestrel", true, testRestricted)
 	registerPhase(phaseOf[ProfileIngest]+1, p, "P-FEED-5", "ingest replay produces exactly expected-changes.json", true, testReplayFeed)
 	register(p, "P-FEED-6", "grant change → grant entry with resync:true", true, testGrantResync)
-	register(p, "P-CAT-1", "products KO-1001 and KO-1005 match the expected fixtures, including the 0.2 article data", true, testProductFixtures)
+	register(p, "P-FEED-7", "cursors from before a spec upgrade → 410 cursor_expired; without a cursor works", true, testSpecUpgradeCursor)
+	register(p, "P-CAT-1", "products KO-1001 and KO-1005 match the expected fixtures, including the article data with names", true, testProductFixtures)
 	register(p, "P-CAT-2", "GET /products pagination is complete and stable; ids= filter", true, testProductList)
 	register(p, "P-CAT-3", "GTIN lookup matches the expected fixture; 2001 codes → limit_exceeded", true, testGTINLookup)
 	register(p, "P-CAT-4", "invisible objects answer 404, never 403", true, testInvisible404)
 	register(p, "P-CAT-5", "article data round trip: KO-1008, KO-1009, KO-1010 and KT-2001 match the expected fixtures", true, testArticleRoundTrip)
-	register(p, "P-CAT-6", "article data shape over the whole snapshot: 0.2 properties present, valid, normalised fibres, no empty objects", true, testArticleShape)
+	register(p, "P-CAT-6", "article data shape over the whole snapshot: properties present, valid, qualifiers instead of 0.1 keys, vocabulary names, categories and symbols, no empty objects", true, testArticleShape)
 	register(p, "P-MEDIA-1", "assets match the expected fixtures (AI, embargo, large original, no original)", true, testAssetFixtures)
 	register(p, "P-MEDIA-2", "renditions: sha256, ETag, OBX-Content-SHA256, Range, If-None-Match, signed URLs", true, testRenditionHTTP)
 	register(p, "P-MEDIA-3", "originals byte-identical; web ≤ 2000, thumb ≤ 600, square is square, JPEG, never upscaled", true, testRenditionRules)
@@ -176,7 +178,7 @@ func testDiscovery(t *T) {
 	}
 	if d.ObxVersion != obx.Version {
 		// P-DISC-1 does not ask for a version; the article data tests
-		// (P-CAT-1, P-CAT-5, P-CAT-6) show what a 0.1 node misses.
+		// (P-CAT-1, P-CAT-5, P-CAT-6) show what an older node misses.
 		t.Notef("obx_version %q; this suite checks protocol %s", d.ObxVersion, obx.Version)
 	}
 	if len(d.Languages) == 0 {
@@ -674,6 +676,47 @@ func testGrantResync(t *T) {
 			t.Errorf("after the grant change the snapshot still has %s %s", ch.Type, ch.ExternalIDValue())
 			break
 		}
+	}
+}
+
+// testSpecUpgradeCursor is P-FEED-7 (protocol.md 6.4): a node that upgrades
+// to incompatible shapes answers every earlier cursor with 410
+// cursor_expired. The operator simulates the upgrade; without one that
+// offers simulate_spec_upgrade the test is skipped.
+func testSpecUpgradeCursor(t *T) {
+	if t.r.online() {
+		t.onlineStop("simulating a spec upgrade needs a brand-side step")
+	}
+	if t.r.cfg.Operator == nil {
+		t.Skip("needs an operator that offers %s (--operator-hook, --operator-prompt or Config.Operator)", ActSimulateSpecUpgrade)
+	}
+	c := t.newThrowawayKey("OBX conformance: spec upgrade", nil)
+	cursor := t.liveCursor(c)
+	if res := t.get(c, "/changes?cursor="+url.QueryEscape(cursor)); res.status != http.StatusOK {
+		t.Fatalf("GET /changes with a fresh live cursor: %d %s", res.status, truncate(res.body))
+	}
+	a := Action{Name: ActSimulateSpecUpgrade, Params: map[string]string{}, Result: []string{"simulated"},
+		Hint: "Make the node behave as after an upgrade from spec 0.2 to 0.3: every cursor issued so far must answer 410 cursor_expired (for example bump a cursor epoch). Answer simulated: true when done, or leave it empty if the node cannot do this (the test is then skipped)."}
+	t.r.logf("operator: %s", a.Name)
+	res, err := t.r.cfg.Operator.Do(t.ctx, a)
+	if errors.Is(err, ErrActionNotSupported) {
+		t.Skip("the operator does not offer %s", ActSimulateSpecUpgrade)
+	}
+	t.Check(err, "operator "+a.Name)
+	if res["simulated"] != "true" {
+		t.Skip("the operator does not offer %s (no simulated: true)", ActSimulateSpecUpgrade)
+	}
+	old := t.get(c, "/changes?cursor="+url.QueryEscape(cursor))
+	t.expectStatus(old, http.StatusGone, obx.ErrCursorExpired, "cursor from before the spec upgrade")
+	f := t.readFeed(c, "", 500)
+	if f.cursor == "" {
+		t.Errorf("/changes without a cursor after the spec upgrade gives no next_cursor")
+	}
+	if len(f.snapshot) == 0 {
+		t.Errorf("/changes without a cursor after the spec upgrade has an empty snapshot")
+	}
+	if res := t.get(c, "/changes?cursor="+url.QueryEscape(f.cursor)); res.status != http.StatusOK {
+		t.Errorf("GET /changes with a cursor issued after the spec upgrade: %d %s", res.status, truncate(res.body))
 	}
 }
 

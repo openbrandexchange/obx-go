@@ -6,6 +6,63 @@ All notable changes to obx-go are listed here. The format follows
 change the Go API; the `obx` command line, its exit codes and the file formats
 it reads stay compatible within a minor version.
 
+## [Unreleased]
+
+For Open Brand Exchange specification 0.3.0: materials and care as terms with
+names (spec proposal 0004, [spec PR #3](https://github.com/openbrandexchange/spec/pull/3)).
+**Breaking** (allowed before 1.0): the JSON of `materials` and `care` changes,
+and only 0.3 is supported.
+
+### Changed (breaking)
+
+- **`obx.MaterialPart.Part`, `obx.Fiber.Material` and `obx.Fiber.Qualifier`
+  are terms** (`obx.Term{Code, Name}`, `Name` a `LocalizedText` or `nil`).
+  `Fiber.Fiber`, `Fiber.Recycled` and `Fiber.Organic` are gone: a fibre has
+  one qualifier (`organic`, `recycled`, `regenerative` or another code),
+  `nil` when it has none. JSON: `{"part": {"code", "name"}, "fibers":
+  [{"material": {"code", "name"}, "percentage", "qualifier": {...} | null}]}`.
+- **`obx.CareInstruction`** has `Category` (ISO 3758 group: `washing`,
+  `bleaching`, `drying`, `ironing`, `professional_care`), `Symbol` (GINETEX
+  notation such as `1_C_40`) and `Name`; `Text` is the brand's own extra text.
+- `obx.NormalizeFiber` turns the 0.1 keys `recycled_<fibre>` /
+  `organic_<fibre>` into the material with that qualifier (the key wins over a
+  qualifier already set).
+- `obx.Version` is `0.3` and `obx.SpecVersion` `0.3.0`; the embedded schemas
+  are the 0.3 schemas at `/schemas/v0.3/`. The spec withdrew 0.1 and 0.2, so
+  the frozen 0.1 schemas are no longer embedded: `specdata.SchemaBaseV01` and
+  `Validator.Schema("v0.1/...")` are removed.
+- `canonicalcsv` materials grammar: `<pct>% <material> [(<qualifier>)]`,
+  any qualifier code (`(regenerative)`), one per fibre (two are an error);
+  `(recycled)`, `(organic)` and the 0.1 keys keep working.
+
+### Added
+
+- **Vocabularies**: `specdata.Vocabulary()` returns the spec's
+  `vocabularies/*.json` (parts, materials, qualifiers, care codes with names in
+  en/nl/de/fr, and for care category and symbol) as an `obx.Vocabulary`;
+  `obx.ParseVocabulary` reads another copy. `Materials.WithNames` and
+  `Care.WithNames` fill names (and care category/symbol) for known codes and
+  keep what was written for others, without empty strings.
+- The mock portal stores and returns the vocabulary's names, categories and
+  symbols for known codes (on every write path: Ingest API, imports, admin);
+  writes may leave them out, so PUTting back a GET is still `unchanged`.
+- **Conformance** P-CAT-6 checks the terms: no material code starting with
+  `recycled_`/`organic_`, no 0.2 fibre properties, every known part, material
+  and qualifier has a name (P-CAT-5 pins the vocabulary's names for the Kestrel
+  products), the part `main` has the name `null`, care codes of the vocabulary
+  have exactly its category and symbol and a name, and no name has an empty
+  string. P-CAT-1 and P-CAT-5 match the 0.3 expected fixtures.
+- **Conformance P-FEED-7** (spec protocol.md §6.4: a node that upgrades
+  0.2 → 0.3 answers every earlier cursor with `410 cursor_expired`): takes a
+  live cursor, asks the operator for the new optional action
+  `simulate_spec_upgrade` (`conformance.ActSimulateSpecUpgrade`, result
+  `simulated: true`), then checks `410 cursor_expired` for the old cursor and a
+  working `/changes` without one. Skipped when the operator does not offer the
+  action (`conformance.ErrActionNotSupported`, or no `simulated: true`), without
+  an operator and in the online check. `mock.Node.SimulateSpecUpgrade` bumps
+  the mock's cursor epoch; `TestMockPassesAll` covers it.
+- `scripts/sync-spec.sh` copies `vocabularies/` too.
+
 ## [0.2.1] - 2026-11-12
 
 An online compatibility check, the Excel import tests and fixes. Works with
@@ -186,6 +243,7 @@ First release, for Open Brand Exchange specification 0.1.0.
 - The shared filename test vectors: `obx-conformance` and the mock read image names as
   the specification's `fixtures/expected/image-filenames.json` says.
 
+[Unreleased]: https://github.com/openbrandexchange/obx-go/compare/v0.2.1...HEAD
 [0.2.1]: https://github.com/openbrandexchange/obx-go/releases/tag/v0.2.1
 [0.2.0]: https://github.com/openbrandexchange/obx-go/releases/tag/v0.2.0
 [0.1.0]: https://github.com/openbrandexchange/obx-go/releases/tag/v0.1.0
