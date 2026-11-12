@@ -63,7 +63,10 @@ for dry in true false; do
   grep -q 'Open Brand Exchange: published' "$GITHUB_STEP_SUMMARY" || { echo "no job summary (dry=$dry)" >&2; exit 1; }
 done
 grep -q 'dry run' "$work/log-true.txt"
-grep -q 'rows: 40, images: 27' "$work/log-false.txt"
+# Counts follow the fixtures (spec 0.2 added products), so they are not hard-coded.
+rows=$(($(wc -l < "$fixtures/products.csv") - 1))
+images=$(find "$fixtures/images" -type f | wc -l | tr -d ' ')
+grep -q "rows: $rows, images: $images" "$work/log-false.txt" || { echo "want rows: $rows, images: $images, got:" >&2; grep 'rows:' "$work/log-false.txt" >&2; exit 1; }
 
 echo "== push.sh: missing inputs fail with a clear message"
 : > "$GITHUB_OUTPUT"
