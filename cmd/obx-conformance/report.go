@@ -84,6 +84,15 @@ func verdict(rep *conformance.Report) string {
 	return fmt.Sprintf("NOT CONFORMANT: %d required check(s) failed. Retailers' software or automatic uploads may not work correctly with this portal until they are fixed.", failed)
 }
 
+// nextStep is shown under a full conformant result: how to get it confirmed and
+// where to read about the official partner listing.
+func nextStep(rep *conformance.Report) string {
+	if !rep.OK() || rep.Partial {
+		return ""
+	}
+	return "Compatible with Open Brand Exchange! To have this confirmed for free, send the JSON report (--json) and the address of this portal to hello@openbrandexchange.com. Want to be listed as an official partner? See https://openbrandexchange.com/en/partners/"
+}
+
 // printReport writes the report for people: the verdict first, a summary per
 // area in plain words, what failed and why it matters, then every check.
 func printReport(w io.Writer, rep *conformance.Report) {
@@ -96,6 +105,9 @@ func printReport(w io.Writer, rep *conformance.Report) {
 	fmt.Fprintf(w, "Specification:  %.12s, checked %s, took %.1f s\n", rep.SpecCommit, rep.StartedAt.Local().Format("2006-01-02 15:04"), float64(rep.Millis)/1000)
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Result: "+verdict(rep))
+	if n := nextStep(rep); n != "" {
+		fmt.Fprintln(w, n)
+	}
 	fmt.Fprintln(w)
 	counts, order := countProfiles(rep)
 	width := 0
@@ -178,6 +190,9 @@ func printMarkdown(w io.Writer, rep *conformance.Report) {
 	}
 	fmt.Fprintf(w, "## Open Brand Exchange conformance: %s\n\n", head)
 	fmt.Fprintf(w, "Portal `%s` (%s), specification `%.12s`.\n\n%s\n\n", rep.BaseURL, sw, rep.SpecCommit, verdict(rep))
+	if n := nextStep(rep); n != "" {
+		fmt.Fprintf(w, "%s\n\n", n)
+	}
 	counts, order := countProfiles(rep)
 	fmt.Fprintln(w, "| Area | Result |")
 	fmt.Fprintln(w, "|---|---|")

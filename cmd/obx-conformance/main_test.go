@@ -120,3 +120,28 @@ func TestReportFromJSON(t *testing.T) {
 		t.Fatalf("not a report: %d", code)
 	}
 }
+
+// A full pass points to the free confirmation and the partner page; a failed or
+// partial run does not.
+func TestNextStepOnlyAfterFullPass(t *testing.T) {
+	pass := &conformance.Report{Results: []conformance.Result{{Required: true, Status: conformance.StatusPass}}}
+	var buf bytes.Buffer
+	printReport(&buf, pass)
+	if !strings.Contains(buf.String(), "Compatible with Open Brand Exchange!") || !strings.Contains(buf.String(), "/en/partners/") {
+		t.Fatalf("passing report has no next step:\n%s", buf.String())
+	}
+	buf.Reset()
+	printMarkdown(&buf, pass)
+	if !strings.Contains(buf.String(), "/en/partners/") {
+		t.Fatalf("markdown report has no next step:\n%s", buf.String())
+	}
+	fail := &conformance.Report{Results: []conformance.Result{{Required: true, Status: conformance.StatusFail}}}
+	partial := &conformance.Report{Partial: true, Results: pass.Results}
+	for _, rep := range []*conformance.Report{fail, partial} {
+		buf.Reset()
+		printReport(&buf, rep)
+		if strings.Contains(buf.String(), "partners") {
+			t.Fatalf("next step shown for a failed or partial run:\n%s", buf.String())
+		}
+	}
+}
