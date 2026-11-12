@@ -127,7 +127,7 @@ func TestNextStepOnlyAfterFullPass(t *testing.T) {
 	pass := &conformance.Report{Results: []conformance.Result{{Required: true, Status: conformance.StatusPass}}}
 	var buf bytes.Buffer
 	printReport(&buf, pass)
-	if !strings.Contains(buf.String(), "Compatible with Open Brand Exchange!") || !strings.Contains(buf.String(), "/en/partners/") {
+	if !strings.Contains(buf.String(), "All required checks passed.") || !strings.Contains(buf.String(), "/en/partners/") {
 		t.Fatalf("passing report has no next step:\n%s", buf.String())
 	}
 	buf.Reset()

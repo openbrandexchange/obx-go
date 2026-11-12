@@ -90,7 +90,7 @@ func nextStep(rep *conformance.Report) string {
 	if !rep.OK() || rep.Partial {
 		return ""
 	}
-	return "Compatible with Open Brand Exchange! To have this confirmed for free, send the JSON report (--json) and the address of this portal to hello@openbrandexchange.com. Want to be listed as an official partner? See https://openbrandexchange.com/en/partners/"
+	return "All required checks passed. To have this confirmed as \"Compatible with Open Brand Exchange\" (free), send the JSON report (--json) and the address of this portal to hello@openbrandexchange.com. About partner listings: https://openbrandexchange.com/en/partners/"
 }
 
 // printReport writes the report for people: the verdict first, a summary per
