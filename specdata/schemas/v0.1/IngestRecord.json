@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openbrandexchange.com/schemas/v0.1/IngestRecord.json",
+  "type": "object",
+  "title": "IngestRecord",
+  "description": "GET representation in the Ingest API (and the admin catalog).",
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": [
+        "brand",
+        "product",
+        "variant",
+        "asset"
+      ]
+    },
+    "id": {
+      "$ref": "Common.json#/$defs/Id"
+    },
+    "external_id": {
+      "$ref": "Common.json#/$defs/ExternalId"
+    },
+    "status": {
+      "$ref": "Common.json#/$defs/PublicationStatus"
+    },
+    "visibility": {
+      "type": "string",
+      "enum": [
+        "visible",
+        "hidden",
+        "pending_files"
+      ]
+    },
+    "etag": {
+      "type": "string"
+    },
+    "created_at": {
+      "$ref": "Common.json#/$defs/DateTime"
+    },
+    "updated_at": {
+      "$ref": "Common.json#/$defs/DateTime"
+    },
+    "data": {
+      "type": "object",
+      "description": "The stored write model (BrandInput/ProductInput/VariantInput/AssetInput) with defaults applied. For assets: `rights` is the full effective Rights object (node default rights merged with the fields the brand sent), `provenance` the full Provenance with its defaults, and `files` lists every current blob (original and web/square/thumb, including renditions the node made itself) with sha256, width and height."
+    },
+    "missing_files": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "Common.json#/$defs/RenditionName"
+      },
+      "description": "Present for assets only (an empty array when nothing is missing); omitted for brands, products and variants. Files still required before the asset becomes visible."
+    }
+  },
+  "required": [
+    "kind",
+    "id",
+    "external_id",
+    "status",
+    "visibility",
+    "etag",
+    "created_at",
+    "updated_at",
+    "data"
+  ],
+  "additionalProperties": false,
+  "patternProperties": {
+    "^x-[a-z0-9]+-[a-z0-9_-]+$": true
+  }
+}

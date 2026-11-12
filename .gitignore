@@ -1,6 +1,7 @@
 dist/
 completions/
 /obx
+!/obx/
 /obx-conformance
 /obx-interop
 *.test

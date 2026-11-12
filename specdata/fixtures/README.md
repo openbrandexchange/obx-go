@@ -4,11 +4,12 @@ Everything here is **fictional**: "Kestrel Outfitters" is not a real company, th
 
 | Path | What |
 |---|---|
-| `kestrel/products.csv` | canonical import CSV: 2 brands (Kestrel, Kestrel Trail), 8 products, 40 variants with valid EAN-13s, materials, care codes, `nl` + `en` text |
+| `kestrel/products.csv` | canonical import CSV: 2 brands (Kestrel, Kestrel Trail), 11 products, 46 variants with valid EAN-13s, materials, care codes, `nl` + `en` text, and the 0.2 article data: a suitcase (KO-1008, `luggage`/`cabin`, two sizes with different measurements), a laptop bag with a detachable shoulder strap (KO-1009), a leather Chelsea boot with `footwear_materials` (KO-1010), measurements, features, certifications, colour families and `contains_animal_origin` on others. KT-2001 and KT-2002 deliberately keep the 0.1 fibre keys `recycled_polyester` / `recycled_polyamide`, which nodes normalise |
 | `kestrel/assets.csv` | overrides: one AI-generated model image (`KO-1003_RST_3_model.png`, `ai_generated: true`) and one embargoed image (`KO-1002_BLK_2_back.png`, embargo until 2030-01-01) |
-| `kestrel/images/*.png` | 27 placeholder images following `{style}_{color}_{position}_{qualifier}.png`; `KO-1002_OLV_1_front.png` is 2400×3000 to exercise downscaling, the rest 1200×1500 |
+| `kestrel/images/*.png` | 35 placeholder images following `{style}_{color}_{position}_{qualifier}.png`; `KO-1002_OLV_1_front.png` is 2400×3000 to exercise downscaling, the rest 1200×1500 |
 | `kestrel/images.json` | sha256, bytes, dimensions of every original |
 | `expected/*.json` | expected protocol objects after importing `kestrel/` into a fresh node (placeholders: see [docs/conformance.md](../docs/conformance.md#fixture-conventions)) |
+| `imports/` | small `products.csv` files with their expected results for conformance I-IMP-7 (the 0.2 columns, `expected.json`) and I-IMP-8 (label completeness warnings, `label-warnings.expected.json`) |
 | `expected/image-filenames.json` | test vectors for the image filename rule: style, colour (`null` for `ALL`), position, role, view and external id per name, or `error` |
 | `ingest/script.ndjson` | 18 ingest operations: upserts, an idempotent repeat, an image replacement, a position conflict, an asset unpublish, an invalid GTIN, a product unpublish + republish, deletes |
 | `ingest/expected-results.json` | expected `result` (and `obx_error`) per operation |

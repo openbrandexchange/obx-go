@@ -10,9 +10,13 @@ if [ ! -f "$SPEC/schemas/Common.json" ]; then
   exit 1
 fi
 rm -rf "$DEST/schemas" "$DEST/fixtures"
-mkdir -p "$DEST/schemas" "$DEST/fixtures"
+mkdir -p "$DEST/schemas/v0.1" "$DEST/fixtures"
 cp "$SPEC"/schemas/*.json "$DEST/schemas/"
-for d in kestrel expected ingest examples; do
+# The frozen 0.1 schemas keep their own $id (/schemas/v0.1/...).
+if [ -d "$SPEC/schemas/v0.1" ]; then
+  cp "$SPEC"/schemas/v0.1/*.json "$DEST/schemas/v0.1/"
+fi
+for d in kestrel expected ingest examples imports; do
   cp -R "$SPEC/fixtures/$d" "$DEST/fixtures/$d"
 done
 cp "$SPEC/fixtures/README.md" "$DEST/fixtures/README.md"
