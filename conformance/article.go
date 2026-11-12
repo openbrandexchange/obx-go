@@ -110,6 +110,10 @@ func testArticleShape(t *T) {
 		}
 	}
 
+	if t.r.online() && !t.r.fixturesPresent {
+		t.partialf("KO-1003 and KO-1004 (needs the Kestrel test data); the shape of every object was checked")
+		return
+	}
 	// KO-1004: three sizes with a second size and the inseam.
 	var ko1004 []map[string]any
 	for pid, ext := range productExt {

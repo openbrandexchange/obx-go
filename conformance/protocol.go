@@ -192,6 +192,9 @@ func testCapabilities(t *T) {
 			t.Errorf("required capability %q is missing", c)
 		}
 	}
+	if t.r.online() && t.r.full == nil {
+		t.onlineStop("the 501 answers of capabilities the portal does not offer need an API key")
+	}
 	tok, err := t.r.full.Token(t.ctx)
 	t.Check(err, "token")
 	base := t.r.cfg.BaseURL + obx.PathAPIBase
@@ -211,6 +214,10 @@ func testCapabilities(t *T) {
 	}
 	for c, probe := range probes {
 		if d.Has(c) {
+			continue
+		}
+		if t.r.online() && (c == obx.CapExports || c == obx.CapUsage) {
+			t.partialf("the 501 answer for %s (the probe is a POST)", c)
 			continue
 		}
 		res, err := probe()
@@ -445,6 +452,10 @@ func testSnapshot(t *T) {
 		}
 	}
 	for _, k := range []string{"brands", "products", "variants", "assets"} {
+		if t.r.online() && !t.r.fixturesPresent {
+			t.partialf("the counts of expected/counts.json (needs the Kestrel test data)")
+			break
+		}
 		exp := int(want.(map[string]any)[k].(float64))
 		if got := counts[strings.TrimSuffix(k, "s")]; got != exp {
 			t.Errorf("snapshot has %d %s, want %d", got, k, exp)
@@ -498,7 +509,12 @@ func key(ch obx.Change) string { return ch.Type + "/" + ch.Op + "/" + ch.ID }
 
 func testPaging(t *T) {
 	big := t.readFeed(t.r.full, "", 500)
-	small := t.readFeed(t.r.full, "", 1)
+	limit := 1
+	if n := len(big.snapshot) + len(big.live); t.r.online() && n > 300 {
+		limit = (n + 299) / 300
+		t.partialf("paging with limit=1: the feed has %d entries, so limit=%d was compared with limit=500", n, limit)
+	}
+	small := t.readFeed(t.r.full, "", limit)
 	join := func(f *feed) []string {
 		var out []string
 		seen := map[string]bool{}
@@ -516,7 +532,7 @@ func testPaging(t *T) {
 		t.Errorf("limit=1 and limit=500 give different entries (%d vs %d)", len(b), len(a))
 	}
 	for _, p := range small.pages {
-		if len(p.Changes) > 1 && !allSame(p.Changes) {
+		if limit == 1 && len(p.Changes) > 1 && !allSame(p.Changes) {
 			t.Errorf("a page with limit=1 has %d entries", len(p.Changes))
 			break
 		}
@@ -574,6 +590,10 @@ func testRestricted(t *T) {
 		}
 		return nil
 	}), "list products")
+	if t.r.online() {
+		t.partialf("the restricted export (it creates an export) and the live entries (they need a brand-side step)")
+		return
+	}
 	if t.r.discovery != nil && t.r.discovery.Has(obx.CapExports) {
 		e, err := t.r.second.CreateExport(t.ctx, obx.ExportRequest{Renditions: []string{obx.RenditionThumb}}, "")
 		t.Check(err, "export")
@@ -714,6 +734,19 @@ func testProductList(t *T) {
 	if strings.Join(all, ",") != strings.Join(paged, ",") {
 		t.Errorf("paging with limit=3 gives %v, limit=100 gives %v", paged, all)
 	}
+	if t.r.online() && !t.r.fixturesPresent {
+		t.partialf("the number of products (needs the Kestrel test data)")
+		if len(all) < 2 {
+			t.Notef("ids= filter not checked: fewer than two products")
+			return
+		}
+		page, err := t.r.full.Products(t.ctx, client.ProductsQuery{IDs: []string{all[0], all[1], "prd_does-not-exist"}, Limit: 100})
+		t.Check(err, "ids filter")
+		if len(page.Items) != 2 {
+			t.Errorf("ids= with two known and one unknown id returned %d products", len(page.Items))
+		}
+		return
+	}
 	if want := t.fixtureCount("products"); len(all) != want {
 		t.Errorf("GET /products lists %d products, want %d", len(all), want)
 	}
@@ -737,10 +770,14 @@ func testGTINLookup(t *T) {
 		t.Fatalf("POST by-gtin: %d %s", res.status, truncate(res.body))
 	}
 	t.validate("GtinLookupResult", res.body, "the lookup result")
-	var got any
-	json.Unmarshal(res.body, &got)
-	for _, d := range matchExpected(got, want, "", t.r.productExpectation(t.ctx)) {
-		t.Errorf("%s", d)
+	if t.r.online() && !t.r.fixturesPresent {
+		t.partialf("the answer against expected/gtin-lookup.json (needs the Kestrel test data); its shape was checked")
+	} else {
+		var got any
+		json.Unmarshal(res.body, &got)
+		for _, d := range matchExpected(got, want, "", t.r.productExpectation(t.ctx)) {
+			t.Errorf("%s", d)
+		}
 	}
 	many := make([]string, 2001)
 	for i := range many {
@@ -760,7 +797,7 @@ func testInvisible404(t *T) {
 	for _, p := range []string{"/products/prd_does-not-exist", "/assets/ast_does-not-exist", "/brands/brd_does-not-exist", "/assets/ast_does-not-exist/renditions/web"} {
 		t.expectStatus(t.get(t.r.full, p), http.StatusNotFound, obx.ErrNotFound, "GET "+p)
 	}
-	if t.r.second != nil {
+	if t.r.second != nil && (!t.r.online() || t.r.fixturesPresent) {
 		t.expectStatus(t.get(t.r.second, "/products/"+t.productID("KT-2001")), http.StatusNotFound, obx.ErrNotFound, "product outside the grant")
 		t.expectStatus(t.get(t.r.second, "/assets/"+t.assetID("KT-2001_BLK_1")), http.StatusNotFound, obx.ErrNotFound, "image outside the grant")
 		t.expectStatus(t.get(t.r.second, "/brands/"+t.r.brandIDs["kestrel-trail"]), http.StatusNotFound, obx.ErrNotFound, "brand outside the grant")
@@ -773,6 +810,9 @@ func testInvisible404(t *T) {
 	case t.r.cfg.Operator != nil:
 		t.opStep(productAction(ActUnpublishProduct, "KO-1006", "Unpublish this product (retailers must no longer see it)."))
 		defer t.r.operate(t.ctx, productAction(ActPublishProduct, "KO-1006", "Publish this product again."))
+	case t.r.online():
+		t.partialf("unpublished products answer 404 (needs a brand-side step)")
+		return
 	default:
 		t.Notef("unpublishing not checked (no upload key or operator)")
 		return
@@ -1204,14 +1244,20 @@ func testRateLimit(t *T) {
 
 func testProblems(t *T) {
 	base := t.r.cfg.BaseURL + obx.PathAPIBase
-	tok, _ := t.r.full.Token(t.ctx)
+	var auth http.Header
+	if t.r.full != nil {
+		tok, _ := t.r.full.Token(t.ctx)
+		auth = bearerHeader(tok)
+	} else {
+		t.partialf("error answers behind a valid token (no API key given); the answers without a token were checked")
+	}
 	for _, probe := range []struct{ method, path string }{
 		{http.MethodGet, "/products/prd_nope"},
 		{http.MethodDelete, "/changes"},
 		{http.MethodGet, "/changes?cursor=nope"},
 		{http.MethodGet, "/nope"},
 	} {
-		res, err := t.r.do(t.ctx, probe.method, base+probe.path, nil, bearerHeader(tok))
+		res, err := t.r.do(t.ctx, probe.method, base+probe.path, nil, auth)
 		t.Check(err, probe.path)
 		if res.status < 400 {
 			t.Errorf("%s %s answered %d", probe.method, probe.path, res.status)

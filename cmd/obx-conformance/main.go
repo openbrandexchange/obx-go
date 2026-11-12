@@ -39,6 +39,8 @@ const usage = `obx-conformance checks an Open Brand Exchange node against the sp
 Usage:
   obx-conformance <profile> --url <node> [options]   profile: protocol, ingest, portal, security or all
   obx-conformance mock [--addr :8080]                run the in-memory mock node
+  obx-conformance check --url <portal> [--client id:secret] [--json]
+                                                     read-only online check (what openbrandexchange.com runs)
   obx-conformance list                               list all tests
   obx-conformance report [--format text|markdown] <report.json>
                                                      show a saved --json report for people
@@ -96,11 +98,17 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, getenv fu
 			if !t.Required {
 				req = "optional"
 			}
-			fmt.Fprintf(stdout, "%-10s %-9s %-8s %s\n", t.ID, t.Profile, req, t.Title)
+			online := conformance.OnlineTier(t.ID)
+			if online == "" {
+				online = "-"
+			}
+			fmt.Fprintf(stdout, "%-10s %-9s %-8s %-9s %s\n", t.ID, t.Profile, req, online, t.Title)
 		}
 		return 0
 	case "mock":
 		return runMock(ctx, args[1:], stdout, stderr, getenv)
+	case "check":
+		return runCheck(ctx, args[1:], stdout, stderr, getenv)
 	case "report":
 		return runReport(args[1:], stdout, stderr)
 	case conformance.ProfileProtocol, conformance.ProfileIngest, conformance.ProfilePortal, conformance.ProfileSecurity, conformance.ProfileAll:
