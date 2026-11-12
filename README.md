@@ -202,4 +202,4 @@ Releases are made by pushing a version tag; see [CONTRIBUTING.md](CONTRIBUTING.m
 
 Apache License 2.0, see [LICENSE](LICENSE) and [NOTICE](NOTICE). The embedded specification schemas and fixtures in `specdata/` are CC-BY-4.0.
 
-An initiative of Richard Lindhout · Open Brand Exchange Foundation (in formation) · hello@openbrandexchange.com
+Open Brand Exchange Foundation (in formation) · hello@openbrandexchange.com
