@@ -42,13 +42,17 @@ type Brand struct {
 	UpdatedAt   time.Time     `json:"updated_at"`
 }
 
-// Fiber is one fibre with its percentage.
+// Fiber is one fibre with its percentage. Recycled and Organic are flags
+// (0.2), present in JSON only when true; see NormalizeFiber for the 0.1 keys
+// recycled_<fibre> and organic_<fibre>.
 type Fiber struct {
 	Fiber      string  `json:"fiber"`
 	Percentage float64 `json:"percentage"`
+	Recycled   bool    `json:"recycled,omitempty"`
+	Organic    bool    `json:"organic,omitempty"`
 }
 
-// MaterialPart is the composition of one garment part (schemas/Materials.json).
+// MaterialPart is the composition of one part of the article (schemas/Materials.json).
 type MaterialPart struct {
 	Part   string  `json:"part"`
 	Fibers []Fiber `json:"fibers"`
@@ -67,26 +71,34 @@ type CareInstruction struct {
 type Care []CareInstruction
 
 // Product is a style/model (schemas/Product.json). In /changes it never
-// carries Variants or Assets; see ProductDetail.
+// carries Variants or Assets; see ProductDetail. The article data of 0.2
+// (ItemSubtype, ContainsAnimalOrigin, FootwearMaterials, Certifications,
+// Features) is always written, as null when not stated; a 0.1 node does not
+// send it, which decodes as nil.
 type Product struct {
-	ID              string         `json:"id"`
-	ExternalID      string         `json:"external_id"`
-	BrandID         string         `json:"brand_id"`
-	StyleNumber     string         `json:"style_number"`
-	Name            LocalizedText  `json:"name"`
-	Description     LocalizedText  `json:"description"`
-	ItemType        *string        `json:"item_type"`
-	GPCBrick        *string        `json:"gpc_brick"`
-	TargetGroup     *string        `json:"target_group"`
-	Season          *string        `json:"season"`
-	Collection      *string        `json:"collection"`
-	Materials       Materials      `json:"materials"`
-	Care            Care           `json:"care"`
-	CountryOfOrigin *string        `json:"country_of_origin"`
-	DPPURL          *string        `json:"dpp_url"`
-	Attributes      map[string]any `json:"attributes"`
-	CreatedAt       time.Time      `json:"created_at"`
-	UpdatedAt       time.Time      `json:"updated_at"`
+	ID                   string             `json:"id"`
+	ExternalID           string             `json:"external_id"`
+	BrandID              string             `json:"brand_id"`
+	StyleNumber          string             `json:"style_number"`
+	Name                 LocalizedText      `json:"name"`
+	Description          LocalizedText      `json:"description"`
+	ItemType             *string            `json:"item_type"`
+	ItemSubtype          *string            `json:"item_subtype"`
+	GPCBrick             *string            `json:"gpc_brick"`
+	TargetGroup          *string            `json:"target_group"`
+	Season               *string            `json:"season"`
+	Collection           *string            `json:"collection"`
+	Materials            Materials          `json:"materials"`
+	ContainsAnimalOrigin *bool              `json:"contains_animal_origin"`
+	FootwearMaterials    *FootwearMaterials `json:"footwear_materials"`
+	Care                 Care               `json:"care"`
+	CountryOfOrigin      *string            `json:"country_of_origin"`
+	Certifications       []Certification    `json:"certifications"`
+	DPPURL               *string            `json:"dpp_url"`
+	Features             *Features          `json:"features"`
+	Attributes           map[string]any     `json:"attributes"`
+	CreatedAt            time.Time          `json:"created_at"`
+	UpdatedAt            time.Time          `json:"updated_at"`
 }
 
 // ProductDetail is a product with its published variants and visible assets
@@ -110,26 +122,31 @@ func (p ProductDetail) MarshalJSON() ([]byte, error) {
 	return json.Marshal(q)
 }
 
-// Color of a variant (schemas/Color.json).
+// Color of a variant (schemas/Color.json). Family (0.2) is one of
+// ColorFamilies or nil.
 type Color struct {
 	Code          string        `json:"code"`
 	Name          LocalizedText `json:"name"`
 	SupplierColor *string       `json:"supplier_color"`
+	Family        *string       `json:"family"`
 }
 
-// Variant is a sellable colour/size (schemas/Variant.json).
+// Variant is a sellable colour/size (schemas/Variant.json). SizeLength and
+// Measurements (0.2) are always written, as null when not stated.
 type Variant struct {
-	ID           string    `json:"id"`
-	ExternalID   string    `json:"external_id"`
-	ProductID    string    `json:"product_id"`
-	BrandID      string    `json:"brand_id"`
-	GTIN         *string   `json:"gtin"`
-	GTINOriginal *string   `json:"gtin_original"`
-	SKU          *string   `json:"sku"`
-	Color        Color     `json:"color"`
-	Size         *string   `json:"size"`
-	SizeSystem   *string   `json:"size_system"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID           string        `json:"id"`
+	ExternalID   string        `json:"external_id"`
+	ProductID    string        `json:"product_id"`
+	BrandID      string        `json:"brand_id"`
+	GTIN         *string       `json:"gtin"`
+	GTINOriginal *string       `json:"gtin_original"`
+	SKU          *string       `json:"sku"`
+	Color        Color         `json:"color"`
+	Size         *string       `json:"size"`
+	SizeLength   *string       `json:"size_length"`
+	SizeSystem   *string       `json:"size_system"`
+	Measurements *Measurements `json:"measurements"`
+	UpdatedAt    time.Time     `json:"updated_at"`
 }
 
 // Rights are the usage rights of an asset (schemas/Rights.json).

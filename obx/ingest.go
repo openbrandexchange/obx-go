@@ -18,32 +18,45 @@ type BrandInput struct {
 // Omitted optional fields become null on PUT; an omitted Status keeps the
 // current status.
 type ProductInput struct {
-	BrandExternalID *string        `json:"brand_external_id,omitempty"`
-	StyleNumber     string         `json:"style_number"`
-	Name            LocalizedText  `json:"name"`
-	Description     LocalizedText  `json:"description,omitempty"`
-	ItemType        *string        `json:"item_type,omitempty"`
-	GPCBrick        *string        `json:"gpc_brick,omitempty"`
-	TargetGroup     *string        `json:"target_group,omitempty"`
-	Season          *string        `json:"season,omitempty"`
-	Collection      *string        `json:"collection,omitempty"`
-	Materials       Materials      `json:"materials,omitempty"`
-	Care            Care           `json:"care,omitempty"`
-	CountryOfOrigin *string        `json:"country_of_origin,omitempty"`
-	DPPURL          *string        `json:"dpp_url,omitempty"`
-	Attributes      map[string]any `json:"attributes,omitempty"`
-	Status          *string        `json:"status,omitempty"`
+	BrandExternalID      *string            `json:"brand_external_id,omitempty"`
+	StyleNumber          string             `json:"style_number"`
+	Name                 LocalizedText      `json:"name"`
+	Description          LocalizedText      `json:"description,omitempty"`
+	ItemType             *string            `json:"item_type,omitempty"`
+	ItemSubtype          *string            `json:"item_subtype,omitempty"`
+	GPCBrick             *string            `json:"gpc_brick,omitempty"`
+	TargetGroup          *string            `json:"target_group,omitempty"`
+	Season               *string            `json:"season,omitempty"`
+	Collection           *string            `json:"collection,omitempty"`
+	Materials            Materials          `json:"materials,omitempty"`
+	ContainsAnimalOrigin *bool              `json:"contains_animal_origin,omitempty"`
+	FootwearMaterials    *FootwearMaterials `json:"footwear_materials,omitempty"`
+	Care                 Care               `json:"care,omitempty"`
+	CountryOfOrigin      *string            `json:"country_of_origin,omitempty"`
+	Certifications       []Certification    `json:"certifications,omitempty"`
+	DPPURL               *string            `json:"dpp_url,omitempty"`
+	Features             *Features          `json:"features,omitempty"`
+	Attributes           map[string]any     `json:"attributes,omitempty"`
+	Status               *string            `json:"status,omitempty"`
+}
+
+// LabelWarnings returns the label completeness warnings of the product
+// (docs/import-format.md rule 10).
+func (p *ProductInput) LabelWarnings() []LabelWarning {
+	return LabelWarnings(p.ItemType, p.Materials, p.ContainsAnimalOrigin, p.FootwearMaterials)
 }
 
 // VariantInput is the ingest body for a variant (schemas/VariantInput.json).
 type VariantInput struct {
-	ProductExternalID string  `json:"product_external_id"`
-	GTIN              *string `json:"gtin,omitempty"`
-	SKU               *string `json:"sku,omitempty"`
-	Color             Color   `json:"color"`
-	Size              *string `json:"size,omitempty"`
-	SizeSystem        *string `json:"size_system,omitempty"`
-	Status            *string `json:"status,omitempty"`
+	ProductExternalID string        `json:"product_external_id"`
+	GTIN              *string       `json:"gtin,omitempty"`
+	SKU               *string       `json:"sku,omitempty"`
+	Color             Color         `json:"color"`
+	Size              *string       `json:"size,omitempty"`
+	SizeLength        *string       `json:"size_length,omitempty"`
+	SizeSystem        *string       `json:"size_system,omitempty"`
+	Measurements      *Measurements `json:"measurements,omitempty"`
+	Status            *string       `json:"status,omitempty"`
 }
 
 // RightsInput are asset rights on ingest; nil fields take the node's default rights.
@@ -261,6 +274,17 @@ type IngestResult struct {
 	ETag       *string  `json:"etag"`
 	Error      *Problem `json:"error"`
 	Warnings   []string `json:"warnings"`
+	// WarningDetails are the warnings with a stable code (0.2: label
+	// completeness); each is also in Warnings as text. Present only when
+	// there are any.
+	WarningDetails []WarningDetail `json:"warning_details,omitempty"`
+}
+
+// WarningDetail is a warning with a stable code (IngestResult.warning_details).
+type WarningDetail struct {
+	Code    string  `json:"code"`
+	Pointer *string `json:"pointer,omitempty"`
+	Detail  string  `json:"detail"`
 }
 
 // MarshalJSON keeps Warnings an array.

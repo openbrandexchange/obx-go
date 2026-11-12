@@ -113,6 +113,11 @@ func superset(got, want any, path string) (string, bool) {
 		for k, wv := range w {
 			gv, ok := g[k]
 			if !ok {
+				if wv == nil {
+					// An input member sent as null equals the member left
+					// out (ingest.md: omitted optional fields become null).
+					continue
+				}
 				return path + "/" + k, false
 			}
 			if p, ok := superset(gv, wv, path+"/"+k); !ok {
