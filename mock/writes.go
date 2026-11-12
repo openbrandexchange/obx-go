@@ -131,6 +131,9 @@ func normalizeProduct(in *obx.ProductInput) {
 	if len(in.Certifications) == 0 {
 		in.Certifications = nil
 	}
+	if in.FootwearMaterials.IsEmpty() {
+		in.FootwearMaterials = nil
+	}
 }
 
 // normalizeVariant stores an empty measurements object as null.

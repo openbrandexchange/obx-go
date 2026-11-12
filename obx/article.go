@@ -75,6 +75,12 @@ type FootwearMaterials struct {
 	OuterSole     *string `json:"outer_sole"`
 }
 
+// IsEmpty reports whether no part is stated (protocol.md 5.9.2: such an
+// object is stored and returned as null).
+func (f *FootwearMaterials) IsEmpty() bool {
+	return f == nil || (f.Upper == nil && f.LiningAndSock == nil && f.OuterSole == nil)
+}
+
 // Part returns the value of a part by key ("upper", "lining_and_sock",
 // "outer_sole"), or nil.
 func (f *FootwearMaterials) Part(key string) *string {
