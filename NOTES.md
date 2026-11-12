@@ -1,6 +1,6 @@
 # Implementation notes
 
-Choices made in obx-go where the specification (v0.2.0, commit in `specdata/SPEC_COMMIT`) is silent, ambiguous or contradicts itself. Each is the simplest reading; the ones marked **spec** should be settled in the spec repository.
+Choices made in obx-go where the specification (v0.3.0, commit in `specdata/SPEC_COMMIT`) is silent, ambiguous or contradicts itself. Each is the simplest reading; the ones marked **spec** should be settled in the spec repository.
 
 ## Protocol and ingest behaviour (mock node and conformance suite)
 
@@ -64,8 +64,14 @@ Choices made in obx-go where the specification (v0.2.0, commit in `specdata/SPEC
 34. **Label warnings in imports** are checked once per product per import, after its first row is applied, on the product as stored (rule 9 kept values included), at the product's first row; they count in `counts.warnings`. In an IngestResult each is in `warning_details` and as `"<code>: <detail>"` in `warnings`. A dry run reports them too.
 35. **Animal fibres** for `animal_origin_unknown`: the list of rule 10 (`leather`, `suede`, `fur`, `down`, `feather`, `wool`, `merino_wool`, `lambswool`, `cashmere`, `alpaca`, `mohair`, `silk`) and every key ending in `_wool`.
 36. **`obx.Features` decoding never fails on content.** Registry keys get typed fields; a registry key whose value has the wrong type (`"wheels": "four"`) and every key outside the registry are kept in `Features.Other`, so a document round-trips unchanged. `Features.Validate` reports what a node must refuse; the mock relies on the schema and calls it as a second check. `wheels` `4.0` is the integer 4 (JSON Schema `integer`).
-37. **P-DISC-1 and `obx_version`.** The spec's P-DISC-1 does not check the version; obx-go notes an `obx_version` other than `0.2` instead of failing, and the article data tests show what a 0.1 node misses.
+37. **P-DISC-1 and `obx_version`.** The spec's P-DISC-1 does not check the version; obx-go notes an `obx_version` other than `0.3` instead of failing, and the article data tests show what an older node misses.
 38. **I-IMP-7 restores the Kestrel import first** (the full fixture import, as after I-IMP-1) and again at the end. Without a protocol client it compares the listed fields with the Ingest API records, whose field names are the same, and skips the change entries.
+
+## Materials and care as terms (specification 0.3)
+
+39. **Names of known codes.** The mock returns the vocabulary's names (and for care its category and symbol) for every code in `vocabularies/`, and ignores names written for those codes; for other codes it keeps the name (category, symbol) that was written, with empty strings dropped and an empty name stored as `null`. The spec allows a node its own reviewed translations (SHOULD); P-CAT-6 therefore only checks that a known code has a name, P-CAT-5 pins the vocabulary's names for the Kestrel products.
+40. **One qualifier, and the 0.1 key wins.** `100% recycled_polyester (organic)` and `{"material": {"code": "recycled_polyester"}, "qualifier": {"code": "organic"}}` give polyester with the qualifier `recycled` (ingest.md §3.4: "the key wins"). With combined prefixes (`organic_recycled_cotton`) the first prefix is the qualifier. Two qualifiers in brackets on one fibre are an import error.
+41. **The code lists of `canonicalcsv`** (`FiberKeys`, `PartKeys`, `CareCodes`) stay as Go slices so the package does not need the embedded spec; a test checks they equal the vocabularies.
 
 ## Production-readiness checklist: what applies to obx-go
 

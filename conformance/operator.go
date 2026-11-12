@@ -56,7 +56,20 @@ const (
 	// ActUnpublishProduct and ActPublishProduct: params external_id.
 	ActUnpublishProduct = "unpublish_product"
 	ActPublishProduct   = "publish_product"
+	// ActSimulateSpecUpgrade: do to the node what an upgrade to a spec version
+	// with incompatible shapes (0.2 → 0.3) does to its cursors: every cursor
+	// issued so far must answer 410 cursor_expired (protocol.md 6.4), for
+	// example by bumping a cursor epoch. No params. Result simulated: "true"
+	// when done. An operator that does not offer it returns
+	// ErrActionNotSupported, or no "true" (a hook that prints nothing, a
+	// person who presses Enter), and P-FEED-7 is skipped.
+	ActSimulateSpecUpgrade = "simulate_spec_upgrade"
 )
+
+// ErrActionNotSupported is what an Operator returns for an optional action
+// it does not offer (ActSimulateSpecUpgrade); the test that needs it is
+// skipped.
+var ErrActionNotSupported = errors.New("conformance: the operator does not offer this action")
 
 // Action is one step for the operator.
 type Action struct {

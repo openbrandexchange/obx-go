@@ -1,6 +1,6 @@
 // Package obx holds the Open Brand Exchange (OBX) data types, taken from the
 // JSON Schemas in the specification (https://github.com/openbrandexchange/spec,
-// schemas/*.json, version 0.2).
+// schemas/*.json and vocabularies/*.json, version 0.3).
 //
 // JSON tags match the schemas exactly. Nullable schema properties are pointers
 // (or nil slices/maps) without omitempty, so a marshalled response contains every
@@ -14,10 +14,10 @@ package obx
 
 // Version is the OBX protocol version this package implements (the value of
 // the OBX-Version header and DiscoveryDocument.ObxVersion).
-const Version = "0.2"
+const Version = "0.3"
 
 // SpecVersion is the specification release the types were generated from.
-const SpecVersion = "0.2.0"
+const SpecVersion = "0.3.0"
 
 // Header names used across the protocol and the ingest API.
 const (

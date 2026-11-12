@@ -23,14 +23,17 @@ func TestIngestArticleData(t *testing.T) {
 	ing, _ := ingest.New(srv.URL, creds.IngestToken)
 	c, _ := client.New(client.Config{BaseURL: srv.URL, ClientID: creds.Full.ClientID, ClientSecret: creds.Full.ClientSecret})
 
-	// 0.1 fibre keys are normalised, a flag false is not stored, {} is null,
-	// an unknown feature key is kept as sent, and label warnings come with codes.
+	// 0.1 fibre keys are normalised to the qualifier, known codes get the
+	// vocabulary's names (unknown codes keep what was sent), {} is null, an
+	// unknown feature key is kept as sent, and label warnings come with codes.
 	body := map[string]any{
 		"brand_external_id": "kestrel", "style_number": "KX-1", "name": map[string]string{"en": "Test scarf"}, "item_type": "scarf",
-		"materials": []any{map[string]any{"part": "main", "fibers": []any{
-			map[string]any{"fiber": "organic_cotton", "percentage": 60},
-			map[string]any{"fiber": "wool", "percentage": 30, "recycled": false},
+		"materials": []any{map[string]any{"part": map[string]any{"code": "main"}, "fibers": []any{
+			map[string]any{"material": map[string]any{"code": "organic_cotton"}, "percentage": 60},
+			map[string]any{"material": map[string]any{"code": "wool", "name": map[string]any{"en": "Mine"}}, "percentage": 30, "qualifier": nil},
+			map[string]any{"material": map[string]any{"code": "seacell", "name": map[string]any{"en": "SeaCell"}}, "percentage": 5, "qualifier": map[string]any{"code": "in_conversion"}},
 		}}},
+		"care":           []any{map[string]any{"code": "wash_30", "text": map[string]any{"en": "Wash inside out"}}, map[string]any{"code": "steam_only", "category": "ironing"}},
 		"features":       map[string]any{"fit": "regular", "fringe_cm": 5},
 		"certifications": []any{},
 	}
@@ -48,8 +51,14 @@ func TestIngestArticleData(t *testing.T) {
 	rec, _ := ing.Get(ctx, obx.KindProduct, "KX-1")
 	var data map[string]any
 	_ = json.Unmarshal(rec.Data, &data)
-	if b, _ := json.Marshal(data["materials"]); string(b) != `[{"fibers":[{"fiber":"cotton","organic":true,"percentage":60},{"fiber":"wool","percentage":30}],"part":"main"}]` {
+	if b, _ := json.Marshal(data["materials"]); string(b) != `[{"fibers":[{"material":{"code":"cotton","name":{"de":"Baumwolle","en":"Cotton","fr":"Coton","nl":"Katoen"}},"percentage":60,"qualifier":{"code":"organic","name":{"de":"Bio","en":"Organic","fr":"Biologique","nl":"Biologisch"}}},`+
+		`{"material":{"code":"wool","name":{"de":"Wolle","en":"Wool","fr":"Laine","nl":"Wol"}},"percentage":30,"qualifier":null},`+
+		`{"material":{"code":"seacell","name":{"en":"SeaCell"}},"percentage":5,"qualifier":{"code":"in_conversion","name":null}}],"part":{"code":"main","name":null}}]` {
 		t.Fatalf("stored materials %s", b)
+	}
+	if b, _ := json.Marshal(data["care"]); string(b) != `[{"category":"washing","code":"wash_30","name":{"de":"Waschen bei 30 °C","en":"Wash at 30 °C","fr":"Lavage à 30 °C","nl":"Wassen op 30 °C"},"symbol":"1_D_30","text":{"en":"Wash inside out"}},`+
+		`{"category":"ironing","code":"steam_only","name":null,"symbol":null,"text":null}]` {
+		t.Fatalf("stored care %s", b)
 	}
 	if b, _ := json.Marshal(data["features"]); string(b) != `{"fit":"regular","fringe_cm":5}` {
 		t.Fatalf("stored features %s", b)
@@ -62,13 +71,22 @@ func TestIngestArticleData(t *testing.T) {
 	if err != nil || again.Result != obx.ResultUnchanged {
 		t.Fatalf("round trip: %v %+v", err, again)
 	}
-	// A 0.1 key and the flag are the same product.
-	body["materials"] = []any{map[string]any{"part": "main", "fibers": []any{
-		map[string]any{"fiber": "cotton", "percentage": 60, "organic": true},
-		map[string]any{"fiber": "wool", "percentage": 30},
+	// A 0.1 key and the qualifier are the same product, with or without names.
+	body["materials"] = []any{map[string]any{"part": map[string]any{"code": "main"}, "fibers": []any{
+		map[string]any{"material": map[string]any{"code": "cotton"}, "percentage": 60, "qualifier": map[string]any{"code": "organic"}},
+		map[string]any{"material": map[string]any{"code": "wool"}, "percentage": 30},
+		map[string]any{"material": map[string]any{"code": "seacell", "name": map[string]any{"en": "SeaCell"}}, "percentage": 5, "qualifier": map[string]any{"code": "in_conversion"}},
 	}}}
 	if r, err := ing.Put(ctx, obx.KindProduct, "KX-1", body, nil); err != nil || r.Result != obx.ResultUnchanged {
-		t.Fatalf("flag form after 0.1 key: %v %+v", err, r)
+		t.Fatalf("qualifier form after 0.1 key: %v %+v", err, r)
+	}
+	// The protocol object carries the same names.
+	prod, err := c.Product(ctx, obx.Str(res.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f := prod.Materials[0].Fibers[0]; f.Material.Name["nl"] != "Katoen" || f.Qualifier == nil || f.Qualifier.Name["fr"] != "Biologique" || obx.Str(prod.Care[0].Symbol) != "1_D_30" || prod.Materials[0].Part.Name != nil {
+		t.Fatalf("protocol product: %+v", prod.Materials)
 	}
 
 	// Registry values outside the registry are validation_failed.
@@ -108,7 +126,7 @@ func TestIngestArticleData(t *testing.T) {
 		t.Errorf("family navy: want validation_failed, got %v", err)
 	}
 
-	// The protocol object has every 0.2 property, null when not stated, and
+	// The protocol object has every article data property, null when not stated, and
 	// the unknown feature as sent.
 	var id string
 	if err := c.EachProduct(ctx, client.ProductsQuery{Limit: 100}, func(p *obx.ProductDetail) error {

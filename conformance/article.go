@@ -12,7 +12,7 @@ import (
 	"github.com/openbrandexchange/obx-go/specdata"
 )
 
-// Article data (0.2): docs/protocol.md 5.9, import-format.md 1.6 and rules 9
+// Article data: docs/protocol.md 5.9, import-format.md 1.6 and rules 9
 // and 10. P-CAT-5 and P-CAT-6 are registered with the protocol profile,
 // I-IMP-7 and I-IMP-8 with the ingest profile.
 
@@ -38,7 +38,8 @@ func (t *T) matchProducts(exts ...string) {
 }
 
 // testArticleRoundTrip is P-CAT-5: the article data of the suitcase, the
-// laptop bag, the Chelsea boot and KT-2001 (0.1 fibre key) round-trips.
+// laptop bag, the Chelsea boot and KT-2001 (0.1 fibre key) round-trips,
+// with the vocabulary's names for parts, materials, qualifiers and care.
 func testArticleRoundTrip(t *T) {
 	t.matchProducts("KO-1008", "KO-1009", "KO-1010", "KT-2001")
 }
@@ -64,7 +65,7 @@ func testArticleShape(t *T) {
 			continue
 		}
 		if err := v.Validate(s, ch.Data); err != nil {
-			t.Errorf("%s %s does not validate against the 0.2 %s schema: %v", ch.Type, ch.ExternalIDValue(), s, err)
+			t.Errorf("%s %s does not validate against the 0.3 %s schema: %v", ch.Type, ch.ExternalIDValue(), s, err)
 		}
 		var data map[string]any
 		if json.Unmarshal(ch.Data, &data) != nil {
@@ -81,6 +82,7 @@ func testArticleShape(t *T) {
 				}
 			}
 			checkMaterials(t, ext, data["materials"])
+			checkCare(t, ext, data["care"])
 			if obj, ok := data["features"].(map[string]any); ok && len(obj) == 0 {
 				t.Errorf("product %s: features is an empty object, want null", ext)
 			}
@@ -141,9 +143,8 @@ func testArticleShape(t *T) {
 		t.Errorf("KO-1003 is not in the snapshot")
 		return
 	}
-	wantMain := []any{map[string]any{"part": "main", "fibers": []any{map[string]any{"fiber": "cotton", "percentage": 100.0, "organic": true}}}}
-	for _, p := range matchExpected(ko1003["materials"], wantMain, "KO-1003/materials", nil) {
-		t.Errorf("%s", p)
+	if got := materialCodes(ko1003["materials"]); got != "main: 100% cotton (organic)" {
+		t.Errorf("KO-1003/materials: %s, want a main fibre with material code cotton, percentage 100 and qualifier code organic", got)
 	}
 	wantCerts := []any{
 		map[string]any{"scheme": "gots", "licence_number": "CU 200301", "scope": "product"},
@@ -154,24 +155,136 @@ func testArticleShape(t *T) {
 	}
 }
 
-// checkMaterials: no 0.1 fibre key and no fibre flag false.
-func checkMaterials(t *T, ext string, materials any) {
+// termCode returns the code of a term object ("" when it is not one).
+func termCode(v any) string {
+	m, _ := v.(map[string]any)
+	c, _ := m["code"].(string)
+	return c
+}
+
+// materialCodes writes materials in the import grammar (codes only), for
+// messages and comparisons.
+func materialCodes(materials any) string {
 	parts, _ := materials.([]any)
+	var out []string
 	for _, p := range parts {
 		pm, _ := p.(map[string]any)
 		fibers, _ := pm["fibers"].([]any)
+		var fs []string
 		for _, f := range fibers {
 			fm, _ := f.(map[string]any)
-			key, _ := fm["fiber"].(string)
-			if strings.HasPrefix(key, "recycled_") || strings.HasPrefix(key, "organic_") {
-				t.Errorf("product %s: fibre %q is a 0.1 key; a 0.2 node returns the fibre with the flag recycled or organic", ext, key)
+			s := fmt.Sprintf("%v%% %s", fm["percentage"], termCode(fm["material"]))
+			if q := termCode(fm["qualifier"]); q != "" {
+				s += " (" + q + ")"
 			}
-			for _, flag := range []string{"recycled", "organic"} {
-				if v, ok := fm[flag]; ok && v != true {
-					t.Errorf("product %s: fibre %s has %s %s; the flag is present only when true", ext, key, flag, short(v))
+			fs = append(fs, s)
+		}
+		out = append(out, termCode(pm["part"])+": "+strings.Join(fs, ", "))
+	}
+	return strings.Join(out, "; ")
+}
+
+// checkName checks a name (LocalizedText or null) for empty strings, and
+// when required that it has at least one language.
+func checkName(t *T, where string, name any, required bool) {
+	m, ok := name.(map[string]any)
+	if !ok {
+		if required {
+			t.Errorf("%s has the name %s; a code of the vocabularies has a name", where, short(name))
+		}
+		return
+	}
+	if required && len(m) == 0 {
+		t.Errorf("%s has an empty name; a code of the vocabularies has a name", where)
+	}
+	for lang, v := range m {
+		if v == "" {
+			t.Errorf("%s: the name in %s is an empty string; a language without a name is omitted", where, lang)
+		}
+	}
+}
+
+// checkTerm checks one part, material or qualifier against the vocabulary
+// (P-CAT-6): a known code has a name, main has the name null.
+func checkTerm(t *T, where, kind string, term any, lookup func(string) (obx.LocalizedText, bool)) {
+	m, ok := term.(map[string]any)
+	if !ok {
+		t.Errorf("%s: %s is %s, want an object {code, name}", where, kind, short(term))
+		return
+	}
+	code, _ := m["code"].(string)
+	where = fmt.Sprintf("%s %s %q", where, kind, code)
+	if _, ok := m["name"]; !ok {
+		t.Errorf("%s has no property name (null when there is none)", where)
+	}
+	if kind == "part" && code == "main" {
+		if m["name"] != nil {
+			t.Errorf("%s has the name %s, want null", where, short(m["name"]))
+		}
+		return
+	}
+	_, known := lookup(code)
+	checkName(t, where, m["name"], known)
+}
+
+// checkMaterials: no 0.1 material key, names of the vocabularies' codes,
+// main without a name, no empty strings.
+func checkMaterials(t *T, ext string, materials any) {
+	v := specdata.Vocabulary()
+	parts, _ := materials.([]any)
+	where := "product " + ext
+	for _, p := range parts {
+		pm, _ := p.(map[string]any)
+		checkTerm(t, where, "part", pm["part"], v.PartName)
+		fibers, _ := pm["fibers"].([]any)
+		for _, f := range fibers {
+			fm, _ := f.(map[string]any)
+			code := termCode(fm["material"])
+			if strings.HasPrefix(code, "recycled_") || strings.HasPrefix(code, "organic_") {
+				t.Errorf("%s: material %q is a 0.1 key; a 0.3 node returns the material with the qualifier recycled or organic", where, code)
+			}
+			for _, gone := range []string{"fiber", "recycled", "organic"} {
+				if _, ok := fm[gone]; ok {
+					t.Errorf("%s: fibre %s has the 0.2 property %s", where, code, gone)
 				}
 			}
+			checkTerm(t, where, "material", fm["material"], v.MaterialName)
+			if _, ok := fm["qualifier"]; !ok {
+				t.Errorf("%s: fibre %s has no property qualifier (null when there is none)", where, code)
+			} else if fm["qualifier"] != nil {
+				checkTerm(t, where, "qualifier", fm["qualifier"], v.QualifierName)
+			}
 		}
+	}
+}
+
+// checkCare: a care code of the vocabulary has exactly its category and
+// symbol and a name; every entry has all properties; no empty strings.
+func checkCare(t *T, ext string, care any) {
+	v := specdata.Vocabulary()
+	entries, _ := care.([]any)
+	for _, e := range entries {
+		m, _ := e.(map[string]any)
+		code, _ := m["code"].(string)
+		where := fmt.Sprintf("product %s care %q", ext, code)
+		for _, p := range []string{"category", "symbol", "name", "text"} {
+			if _, ok := m[p]; !ok {
+				t.Errorf("%s has no property %s (null when unknown)", where, p)
+			}
+		}
+		want, known := v.CareCode(code)
+		if known {
+			if got, _ := m["category"].(string); m["category"] == nil || got != obx.Str(want.Category) {
+				t.Errorf("%s: category %s, want %q", where, short(m["category"]), obx.Str(want.Category))
+			}
+			if want.Symbol == nil && m["symbol"] != nil {
+				t.Errorf("%s: symbol %s, want null", where, short(m["symbol"]))
+			} else if got, _ := m["symbol"].(string); want.Symbol != nil && got != *want.Symbol {
+				t.Errorf("%s: symbol %s, want %q", where, short(m["symbol"]), *want.Symbol)
+			}
+		}
+		checkName(t, where, m["name"], known)
+		checkName(t, where+" text", m["text"], false)
 	}
 }
 
@@ -196,7 +309,7 @@ func (t *T) productsCSVImport(file string, dryRun bool) (*obx.IngestJob, []obx.I
 		CSV: &ingest.File{Name: "products.csv", Data: data}})
 }
 
-// testImportArticleColumns is I-IMP-7: the 0.2 columns and rule 9 per key.
+// testImportArticleColumns is I-IMP-7: the article data columns and rule 9 per key.
 func testImportArticleColumns(t *T) {
 	raw, err := t.r.fixture("imports/expected.json")
 	t.Check(err, "read fixtures/imports/expected.json")

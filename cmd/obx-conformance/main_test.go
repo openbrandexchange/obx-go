@@ -36,8 +36,10 @@ func TestProtocolWithAPIKeysOnly(t *testing.T) {
 	if rep.Failed != 0 || rep.Passed < 20 {
 		t.Fatalf("passed %d failed %d", rep.Passed, rep.Failed)
 	}
+	// P-FEED-5 needs the ingest replay, P-FEED-7 an operator that offers
+	// simulate_spec_upgrade.
 	for _, r := range rep.Results {
-		if r.Status == conformance.StatusSkip && !strings.Contains(strings.Join(r.Messages, " "), "admin") && r.ID != "P-FEED-5" {
+		if r.Status == conformance.StatusSkip && !strings.Contains(strings.Join(r.Messages, " "), "admin") && r.ID != "P-FEED-5" && r.ID != "P-FEED-7" {
 			t.Errorf("%s skipped for another reason than missing admin credentials: %v", r.ID, r.Messages)
 		}
 	}

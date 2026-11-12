@@ -107,7 +107,7 @@ go get github.com/openbrandexchange/obx-go
 
 | Package | |
 |---|---|
-| `obx` | types generated from the spec's JSON Schemas (exact JSON tags), including the 0.2 article data (measurements, typed features, footwear materials, certifications, colour family), error codes, GTIN helpers, label completeness checks (`LabelWarnings`), `LocalizedText.Pick` (the language fallback every OBX UI uses: your language → English → first available) |
+| `obx` | types generated from the spec's JSON Schemas (exact JSON tags), including the article data (materials and care as terms with names, measurements, typed features, footwear materials, certifications, colour family), error codes, GTIN helpers, label completeness checks (`LabelWarnings`), `LocalizedText.Pick` (the language fallback every OBX UI uses: your language → English → first available) |
 | `client` | OBX Protocol client: discovery, OAuth2 client credentials with token caching, change feed with a cursor store (`Sync` handles snapshots, grant resyncs and expired cursors), products, GTIN lookup, rendition downloads with sha256 verification, exports, webhooks, access requests, usage |
 | `ingest` | Ingest API client: upserts/patches/deletes with ETags, batches (sync and async), blob dedupe, resumable multipart uploads with progress, imports and jobs; `Preparer` hashes, uploads and (when needed) renders images |
 | `canonicalcsv` | parser/validator for `products.csv`, `assets.csv` and image names, import planning, and the CSV export writer |
@@ -183,7 +183,7 @@ In a portal's CI, use the [conformance action](conformance-action/action.yml) or
 
 `scripts/interop.sh` runs the same automation against node-go, node-php and node-ts (sibling checkouts; needs Go, Docker and Bun): first-run setup, `obx push` of the Kestrel fixtures, `obx pull`, then `obx-interop trace`, which records the change feed, every product and the sha256 of every file and replays the spec's ingest script step by step, and finally an incremental and a fresh `obx pull`. Node ids, timestamps, cursors and signed URLs are replaced by stable labels such as `product:KO-1001` before `obx-interop compare` lists every difference. `NODES=go,ts` runs a subset.
 
-The spec's schemas (0.2, and the frozen 0.1 schemas at their own `$id`s) and fixtures are embedded (`specdata/`, refreshed with `scripts/sync-spec.sh ../spec`); `--fixtures` points at another copy. This release implements specification 0.2.0.
+The spec's schemas (0.3), vocabularies (`specdata.Vocabulary()`: the names of part, material, qualifier and care codes) and fixtures are embedded (`specdata/`, refreshed with `scripts/sync-spec.sh ../spec`); `--fixtures` points at another copy. The main branch implements specification 0.3.0 (unreleased); release v0.2.0 implements 0.2.0.
 
 ## Building and releasing
 

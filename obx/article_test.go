@@ -11,39 +11,62 @@ import (
 )
 
 func TestNormalizeFiber(t *testing.T) {
-	cases := map[string]obx.Fiber{
-		"recycled_polyester":      {Fiber: "polyester", Recycled: true},
-		"organic_cotton":          {Fiber: "cotton", Organic: true},
-		"recycled_polyamide":      {Fiber: "polyamide", Recycled: true},
-		"organic_recycled_cotton": {Fiber: "cotton", Recycled: true, Organic: true},
-		"recycled_":               {Fiber: "recycled_"},
-		"merino_wool":             {Fiber: "merino_wool"},
+	cases := map[string][2]string{
+		"recycled_polyester":      {"polyester", "recycled"},
+		"organic_cotton":          {"cotton", "organic"},
+		"recycled_polyamide":      {"polyamide", "recycled"},
+		"organic_recycled_cotton": {"cotton", "organic"},
+		"recycled_":               {"recycled_", ""},
+		"merino_wool":             {"merino_wool", ""},
 	}
 	for in, want := range cases {
-		if got := obx.NormalizeFiber(obx.Fiber{Fiber: in}); got != want {
-			t.Errorf("%s: got %+v, want %+v", in, got, want)
+		got := obx.NormalizeFiber(obx.Fiber{Material: obx.Term{Code: in}})
+		q := ""
+		if got.Qualifier != nil {
+			q = got.Qualifier.Code
+		}
+		if got.Material.Code != want[0] || q != want[1] {
+			t.Errorf("%s: got %s (%s), want %v", in, got.Material.Code, q, want)
 		}
 	}
-	m := obx.Materials{{Part: "outer", Fibers: []obx.Fiber{{Fiber: "recycled_polyester", Percentage: 100}}}}
+	// The 0.1 key wins over a qualifier the fibre already has.
+	got := obx.NormalizeFiber(obx.Fiber{Material: obx.Term{Code: "recycled_polyester"}, Qualifier: &obx.Term{Code: "organic"}})
+	if got.Material.Code != "polyester" || got.Qualifier.Code != "recycled" {
+		t.Errorf("key does not win: %+v", got)
+	}
+	m := obx.Materials{{Part: obx.Term{Code: "outer"}, Fibers: []obx.Fiber{{Material: obx.Term{Code: "recycled_polyester"}, Percentage: 100}}}}
 	n := m.Normalized()
-	if m[0].Fibers[0].Fiber != "recycled_polyester" {
+	if m[0].Fibers[0].Material.Code != "recycled_polyester" {
 		t.Fatal("Normalized changed its receiver")
 	}
 	b, _ := json.Marshal(n)
-	if string(b) != `[{"part":"outer","fibers":[{"fiber":"polyester","percentage":100,"recycled":true}]}]` {
+	if string(b) != `[{"part":{"code":"outer","name":null},"fibers":[{"material":{"code":"polyester","name":null},"percentage":100,"qualifier":{"code":"recycled","name":null}}]}]` {
 		t.Fatalf("normalised materials: %s", b)
 	}
 }
 
-// The fibre flags are present only when true: false is not written.
-func TestFiberFlagsOnlyWhenTrue(t *testing.T) {
-	var f obx.Fiber
-	if err := json.Unmarshal([]byte(`{"fiber":"cotton","percentage":100,"organic":false,"recycled":false}`), &f); err != nil {
+// WithNames fills the vocabulary's names for known codes, keeps what was
+// written for others, and never writes an empty string.
+func TestMaterialsWithNames(t *testing.T) {
+	v := specdata.Vocabulary()
+	var m obx.Materials
+	in := `[{"part":{"code":"main"},"fibers":[{"material":{"code":"cotton","name":{"en":"Mine"}},"percentage":95,"qualifier":{"code":"organic"}},{"material":{"code":"seacell","name":{"en":"SeaCell","nl":""}},"percentage":5,"qualifier":{"code":"in_conversion","name":{"en":"In conversion"}}}]},` +
+		`{"part":{"code":"lining"},"fibers":[{"material":{"code":"recycled_polyester"},"percentage":100}]},{"part":{"code":"collar","name":{"nl":""}},"fibers":[{"material":{"code":"wool"},"percentage":100,"qualifier":null}]}]`
+	if err := json.Unmarshal([]byte(in), &m); err != nil {
 		t.Fatal(err)
 	}
-	b, _ := json.Marshal(f)
-	if string(b) != `{"fiber":"cotton","percentage":100}` {
-		t.Fatalf("got %s", b)
+	b, _ := json.Marshal(m.WithNames(v))
+	want := `[{"part":{"code":"main","name":null},"fibers":[{"material":{"code":"cotton","name":{"de":"Baumwolle","en":"Cotton","fr":"Coton","nl":"Katoen"}},"percentage":95,"qualifier":{"code":"organic","name":{"de":"Bio","en":"Organic","fr":"Biologique","nl":"Biologisch"}}},` +
+		`{"material":{"code":"seacell","name":{"en":"SeaCell"}},"percentage":5,"qualifier":{"code":"in_conversion","name":{"en":"In conversion"}}}]},` +
+		`{"part":{"code":"lining","name":{"de":"Futter","en":"Lining","fr":"Doublure","nl":"Voering"}},"fibers":[{"material":{"code":"polyester","name":{"de":"Polyester","en":"Polyester","fr":"Polyester","nl":"Polyester"}},"percentage":100,"qualifier":{"code":"recycled","name":{"de":"Recycelt","en":"Recycled","fr":"Recyclé","nl":"Gerecycled"}}}]},` +
+		`{"part":{"code":"collar","name":null},"fibers":[{"material":{"code":"wool","name":{"de":"Wolle","en":"Wool","fr":"Laine","nl":"Wol"}},"percentage":100,"qualifier":null}]}]`
+	if string(b) != want {
+		t.Fatalf("got\n%s\nwant\n%s", b, want)
+	}
+	care := obx.Care{{Code: "wash_30", Text: obx.LocalizedText{"en": "Wash inside out", "nl": ""}}, {Code: "steam_only", Category: obx.Ptr("ironing"), Name: obx.LocalizedText{"en": "Steam only"}}}
+	b, _ = json.Marshal(care.WithNames(v))
+	if string(b) != `[{"code":"wash_30","category":"washing","symbol":"1_D_30","name":{"de":"Waschen bei 30 °C","en":"Wash at 30 °C","fr":"Lavage à 30 °C","nl":"Wassen op 30 °C"},"text":{"en":"Wash inside out"}},{"code":"steam_only","category":"ironing","symbol":null,"name":{"en":"Steam only"},"text":null}]` {
+		t.Fatalf("care: %s", b)
 	}
 }
 
@@ -162,9 +185,9 @@ func TestNewPropertiesAlwaysPresent(t *testing.T) {
 func TestLabelWarnings(t *testing.T) {
 	no := obx.Ptr(false)
 	mat := func(s ...any) obx.Materials {
-		p := obx.MaterialPart{Part: "main"}
+		p := obx.MaterialPart{Part: obx.Term{Code: "main"}}
 		for i := 0; i < len(s); i += 2 {
-			p.Fibers = append(p.Fibers, obx.Fiber{Fiber: s[i].(string), Percentage: float64(s[i+1].(int))})
+			p.Fibers = append(p.Fibers, obx.Fiber{Material: obx.Term{Code: s[i].(string)}, Percentage: float64(s[i+1].(int))})
 		}
 		return obx.Materials{p}
 	}

@@ -26,6 +26,19 @@ func report(t *testing.T, rep *conformance.Report) {
 	t.Logf("passed %d, failed %d, skipped %d in %d ms", rep.Passed, rep.Failed, rep.Skipped, rep.Millis)
 }
 
+// specUpgradeOperator offers only simulate_spec_upgrade (P-FEED-7), done by
+// the mock's own Go method, the way a node's tests call its own code; the
+// suite does every other brand-side step through the admin API.
+func specUpgradeOperator(n *mock.Node) conformance.Operator {
+	return conformance.OperatorFunc(func(_ context.Context, a conformance.Action) (map[string]string, error) {
+		if a.Name != conformance.ActSimulateSpecUpgrade {
+			return nil, conformance.ErrActionNotSupported
+		}
+		n.SimulateSpecUpgrade()
+		return map[string]string{"simulated": "true"}, nil
+	})
+}
+
 // TestMockPassesAll runs every profile against a fresh mock node, the way
 // node repositories run the suite in CI.
 func TestMockPassesAll(t *testing.T) {
@@ -38,7 +51,7 @@ func TestMockPassesAll(t *testing.T) {
 			n := mock.New(mock.Options{AllowPrivateURLs: true, ClientRenditions: clientRenditions})
 			srv := httptest.NewServer(n)
 			defer srv.Close()
-			rep, err := conformance.Run(context.Background(), []string{conformance.ProfileAll}, conformance.Config{BaseURL: srv.URL, SetupCode: n.SetupCode()})
+			rep, err := conformance.Run(context.Background(), []string{conformance.ProfileAll}, conformance.Config{BaseURL: srv.URL, SetupCode: n.SetupCode(), Operator: specUpgradeOperator(n)})
 			if err != nil {
 				t.Fatal(err)
 			}

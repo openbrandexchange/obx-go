@@ -37,10 +37,11 @@ func NormalizeKey(s string) string {
 	return strings.TrimRight(b.String(), "_")
 }
 
-// Recommended fibre and part keys (docs/import-format.md section 1.4): the
-// English names of Annex I of Regulation (EU) No 1007/2011 where one exists,
-// and the non-textile materials. Recycled and organic content are flags of a
-// fibre, not fibres (0.2).
+// Material and part codes (docs/import-format.md section 1.4,
+// vocabularies/materials.json and parts.json): the English names of Annex I
+// of Regulation (EU) No 1007/2011 where one exists, and the non-textile
+// materials. Recycled and organic content are qualifiers of a fibre, not
+// materials. Other codes are allowed.
 var (
 	FiberKeys = []string{"cotton", "linen", "hemp", "silk", "wool", "merino_wool", "lambswool", "cashmere", "alpaca", "mohair", "viscose", "lyocell", "modal", "cupro", "acetate", "polyester", "polyamide", "elastane", "acrylic", "polypropylene", "polyurethane", "leather", "suede", "down", "feather", "rubber", "metal", "other"}
 	PartKeys  = []string{"main", "outer", "lining", "filling", "padding", "trim", "pocket_lining", "shell", "handle", "strap", "upper", "sole", "insole"}
@@ -62,21 +63,23 @@ var (
 	TargetGroups = []string{"women", "men", "unisex", "girls", "boys", "kids", "baby"}
 )
 
-var fiberFlag = regexp.MustCompile(`(?i)\s*\((recycled|organic)\)\s*$`)
+var fiberQualifier = regexp.MustCompile(`\s*\(([^()]*)\)\s*$`)
 
 // ParseMaterials parses the materials grammar:
 //
 //	materials := part (";" part)*
 //	part      := [part_name ":"] fiber ("," fiber)*
-//	fiber     := number "%" fiber_key flag*
-//	flag      := "(recycled)" | "(organic)"
+//	fiber     := number "%" material_code [qualifier]
+//	qualifier := "(" qualifier_code ")"
 //
-// A flag sets Recycled or Organic on the fibre, and the 0.1 keys
-// recycled_<fibre> and organic_<fibre> are normalised to the fibre with the
-// flag (obx.NormalizeFiber), so "100% recycled_polyester" and "100% polyester
-// (recycled)" give the same materials. err is set when the text does not
-// follow the grammar. Percentages that do not sum to 100 are not an error:
-// the node reports them as the label warning fibre_percentages_not_100
+// A qualifier in brackets ("(organic)", "(recycled)", "(regenerative)" or
+// another code) sets the fibre's qualifier; two are an error. The 0.1 keys
+// recycled_<fibre> and organic_<fibre> are normalised to the material with
+// that qualifier (obx.NormalizeFiber), so "100% recycled_polyester" and
+// "100% polyester (recycled)" give the same materials. The result holds codes
+// only: the node adds the names. err is set when the text does not follow
+// the grammar. Percentages that do not sum to 100 are not an error: the node
+// reports them as the label warning fibre_percentages_not_100
 // (import-format.md rule 10), so the returned warnings are for other notes.
 func ParseMaterials(s string) (obx.Materials, []string, error) {
 	s = strings.TrimSpace(s)
@@ -98,7 +101,7 @@ func ParseMaterials(s string) (obx.Materials, []string, error) {
 				return nil, nil, fmt.Errorf("part name %q is not a valid key", strings.TrimSpace(name))
 			}
 		}
-		part := obx.MaterialPart{Part: partName}
+		part := obx.MaterialPart{Part: obx.Term{Code: partName}}
 		for _, rawFiber := range strings.Split(body, ",") {
 			rawFiber = strings.TrimSpace(rawFiber)
 			if rawFiber == "" {
@@ -106,28 +109,27 @@ func ParseMaterials(s string) (obx.Materials, []string, error) {
 			}
 			num, key, ok := strings.Cut(rawFiber, "%")
 			if !ok {
-				return nil, nil, fmt.Errorf("%q: expected \"<percentage>%% <fibre>\"", rawFiber)
+				return nil, nil, fmt.Errorf("%q: expected \"<percentage>%% <material>\"", rawFiber)
 			}
 			pct, err := strconv.ParseFloat(strings.TrimSpace(num), 64)
 			if err != nil || pct < 0 || pct > 100 || math.IsNaN(pct) {
 				return nil, nil, fmt.Errorf("%q: %q is not a percentage between 0 and 100", rawFiber, strings.TrimSpace(num))
 			}
 			f := obx.Fiber{Percentage: pct}
-			for {
-				m := fiberFlag.FindStringSubmatch(key)
-				if m == nil {
-					break
-				}
-				if strings.EqualFold(m[1], "recycled") {
-					f.Recycled = true
-				} else {
-					f.Organic = true
-				}
+			if m := fiberQualifier.FindStringSubmatch(key); m != nil {
 				key = key[:len(key)-len(m[0])]
+				if fiberQualifier.MatchString(key) {
+					return nil, nil, fmt.Errorf("%q: a fibre has one qualifier", rawFiber)
+				}
+				q := NormalizeKey(m[1])
+				if !IsKey(q) {
+					return nil, nil, fmt.Errorf("%q: qualifier %q is not a valid key", rawFiber, strings.TrimSpace(m[1]))
+				}
+				f.Qualifier = &obx.Term{Code: q}
 			}
-			f.Fiber = NormalizeKey(key)
-			if !IsKey(f.Fiber) {
-				return nil, nil, fmt.Errorf("%q: fibre %q is not a valid key", rawFiber, strings.TrimSpace(key))
+			f.Material.Code = NormalizeKey(key)
+			if !IsKey(f.Material.Code) {
+				return nil, nil, fmt.Errorf("%q: material %q is not a valid key", rawFiber, strings.TrimSpace(key))
 			}
 			part.Fibers = append(part.Fibers, obx.NormalizeFiber(f))
 		}
@@ -142,23 +144,20 @@ func ParseMaterials(s string) (obx.Materials, []string, error) {
 	return out, nil, nil
 }
 
-// FormatMaterials writes materials in the grammar ParseMaterials reads, with
-// the fibre flags as "(recycled)" and "(organic)".
+// FormatMaterials writes materials in the grammar ParseMaterials reads (codes
+// only, the qualifier in brackets).
 func FormatMaterials(m obx.Materials) string {
 	parts := make([]string, 0, len(m))
 	for _, p := range m {
 		fibers := make([]string, 0, len(p.Fibers))
 		for _, f := range p.Fibers {
-			s := strconv.FormatFloat(f.Percentage, 'f', -1, 64) + "% " + f.Fiber
-			if f.Recycled {
-				s += " (recycled)"
-			}
-			if f.Organic {
-				s += " (organic)"
+			s := strconv.FormatFloat(f.Percentage, 'f', -1, 64) + "% " + f.Material.Code
+			if f.Qualifier != nil {
+				s += " (" + f.Qualifier.Code + ")"
 			}
 			fibers = append(fibers, s)
 		}
-		parts = append(parts, p.Part+": "+strings.Join(fibers, ", "))
+		parts = append(parts, p.Part.Code+": "+strings.Join(fibers, ", "))
 	}
 	return strings.Join(parts, "; ")
 }

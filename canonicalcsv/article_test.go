@@ -8,6 +8,7 @@ import (
 
 	"github.com/openbrandexchange/obx-go/canonicalcsv"
 	"github.com/openbrandexchange/obx-go/obx"
+	"github.com/openbrandexchange/obx-go/specdata"
 )
 
 func parse(t *testing.T, csv string) *canonicalcsv.ProductsFile {
@@ -50,7 +51,7 @@ func TestKestrelArticleData(t *testing.T) {
 	if got := js(in.Features); got != `{"shell":"hard","wheels":4,"lock":"tsa_combination","expandable":true,"closure":"zip"}` {
 		t.Errorf("KO-1008 features %s", got)
 	}
-	if got := js(in.Materials); got != `[{"part":"shell","fibers":[{"fiber":"polypropylene","percentage":100}]},{"part":"lining","fibers":[{"fiber":"polyester","percentage":100,"recycled":true}]}]` {
+	if got := js(in.Materials); got != `[{"part":{"code":"shell","name":null},"fibers":[{"material":{"code":"polypropylene","name":null},"percentage":100,"qualifier":null}]},{"part":{"code":"lining","name":null},"fibers":[{"material":{"code":"polyester","name":null},"percentage":100,"qualifier":{"code":"recycled","name":null}}]}]` {
 		t.Errorf("KO-1008 materials %s", got)
 	}
 	if got := js(ko1008.Variants[1].Input.Measurements); got != `{"height_cm":55,"width_cm":40,"depth_cm":23,"weight_kg":2.8,"volume_l":42,"volume_expanded_l":48}` {
@@ -80,7 +81,7 @@ func TestKestrelArticleData(t *testing.T) {
 	if got := js(ko1003.Input.Certifications); got != `[{"scheme":"gots","licence_number":"CU 200301","scope":"product"},{"scheme":"oeko_tex_standard_100","licence_number":"26.KST.20003","scope":"product"}]` {
 		t.Errorf("KO-1003 certifications %s", got)
 	}
-	if got := js(ko1003.Input.Materials); got != `[{"part":"main","fibers":[{"fiber":"cotton","percentage":100,"organic":true}]}]` {
+	if got := js(ko1003.Input.Materials); got != `[{"part":{"code":"main","name":null},"fibers":[{"material":{"code":"cotton","name":null},"percentage":100,"qualifier":{"code":"organic","name":null}}]}]` {
 		t.Errorf("KO-1003 materials %s", got)
 	}
 	ko1004 := product(t, pf, "KO-1004").Variants[0].Input
@@ -88,7 +89,7 @@ func TestKestrelArticleData(t *testing.T) {
 		t.Errorf("KO-1004 %s", js(ko1004))
 	}
 	kt2001 := product(t, pf, "KT-2001")
-	if got := js(kt2001.Input.Materials[0]); got != `{"part":"outer","fibers":[{"fiber":"polyester","percentage":100,"recycled":true}]}` {
+	if got := js(kt2001.Input.Materials[0]); got != `{"part":{"code":"outer","name":null},"fibers":[{"material":{"code":"polyester","name":null},"percentage":100,"qualifier":{"code":"recycled","name":null}}]}` {
 		t.Errorf("KT-2001 0.1 key not normalised: %s", got)
 	}
 	ko1001 := product(t, pf, "KO-1001")
@@ -241,7 +242,7 @@ func TestArticleValueFormatsRoundTrip(t *testing.T) {
 			t.Errorf("footwear %q → %q", s, got)
 		}
 	}
-	for _, s := range []string{"outer: 100% polyester (recycled); lining: 88% polyamide, 12% elastane", "100% cotton (organic)"} {
+	for _, s := range []string{"outer: 100% polyester (recycled); lining: 88% polyamide, 12% elastane", "100% cotton (organic)", "70% wool (regenerative), 30% seacell (in_conversion)"} {
 		m, _, err := canonicalcsv.ParseMaterials(s)
 		if err != nil {
 			t.Fatal(err)
@@ -253,6 +254,25 @@ func TestArticleValueFormatsRoundTrip(t *testing.T) {
 	a, _, _ := canonicalcsv.ParseMaterials("100% organic_cotton")
 	b, _, _ := canonicalcsv.ParseMaterials("100% Cotton (Organic)")
 	if js(a) != js(b) {
-		t.Errorf("0.1 key and flag differ: %s %s", js(a), js(b))
+		t.Errorf("0.1 key and qualifier differ: %s %s", js(a), js(b))
+	}
+	// The 0.1 key wins over a qualifier in brackets.
+	if c, _, _ := canonicalcsv.ParseMaterials("100% recycled_polyester (organic)"); canonicalcsv.FormatMaterials(c) != "main: 100% polyester (recycled)" {
+		t.Errorf("0.1 key with qualifier: %s", js(c))
+	}
+	for _, bad := range []string{"100% cotton (organic) (recycled)", "100% cotton (organic)(recycled)", "100% cotton (Ä)", "100% (organic)"} {
+		if _, _, err := canonicalcsv.ParseMaterials(bad); err == nil {
+			t.Errorf("%q: no error", bad)
+		}
+	}
+}
+
+// The code lists of the package are the spec's vocabularies.
+func TestCodesMatchVocabulary(t *testing.T) {
+	v := specdata.Vocabulary()
+	for name, list := range map[string][]string{"parts": canonicalcsv.PartKeys, "materials": canonicalcsv.FiberKeys, "care": canonicalcsv.CareCodes} {
+		if strings.Join(list, ",") != strings.Join(v.Order[name], ",") {
+			t.Errorf("%s: %v, vocabulary %v", name, list, v.Order[name])
+		}
 	}
 }

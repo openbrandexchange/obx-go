@@ -10,47 +10,53 @@ import (
 	"strings"
 )
 
-// Article data added in 0.2 (docs/protocol.md section 5.9). New product and
-// variant properties are always present in protocol objects (null when not
-// stated); inside Measurements and Features only the stated members are
-// present, and the fibre flags Recycled and Organic only when true.
+// Article data (docs/protocol.md section 5.9). New product and variant
+// properties are always present in protocol objects (null when not stated);
+// inside Measurements and Features only the stated members are present.
 
-// NormalizeFiber turns a 0.1 fibre key recycled_<fibre> or organic_<fibre>
-// into the fibre with the flag set (docs/protocol.md 5.9.1): recycled_polyester
-// becomes polyester with Recycled, organic_cotton becomes cotton with Organic.
-// The prefixes may be combined (organic_recycled_cotton).
+// Qualifier codes of a fibre (vocabularies/qualifiers.json). Other codes are
+// allowed.
+const (
+	QualifierOrganic      = "organic"
+	QualifierRecycled     = "recycled"
+	QualifierRegenerative = "regenerative"
+)
+
+// NormalizeFiber turns a 0.1 material key recycled_<fibre> or
+// organic_<fibre> into the material with that qualifier (docs/ingest.md 3.4):
+// recycled_polyester becomes polyester with the qualifier recycled. The key
+// wins over a qualifier the fibre already has; when prefixes are combined
+// (organic_recycled_cotton) the first one is the qualifier. The name of a
+// rewritten material or qualifier is dropped, since it named the old code.
 func NormalizeFiber(f Fiber) Fiber {
+	var q string
 	for {
+		code := f.Material.Code
+		var prefix string
 		switch {
-		case strings.HasPrefix(f.Fiber, "recycled_") && len(f.Fiber) > len("recycled_"):
-			f.Fiber, f.Recycled = strings.TrimPrefix(f.Fiber, "recycled_"), true
-		case strings.HasPrefix(f.Fiber, "organic_") && len(f.Fiber) > len("organic_"):
-			f.Fiber, f.Organic = strings.TrimPrefix(f.Fiber, "organic_"), true
-		default:
-			return f
+		case strings.HasPrefix(code, "recycled_") && len(code) > len("recycled_"):
+			prefix = QualifierRecycled
+		case strings.HasPrefix(code, "organic_") && len(code) > len("organic_"):
+			prefix = QualifierOrganic
+		}
+		if prefix == "" {
+			break
+		}
+		f.Material = Term{Code: strings.TrimPrefix(code, prefix+"_")}
+		if q == "" {
+			q = prefix
 		}
 	}
+	if q != "" && (f.Qualifier == nil || f.Qualifier.Code != q) {
+		f.Qualifier = &Term{Code: q}
+	}
+	return f
 }
 
-// Normalized returns a copy of m with every fibre normalised (NormalizeFiber).
-// A 0.2 node stores and returns only normalised fibres.
-func (m Materials) Normalized() Materials {
-	if m == nil {
-		return nil
-	}
-	out := make(Materials, len(m))
-	for i, p := range m {
-		q := MaterialPart{Part: p.Part}
-		if p.Fibers != nil {
-			q.Fibers = make([]Fiber, len(p.Fibers))
-			for j, f := range p.Fibers {
-				q.Fibers[j] = NormalizeFiber(f)
-			}
-		}
-		out[i] = q
-	}
-	return out
-}
+// Normalized returns a copy of m with every fibre normalised (NormalizeFiber)
+// and names cleaned, without filling names; see WithNames for what a node
+// stores.
+func (m Materials) Normalized() Materials { return m.WithNames(nil) }
 
 // Footwear material categories of Directive 94/11/EC.
 const (
@@ -746,9 +752,9 @@ func LabelWarnings(itemType *string, materials Materials, containsAnimalOrigin *
 		animal:
 			for _, p := range materials {
 				for _, f := range p.Fibers {
-					if IsAnimalOriginFibre(NormalizeFiber(f).Fiber) {
+					if IsAnimalOriginFibre(NormalizeFiber(f).Material.Code) {
 						out = append(out, LabelWarning{WarnAnimalOriginUnknown, "contains_animal_origin", "/contains_animal_origin",
-							fmt.Sprintf("the materials contain %s; state whether the product contains non-textile parts of animal origin (Regulation (EU) No 1007/2011 Art. 12)", f.Fiber)})
+							fmt.Sprintf("the materials contain %s; state whether the product contains non-textile parts of animal origin (Regulation (EU) No 1007/2011 Art. 12)", NormalizeFiber(f).Material.Code)})
 						break animal
 					}
 				}
@@ -761,7 +767,7 @@ func LabelWarnings(itemType *string, materials Materials, containsAnimalOrigin *
 			}
 			if math.Abs(sum-100) > 0.01 {
 				out = append(out, LabelWarning{WarnFibrePercentagesNot100, "materials", fmt.Sprintf("/materials/%d", i),
-					fmt.Sprintf("the percentages of %s add up to %g, not 100", p.Part, sum)})
+					fmt.Sprintf("the percentages of %s add up to %g, not 100", p.Part.Code, sum)})
 			}
 		}
 	case Contains(FootwearItemTypes, it):
