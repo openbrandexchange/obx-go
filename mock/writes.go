@@ -269,6 +269,10 @@ func (s *state) put(w writer, kind, ext string, data json.RawMessage, ifMatch, o
 		var in obx.VariantInput
 		json.Unmarshal(clean, &in)
 		normalizeVariant(&in)
+		if m := in.Measurements; m != nil && m.StrapLengthCM != nil && m.StrapLengthCM.Min > m.StrapLengthCM.Max {
+			// The schema cannot compare two numbers; protocol.md §5.9 asks min <= max.
+			return writeResult{}, problem(obx.ErrValidationFailed, "measurements: strap_length_cm min is larger than max").WithField("/measurements/strap_length_cm", obx.ErrValidationFailed, "min > max")
+		}
 		prod := s.products[in.ProductExternalID]
 		if prod == nil {
 			return writeResult{}, problemf(obx.ErrUnknownParent, "product %s does not exist", in.ProductExternalID)

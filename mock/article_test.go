@@ -98,6 +98,10 @@ func TestIngestArticleData(t *testing.T) {
 	if _, err := ing.Put(ctx, obx.KindVariant, "2000199901018", v, nil); !obx.IsCode(err, obx.ErrValidationFailed) {
 		t.Errorf("weight 0: want validation_failed, got %v", err)
 	}
+	v["measurements"] = map[string]any{"strap_length_cm": map[string]any{"min": 130, "max": 80}}
+	if _, err := ing.Put(ctx, obx.KindVariant, "2000199901018", v, nil); !obx.IsCode(err, obx.ErrValidationFailed) {
+		t.Errorf("strap 130-80: want validation_failed, got %v", err)
+	}
 	v["measurements"] = nil
 	v["color"] = map[string]any{"code": "RED", "family": "navy"}
 	if _, err := ing.Put(ctx, obx.KindVariant, "2000199901018", v, nil); !obx.IsCode(err, obx.ErrValidationFailed) {
