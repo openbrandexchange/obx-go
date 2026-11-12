@@ -698,11 +698,27 @@ func (n *Node) handleProduct(w http.ResponseWriter, r *http.Request) {
 	}
 	etag := n.productETag(p, c, now)
 	w.Header().Set("ETag", etag)
-	if inm := r.Header.Get("If-None-Match"); inm != "" && (inm == etag || inm == "*") {
+	if noneMatch(r.Header.Get("If-None-Match"), etag) {
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}
 	writeJSON(w, http.StatusOK, n.st.productDetail(p, n.signer(r, c), now))
+}
+
+// noneMatch evaluates If-None-Match with the weak comparison of RFC 9110
+// 13.1.2: W/"x" matches "x". A CDN that compresses a response (Cloudflare)
+// turns a strong ETag into a weak one, and clients send that one back.
+func noneMatch(header, etag string) bool {
+	if header == "" {
+		return false
+	}
+	weak := func(s string) string { return strings.TrimPrefix(strings.TrimSpace(s), "W/") }
+	for _, v := range strings.Split(header, ",") {
+		if strings.TrimSpace(v) == "*" || weak(v) == weak(etag) {
+			return true
+		}
+	}
+	return false
 }
 
 // lookupGTINs answers a GTIN lookup for a retailer (also used by the portal).

@@ -93,3 +93,16 @@ func TestIncrementalCommitEqualsFullCommit(t *testing.T) {
 		t.Fatalf("the scenario wrote only %d entries", len(incLog))
 	}
 }
+
+func TestNoneMatchIsWeak(t *testing.T) {
+	for _, c := range []struct {
+		header string
+		want   bool
+	}{
+		{`"abc"`, true}, {`W/"abc"`, true}, {`"x", W/"abc"`, true}, {`*`, true}, {`"abd"`, false}, {``, false},
+	} {
+		if got := noneMatch(c.header, `"abc"`); got != c.want {
+			t.Errorf("If-None-Match %q: %t, want %t", c.header, got, c.want)
+		}
+	}
+}
