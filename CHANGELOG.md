@@ -6,7 +6,7 @@ All notable changes to obx-go are listed here. The format follows
 change the Go API; the `obx` command line, its exit codes and the file formats
 it reads stay compatible within a minor version.
 
-## [0.1.0] - unreleased
+## [0.1.0] - 2026-11-12
 
 First release, for Open Brand Exchange specification 0.1.0.
 
