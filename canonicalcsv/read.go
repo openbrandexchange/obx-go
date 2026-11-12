@@ -44,13 +44,36 @@ type column struct {
 	lang string
 }
 
-// normalizeHeader lowercases and trims a header cell, turns spaces and "-"
-// into "_" and splits off a ":<lang>" suffix (keeping the tag's case rules).
+// headerSpace is the white space of header names (import-format.md §1.1).
+const headerSpace = " \t\r\n"
+
+// emptyHeader reports whether a header cell names no column (§1.1: its cells
+// are ignored without a warning).
+func emptyHeader(raw string) bool {
+	return strings.Trim(strings.TrimPrefix(raw, "\ufeff"), headerSpace) == ""
+}
+
+// normalizeHeader lowercases and trims a header cell, turns each run of white
+// space and "-" into one "_" and splits off a ":<lang>" suffix (keeping the
+// tag's case rules).
 func normalizeHeader(raw string) column {
-	s := strings.TrimSpace(strings.TrimPrefix(raw, "\ufeff"))
+	s := strings.Trim(strings.TrimPrefix(raw, "\ufeff"), headerSpace)
 	base, lang, hasLang := strings.Cut(s, ":")
-	base = strings.ToLower(strings.TrimSpace(base))
-	base = strings.NewReplacer(" ", "_", "-", "_").Replace(base)
+	base = strings.ToLower(strings.Trim(base, headerSpace))
+	var b strings.Builder
+	sep := false
+	for _, r := range base {
+		if strings.ContainsRune(headerSpace+"-", r) {
+			if !sep {
+				b.WriteByte('_')
+			}
+			sep = true
+			continue
+		}
+		sep = false
+		b.WriteRune(r)
+	}
+	base = b.String()
 	c := column{raw: raw, base: base}
 	if hasLang {
 		switch base {

@@ -66,8 +66,8 @@ func TestStatusFor(t *testing.T) {
 	if StatusFor(ErrCursorExpired) != 410 || StatusFor(ErrPositionConflict) != 409 || StatusFor("nope") != 500 {
 		t.Fatal("StatusFor wrong")
 	}
-	if len(ErrorCodes()) != 39 {
-		t.Fatalf("want 39 error codes, got %d", len(ErrorCodes()))
+	if len(ErrorCodes()) != 43 {
+		t.Fatalf("want 43 error codes, got %d", len(ErrorCodes()))
 	}
 }
 

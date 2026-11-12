@@ -64,6 +64,11 @@ func (n *Node) parseImportForm(r *http.Request) (*importInput, *obx.Problem) {
 			}
 			return nil, nil, nil
 		}
+		if isSpreadsheet(fhs[0]) {
+			// The Excel import (import-format.md §5) is an optional node
+			// feature the mock does not offer.
+			return nil, nil, problemf(obx.ErrUnsupportedMediaType, "%s: this node does not import spreadsheet files; send a CSV", fhs[0].Filename)
+		}
 		b, err := read(fhs[0])
 		if err != nil {
 			return nil, nil, problemf(obx.ErrInvalidRequest, "could not read %s", field)
@@ -724,4 +729,14 @@ func keepAbsentColumns(data, stored json.RawMessage, fields []columnField, prese
 		}
 	}
 	return canonicalJSON(cur)
+}
+
+// isSpreadsheet reports whether an uploaded part is a spreadsheet file
+// (.xlsx and friends, by name, or the xlsx content type of a nameless part).
+func isSpreadsheet(fh *multipart.FileHeader) bool {
+	switch strings.ToLower(path.Ext(fh.Filename)) {
+	case ".xlsx", ".xlsm", ".xls", ".xlsb", ".xltx", ".xltm", ".ods", ".numbers":
+		return true
+	}
+	return fh.Filename == "" && strings.HasPrefix(fh.Header.Get("Content-Type"), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 }

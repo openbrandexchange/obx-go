@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -463,7 +464,11 @@ type File struct {
 	Data []byte
 }
 
-// ImportRequest is the multipart body of POST /imports.
+// XLSXContentType is the media type of an Excel workbook (.xlsx).
+const XLSXContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+// ImportRequest is the multipart body of POST /imports. CSV and AssetsCSV may be Excel
+// workbooks (a file name ending in .xlsx) on nodes that accept them.
 type ImportRequest struct {
 	Package        *File
 	CSV            *File
@@ -513,13 +518,22 @@ func EncodeImport(in ImportRequest) ([]byte, string, error) {
 			return nil, "", err
 		}
 	}
+	// The csv and assets_csv parts may hold an Excel workbook on nodes that
+	// accept one (import-format.md §5): the file name decides, the content
+	// type follows it.
+	tableType := func(f *File) string {
+		if strings.EqualFold(filepath.Ext(f.Name), ".xlsx") {
+			return XLSXContentType
+		}
+		return "text/csv"
+	}
 	if in.CSV != nil {
-		if err := addFile("csv", in.CSV, "text/csv"); err != nil {
+		if err := addFile("csv", in.CSV, tableType(in.CSV)); err != nil {
 			return nil, "", err
 		}
 	}
 	if in.AssetsCSV != nil {
-		if err := addFile("assets_csv", in.AssetsCSV, "text/csv"); err != nil {
+		if err := addFile("assets_csv", in.AssetsCSV, tableType(in.AssetsCSV)); err != nil {
 			return nil, "", err
 		}
 	}

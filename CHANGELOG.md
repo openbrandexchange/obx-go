@@ -20,11 +20,29 @@ it reads stay compatible within a minor version.
   demo portal with a fixed API key (`mock.Options.ReadOnly`,
   `FullClientID`/`FullClientSecret`).
 - `conformance.Config.Progress` and `Result.OnlineTier`.
+- **Conformance I-IMP-9 and I-IMP-10** (ingest profile, optional): the Excel
+  import of the spec's `import-format.md` §5 with the workbooks of
+  `fixtures/imports/xlsx/` (now vendored in `specdata`). I-IMP-9 sends each
+  converting workbook as `products.xlsx` / `assets.xlsx` in a dry run and
+  checks the error rows (Excel row numbers, `detail` locators) and the
+  conversion warnings; the two templates must import all unchanged. I-IMP-10
+  checks that each workbook to refuse fails the run with one ImportRowError
+  (`row` null) of the expected `workbook_*` code and writes nothing. Both are
+  skipped on a node that answers a workbook with `unsupported_media_type`.
+- `obx.ErrWorkbookInvalid`, `ErrWorkbookUnsafe`, `ErrWorkbookSheetMissing`,
+  `ErrWorkbookTooLarge`; `ingest.XLSXContentType`.
 
 ### Changed
 
 - The safe dialer also refuses 0/8, 198.18/15, 240/4, NAT64 (64:ff9b::/96)
   and 6to4 (2002::/16).
+- `ingest.EncodeImport` sends a `csv` / `assets_csv` part whose name ends in
+  `.xlsx` with the xlsx content type.
+- `canonicalcsv` normalises header names as the spec's §1.1 now says: trimmed
+  of space, tab, CR and LF, each run of white space and `-` one `_`
+  (`Style  -  Number` = `style_number`).
+- The mock node answers spreadsheet files (`.xlsx`, `.xls`, `.ods`, …) with
+  `415 unsupported_media_type`, so it skips I-IMP-9 and I-IMP-10.
 
 ## [0.2.0] - 2026-11-12
 

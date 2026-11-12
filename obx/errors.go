@@ -38,6 +38,12 @@ const (
 	ErrFilesMissing         = "files_missing"
 	ErrImportInvalid        = "import_invalid"
 	ErrMassUnpublishRefused = "mass_unpublish_refused"
+	// Excel import (import-format.md §5, a node feature): a workbook that
+	// cannot be imported.
+	ErrWorkbookInvalid      = "workbook_invalid"
+	ErrWorkbookUnsafe       = "workbook_unsafe"
+	ErrWorkbookSheetMissing = "workbook_sheet_missing"
+	ErrWorkbookTooLarge     = "workbook_too_large"
 	ErrUnsafeURL            = "unsafe_url"
 	ErrCSRFFailed           = "csrf_failed"
 	ErrInvalidCredentials   = "invalid_credentials"
@@ -85,6 +91,10 @@ var codes = map[string]codeInfo{
 	ErrFilesMissing:         {422, "Files missing"},
 	ErrImportInvalid:        {422, "Import invalid"},
 	ErrMassUnpublishRefused: {409, "Mass unpublish refused"},
+	ErrWorkbookInvalid:      {422, "Workbook invalid"},
+	ErrWorkbookUnsafe:       {422, "Workbook unsafe"},
+	ErrWorkbookSheetMissing: {422, "Workbook sheet missing"},
+	ErrWorkbookTooLarge:     {422, "Workbook too large"},
 	ErrUnsafeURL:            {422, "Unsafe URL"},
 	ErrCSRFFailed:           {403, "CSRF check failed"},
 	ErrInvalidCredentials:   {401, "Invalid credentials"},

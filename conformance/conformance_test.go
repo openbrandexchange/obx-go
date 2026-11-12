@@ -11,10 +11,15 @@ import (
 	"github.com/openbrandexchange/obx-go/mock"
 )
 
+// mockSkips are tests the mock skips by design: S-RATE-2 needs
+// --rate-limit-test, I-IMP-9 and I-IMP-10 the Excel import, a node feature
+// the mock does not offer.
+var mockSkips = map[string]bool{"S-RATE-2": true, "I-IMP-9": true, "I-IMP-10": true}
+
 func report(t *testing.T, rep *conformance.Report) {
 	t.Helper()
 	for _, r := range rep.Results {
-		if r.Status != conformance.StatusPass && r.ID != "S-RATE-2" {
+		if r.Status != conformance.StatusPass && !mockSkips[r.ID] {
 			t.Errorf("%s %s: %s\n    %s", r.ID, r.Status, r.Title, strings.Join(r.Messages, "\n    "))
 		}
 	}
@@ -40,8 +45,8 @@ func TestMockPassesAll(t *testing.T) {
 			report(t, rep)
 			skipped := rep.Skipped
 			for _, r := range rep.Results {
-				if r.ID == "S-RATE-2" && r.Status == conformance.StatusSkip {
-					skipped-- // needs --rate-limit-test
+				if mockSkips[r.ID] && r.Status == conformance.StatusSkip {
+					skipped--
 				}
 			}
 			if rep.Failed > 0 || skipped > 0 {

@@ -66,6 +66,15 @@ for specification 0.2 (article data for fashion, shoes, bags and luggage):
 | I-IMP-7 | ingest | `fixtures/imports/1-feature-update.csv` to `6-restore.csv`, imported in order on a portal that holds exactly the Kestrel import (the suite restores it first): counts, error rows, change entries and fields as in `fixtures/imports/expected.json` (import rule 9 per feature key and measurement column) |
 | I-IMP-8 | ingest | `fixtures/imports/label-warnings.csv` as a dry run: no errors, nothing written, and exactly the label completeness warnings of `label-warnings.expected.json`; the Kestrel import has none |
 
+Optional, for portals that import Excel workbooks (the spec's
+[import-format.md §5](https://github.com/openbrandexchange/spec/blob/main/docs/import-format.md#excel));
+both are skipped when the portal answers a workbook with `unsupported_media_type`, as the mock does:
+
+| Test | Profile | Checks |
+|---|---|---|
+| I-IMP-9 | ingest | each converting workbook of `fixtures/imports/xlsx/expected.json` sent as `products.xlsx` (or `assets.xlsx`, with the images its `send.images_manifest` names) as a dry run: the run succeeds, the error rows are exactly `import_errors` (Excel row numbers, `column`, `value`, a `detail` starting with `detail_prefix`), the conversion `warnings` are there, and nothing is written; `products-template.xlsx` and `assets-template.xlsx` imported for real are all unchanged with no change entries |
+| I-IMP-10 | ingest | each workbook of `expected.json` with an `error` (macros, an external link, a zip bomb, too many rows, a renamed CSV, an encrypted file, a `DOCTYPE`, a macro part next to a broken `[Content_Types].xml`, a number out of Excel's range, no products sheet) sent as `products.xlsx`: the run fails with that `workbook_*` code in `ImportRun.error`, its results hold exactly one ImportRowError with `row` and `column` null and that code, and nothing is written. A portal that refuses the upload at once with a problem of that code passes too |
+
 I-IMP-3 now refers to the nine Kestrel products. A portal written for 0.1 fails P-CAT-1, P-CAT-5
 and P-CAT-6 until it stores and returns the new fields; P-DISC-1 only notes an `obx_version` other
 than `0.2`.

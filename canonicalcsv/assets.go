@@ -72,7 +72,7 @@ func ParseAssets(r io.Reader, file string, opts Options) (*AssetsFile, error) {
 				idx[base] = i
 			}
 		default:
-			if strings.TrimSpace(c.raw) != "" {
+			if !emptyHeader(c.raw) {
 				out.Problems = append(out.Problems, problem(file, noRow, c.raw, obx.ErrValidationFailed, obx.SeverityWarning, fmt.Sprintf("unknown column %q ignored", strings.TrimSpace(c.raw)), ""))
 			}
 		}
