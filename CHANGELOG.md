@@ -6,7 +6,11 @@ All notable changes to obx-go are listed here. The format follows
 change the Go API; the `obx` command line, its exit codes and the file formats
 it reads stay compatible within a minor version.
 
-## [Unreleased]
+## [0.2.1] - 2026-11-12
+
+An online compatibility check, the Excel import tests and fixes. Works with
+Open Brand Exchange specification 0.2.0; nothing a portal or client has to do
+changes.
 
 ### Added
 
@@ -43,6 +47,16 @@ it reads stay compatible within a minor version.
   (`Style  -  Number` = `style_number`).
 - The mock node answers spreadsheet files (`.xlsx`, `.xls`, `.ods`, …) with
   `415 unsupported_media_type`, so it skips I-IMP-9 and I-IMP-10.
+- After a full conformant result, the `obx-conformance` report adds one calm
+  line on how to have it confirmed for free and where partner listings are
+  described; an online check that passes says that the other checks need a
+  local run.
+
+### Fixed
+
+- The mock node compares `If-None-Match` weakly (RFC 9110 §13.1.2): behind a
+  proxy that compresses responses, a client that sends back `W/"…"` gets
+  `304 Not Modified` instead of the whole response again.
 
 ## [0.2.0] - 2026-11-12
 
@@ -172,5 +186,6 @@ First release, for Open Brand Exchange specification 0.1.0.
 - The shared filename test vectors: `obx-conformance` and the mock read image names as
   the specification's `fixtures/expected/image-filenames.json` says.
 
+[0.2.1]: https://github.com/openbrandexchange/obx-go/releases/tag/v0.2.1
 [0.2.0]: https://github.com/openbrandexchange/obx-go/releases/tag/v0.2.0
 [0.1.0]: https://github.com/openbrandexchange/obx-go/releases/tag/v0.1.0

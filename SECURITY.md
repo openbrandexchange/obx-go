@@ -24,7 +24,7 @@ We coordinate the date of public disclosure with you. There is no bug bounty.
 ## Supported versions
 
 Security fixes are made for the latest minor release (0.1.x today). Pin a version in the GitHub
-Action (`version: v0.2.0`) and update when a release says it contains a security fix.
+Action (`version: v0.2.1`) and update when a release says it contains a security fix.
 
 ## Scope
 

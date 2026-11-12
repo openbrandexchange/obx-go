@@ -37,7 +37,7 @@ body:
     attributes:
       label: Version
       description: "`obx version` or `obx-conformance version`, and your operating system."
-      placeholder: "obx 0.2.0 on Windows 11"
+      placeholder: "obx 0.2.1 on Windows 11"
     validations:
       required: true
   - type: textarea

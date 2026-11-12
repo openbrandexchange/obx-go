@@ -53,7 +53,7 @@ inputs:
     required: false
     default: "true"
   version:
-    description: obx version to use ("latest" or a release tag such as v0.2.0). Pin a tag for reproducible runs.
+    description: obx version to use ("latest" or a release tag such as v0.2.1). Pin a tag for reproducible runs.
     required: false
     default: latest
   lang:
