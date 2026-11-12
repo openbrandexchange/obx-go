@@ -173,7 +173,7 @@ func TestBatchSyncAndAsync(t *testing.T) {
 func TestImportReportsRowProblems(t *testing.T) {
 	_, c := node(t, mock.Options{})
 	ctx := context.Background()
-	csv := "brand,style_number,name:en,gtin,color_code,size\nKestrel,KO-8001,Wool Gloves,2000100801017,GRY,M\nKestrel,KO-8001,Wool Gloves,12345,GRY,L\n"
+	csv := "brand,style_number,name:en,gtin,color_code,size\nKestrel,KO-8001,Wool Gloves,2000199901018,GRY,M\nKestrel,KO-8001,Wool Gloves,12345,GRY,L\n"
 	job, err := c.Import(ctx, ingest.ImportRequest{CSV: &ingest.File{Name: "products.csv", Data: []byte(csv)}, Options: obx.ImportOptions{DryRun: true}})
 	if err != nil {
 		t.Fatal(err)

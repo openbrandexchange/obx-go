@@ -90,7 +90,7 @@ func TestSyncSnapshotThenLive(t *testing.T) {
 	if err := c.Sync(ctx, store, client.SyncOptions{Limit: 10}, m.handle); err != nil {
 		t.Fatal(err)
 	}
-	if m.count("product") != 8 || m.count("variant") != 40 || m.count("asset") != 27 || m.count("brand") != 2 {
+	if m.count("product") != 11 || m.count("variant") != 46 || m.count("asset") != 35 || m.count("brand") != 2 {
 		t.Fatalf("mirror after snapshot: %d brands %d products %d variants %d assets", m.count("brand"), m.count("product"), m.count("variant"), m.count("asset"))
 	}
 	cur, _ := store.Load(ctx)
@@ -104,7 +104,7 @@ func TestSyncSnapshotThenLive(t *testing.T) {
 	if err := c.Sync(ctx, store, client.SyncOptions{}, m.handle); err != nil {
 		t.Fatal(err)
 	}
-	if m.count("product") != 7 || m.count("variant") != 38 || m.count("asset") != 25 {
+	if m.count("product") != 10 || m.count("variant") != 44 || m.count("asset") != 33 {
 		t.Fatalf("after unpublishing KO-1006: %d products %d variants %d assets", m.count("product"), m.count("variant"), m.count("asset"))
 	}
 }
@@ -135,7 +135,7 @@ func TestSyncToleratesDuplicates(t *testing.T) {
 	if changes != 4 {
 		t.Fatalf("want 2 entries delivered twice, got %d", changes)
 	}
-	if m.count("asset") != 26 || m.count("product") != 8 {
+	if m.count("asset") != 34 || m.count("product") != 11 {
 		t.Fatalf("duplicates corrupted the mirror: %d assets", m.count("asset"))
 	}
 }
@@ -159,7 +159,7 @@ func TestSyncRestartsOnExpiredCursor(t *testing.T) {
 	if len(m.resyncs) != 1 || m.resyncs[0] != "cursor_expired" {
 		t.Fatalf("resyncs %v", m.resyncs)
 	}
-	if m.count("product") != 7 {
+	if m.count("product") != 10 {
 		t.Fatalf("mark and sweep after the restart should drop KT-2002: %d products", m.count("product"))
 	}
 	if !contains(m.events, client.EventSnapshotComplete) {
@@ -186,7 +186,7 @@ func TestSyncResyncsOnGrantChange(t *testing.T) {
 	if len(m.resyncs) != 1 || m.resyncs[0] != "grant" {
 		t.Fatalf("resyncs %v", m.resyncs)
 	}
-	if m.count("product") != 6 || m.count("brand") != 1 {
+	if m.count("product") != 9 || m.count("brand") != 1 {
 		t.Fatalf("after narrowing the grant: %d products, %d brands", m.count("product"), m.count("brand"))
 	}
 }

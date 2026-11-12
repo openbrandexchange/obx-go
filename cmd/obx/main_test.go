@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/csv"
+	"encoding/json"
 	"flag"
 	"image"
 	"image/png"
@@ -117,8 +119,28 @@ func TestLoginPushRerunStatus(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("first push: %d\n%s\n%s", code, out, errOut)
 	}
-	if !strings.Contains(out, "rows: 40, images: 27") || !strings.Contains(errOut, "27 uploaded") {
+	if !strings.Contains(out, "rows: 46, images: 35") || !strings.Contains(errOut, "35 uploaded") {
 		t.Fatalf("first push output:\n%s\n%s", out, errOut)
+	}
+	// The 0.2 article data arrives with the push.
+	ic, _ := ingest.New(h.srv.URL, tok)
+	rec, err := ic.Get(context.Background(), obx.KindProduct, "KO-1008")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pin obx.ProductInput
+	_ = json.Unmarshal(rec.Data, &pin)
+	if pin.Features == nil || pin.Features.Wheels == nil || *pin.Features.Wheels != 4 || obx.Str(pin.ItemSubtype) != "cabin" {
+		t.Fatalf("pushed KO-1008 lacks its article data: %s", rec.Data)
+	}
+	rec, err = ic.Get(context.Background(), obx.KindVariant, "2000100901014")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var vin obx.VariantInput
+	_ = json.Unmarshal(rec.Data, &vin)
+	if vin.Measurements == nil || vin.Measurements.StrapLengthCM == nil || vin.Measurements.StrapLengthCM.Max != 140 || obx.Str(vin.Color.Family) != "grey" {
+		t.Fatalf("pushed variant 2000100901014 lacks its measurements: %s", rec.Data)
 	}
 	code, out, errOut = h.run("push", "--csv", filepath.Join(dir, "products.csv"), "--assets-csv", filepath.Join(dir, "assets.csv"), "--images", filepath.Join(dir, "images"))
 	if code != 0 || !strings.Contains(out, "new: 0 · updated: 0") || !strings.Contains(errOut, "0 uploaded") {
@@ -130,15 +152,33 @@ func TestLoginPushRerunStatus(t *testing.T) {
 	if code != 0 || !strings.Contains(out, "new: 0 · updated: 0") || !strings.Contains(errOut, "products.csv + assets.csv") {
 		t.Fatalf("push --csv should pick up the assets.csv next to it: %d\n%s\n%s", code, out, errOut)
 	}
-	csv, _ := os.ReadFile(filepath.Join(dir, "products.csv"))
-	bad := string(csv) + "Kestrel,KO-1001,Merino Crew Sweater,Merino trui met ronde hals,,,sweater,unisex,AW26,Highland,main: 100% merino_wool,,PT,,2000100109999,,NVY,Navy,Marineblauw,,XXL,INT\n"
-	os.WriteFile(filepath.Join(dir, "products.csv"), []byte(bad), 0o644)
+	// A copy of the first row with an invalid EAN, size XXL and no SKU.
+	data, _ := os.ReadFile(filepath.Join(dir, "products.csv"))
+	rows, err := csv.NewReader(bytes.NewReader(data)).ReadAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	extra := append([]string(nil), rows[1]...)
+	for i, h := range rows[0] {
+		switch h {
+		case "gtin":
+			extra[i] = "2000100109999"
+		case "sku":
+			extra[i] = ""
+		case "size":
+			extra[i] = "XXL"
+		}
+	}
+	var buf bytes.Buffer
+	w := csv.NewWriter(&buf)
+	_ = w.WriteAll(append(rows, extra))
+	os.WriteFile(filepath.Join(dir, "products.csv"), buf.Bytes(), 0o644)
 	os.WriteFile(filepath.Join(dir, "images", "notes_NVY_1.jpg"), []byte("not an image"), 0o644)
 	code, out, errOut = h.run("push", dir)
 	if code != exitProblems {
 		t.Fatalf("push with a bad row: want exit 2, got %d\n%s\n%s", code, out, errOut)
 	}
-	if !strings.Contains(out, "products.csv, row 41, column gtin") || !strings.Contains(out, "notes_NVY_1.jpg") {
+	if !strings.Contains(out, "products.csv, row 47, column gtin") || !strings.Contains(out, "notes_NVY_1.jpg") {
 		t.Fatalf("problems not listed:\n%s", out)
 	}
 	code, out, _ = h.run("status")
@@ -153,10 +193,10 @@ func TestLoginPushRerunStatus(t *testing.T) {
 		}
 	}
 	code, out, _ = h.run("status", "--job", jobID)
-	if code != 0 || !strings.Contains(out, "row 41") {
+	if code != 0 || !strings.Contains(out, "row 47") {
 		t.Fatalf("status --job: %d\n%s", code, out)
 	}
-	os.WriteFile(filepath.Join(dir, "products.csv"), []byte(strings.Join(strings.Split(string(csv), "\n")[:5], "\n")+"\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "products.csv"), []byte(strings.Join(strings.Split(string(data), "\n")[:5], "\n")+"\n"), 0o644)
 	code, out, errOut = h.run("push", "--csv", filepath.Join(dir, "products.csv"), "--mirror")
 	if code != exitFailed || !strings.Contains(out, "Nothing was changed") || !strings.Contains(out, "--allow-mass-unpublish") {
 		t.Fatalf("mirror that would empty the catalog: want exit 1 and a hint, got %d %s", code, errOut)
@@ -175,8 +215,8 @@ func TestPushDryRunChangesNothing(t *testing.T) {
 		h.vars["OBX_URL"], h.vars["OBX_TOKEN"] = h.srv.URL, tok
 		dir := fixtureFolder(t)
 		code, out, errOut := h.run("push", dir, "--dry-run")
-		if code != exitOK || !strings.Contains(out, "Checked (dry run, nothing changed): rows: 40, images: 27 → new: 76") ||
-			!strings.Contains(out, "would upload new or changed images: 27") {
+		if code != exitOK || !strings.Contains(out, "Checked (dry run, nothing changed): rows: 46, images: 35 → new: 93") ||
+			!strings.Contains(out, "would upload new or changed images: 35") {
 			t.Fatalf("dry run (client renditions %v): %d\n%s\n%s", clientRenditions, code, out, errOut)
 		}
 		ic, _ := ingest.New(h.srv.URL, tok)
@@ -188,7 +228,7 @@ func TestPushDryRunChangesNothing(t *testing.T) {
 		if _, err := ic.Get(ctx, obx.KindProduct, "KO-1001"); !obx.IsCode(err, obx.ErrNotFound) {
 			t.Fatalf("a dry run created a product: %v", err)
 		}
-		if code, out, _ := h.run("push", dir, "--json"); code != exitOK || !strings.Contains(out, `"uploaded_files": 27`) {
+		if code, out, _ := h.run("push", dir, "--json"); code != exitOK || !strings.Contains(out, `"uploaded_files": 35`) {
 			t.Fatalf("real run after the dry run: %d %s", code, out)
 		}
 		if code, out, _ := h.run("push", dir, "--dry-run"); code != exitOK || !strings.Contains(out, "new: 0 · updated: 0 · unchanged: ") || strings.Contains(out, "would upload") {
@@ -203,7 +243,7 @@ func TestDryRunOnPortalThatNeedsBlobs(t *testing.T) {
 	h, tok := freshNode(t, mock.Options{DryRunNeedsBlobs: true})
 	h.vars["OBX_URL"], h.vars["OBX_TOKEN"] = h.srv.URL, tok
 	code, out, errOut := h.run("push", fixtureFolder(t), "--dry-run")
-	if code != exitOK || !strings.Contains(out, "not in the counts above: 27") || strings.Contains(out, "Problems") {
+	if code != exitOK || !strings.Contains(out, "not in the counts above: 35") || strings.Contains(out, "Problems") {
 		t.Fatalf("dry run: %d\n%s\n%s", code, out, errOut)
 	}
 }
@@ -312,7 +352,7 @@ func TestPushMakesRenditionsForClientRenderingNodes(t *testing.T) {
 	if err != nil || rec.Visibility != obx.VisibilityVisible || len(rec.MissingFiles) != 0 {
 		t.Fatalf("asset after push on a client-rendering node: %+v %v", rec, err)
 	}
-	if !strings.Contains(out, `"uploaded_files": 27`) {
+	if !strings.Contains(out, `"uploaded_files": 35`) {
 		t.Fatalf("json output: %s", out)
 	}
 	code, out, _ = h.run("push", dir, "--json")
@@ -326,7 +366,7 @@ func TestWatchOnce(t *testing.T) {
 	h.vars["OBX_URL"], h.vars["OBX_TOKEN"] = h.srv.URL, tok
 	dir := fixtureFolder(t)
 	code, _, errOut := h.run("watch", dir, "--once")
-	if code != 0 || !strings.Contains(errOut, "done: new: 76") {
+	if code != 0 || !strings.Contains(errOut, "done: new: 93") {
 		t.Fatalf("first watch: %d %s", code, errOut)
 	}
 	code, _, errOut = h.run("watch", dir, "--once")
@@ -379,7 +419,7 @@ func TestPull(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("pull: %d %s %s", code, stdout, errOut)
 	}
-	if !strings.Contains(stdout, "images downloaded: 54") {
+	if !strings.Contains(stdout, "images downloaded: 70") {
 		t.Fatalf("first pull: %s", stdout)
 	}
 	img := filepath.Join(out, "images", "KO-1001", "web", "KO-1001_NVY_1_front_web.jpg")
@@ -392,8 +432,35 @@ func TestPull(t *testing.T) {
 		t.Fatal("original differs from the fixture")
 	}
 	products, _ := os.ReadDir(filepath.Join(out, "products"))
-	if len(products) != 8 {
+	if len(products) != 11 {
 		t.Fatalf("%d product files", len(products))
+	}
+	// The pulled objects carry the 0.2 article data as the portal sent it.
+	var suitcase *obx.Product
+	for _, e := range products {
+		b, _ := os.ReadFile(filepath.Join(out, "products", e.Name()))
+		var p obx.Product
+		if json.Unmarshal(b, &p) == nil && p.ExternalID == "KO-1008" {
+			suitcase = &p
+			if !strings.Contains(string(b), `"item_subtype": "cabin"`) || !strings.Contains(string(b), `"contains_animal_origin": null`) {
+				t.Fatalf("pulled KO-1008: %s", b)
+			}
+		}
+	}
+	if suitcase == nil || suitcase.Features == nil || obx.Str(suitcase.Features.Lock) != "tsa_combination" || suitcase.Materials[1].Fibers[0] != (obx.Fiber{Fiber: "polyester", Percentage: 100, Recycled: true}) {
+		t.Fatalf("pulled KO-1008 lacks its article data: %+v", suitcase)
+	}
+	variants, _ := os.ReadDir(filepath.Join(out, "variants"))
+	found := false
+	for _, e := range variants {
+		b, _ := os.ReadFile(filepath.Join(out, "variants", e.Name()))
+		var v obx.Variant
+		if json.Unmarshal(b, &v) == nil && v.ExternalID == "2000100801017" {
+			found = v.Measurements != nil && v.Measurements.VolumeExpandedL != nil && *v.Measurements.VolumeExpandedL == 42 && obx.Str(v.Color.Family) == "black"
+		}
+	}
+	if !found {
+		t.Fatal("pulled variant 2000100801017 lacks its measurements or colour family")
 	}
 	code, stdout, _ = h.run("pull", srv.URL, "--out", out, "--renditions", "web,original")
 	if code != 0 || !strings.Contains(stdout, "nothing changed") {
@@ -622,5 +689,25 @@ func TestStatusMarksDryRuns(t *testing.T) {
 	// Newest first: the real push, then the dry run.
 	if strings.Contains(lines[1], "(dry run)") || !strings.Contains(lines[2], "(dry run)") {
 		t.Fatalf("dry run not labelled:\n%s", out)
+	}
+}
+
+// Label completeness warnings (0.2) are listed as warnings, in the user's
+// language; the products are still published.
+func TestPushShowsLabelWarnings(t *testing.T) {
+	h, tok := freshNode(t, mock.Options{})
+	h.vars["OBX_URL"], h.vars["OBX_TOKEN"], h.vars["OBX_LANG"] = h.srv.URL, tok, "nl"
+	dir := t.TempDir()
+	data, _ := fs.ReadFile(specdata.Fixtures(), "imports/label-warnings.csv")
+	csvPath := filepath.Join(dir, "products.csv")
+	os.WriteFile(csvPath, data, 0o644)
+	code, out, errOut := h.run("push", "--csv", csvPath)
+	if code != exitOK {
+		t.Fatalf("push: %d\n%s\n%s", code, out, errOut)
+	}
+	for _, want := range []string{"regel 2, kolom contains_animal_origin: geef aan of het product niet-textiele delen van dierlijke oorsprong bevat", "regel 4, kolom materials: de percentages van een onderdeel tellen niet op tot 100"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output lacks %q:\n%s", want, out)
+		}
 	}
 }

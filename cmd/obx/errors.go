@@ -151,6 +151,14 @@ func problemText(e *env, p obx.ImportRowError) string {
 		reason = e.t("problem.media_type")
 	case obx.ErrPayloadTooLarge:
 		reason = e.t("problem.too_large")
+	case obx.WarnFibreCompositionMissing:
+		reason = e.t("problem.fibre_composition_missing")
+	case obx.WarnAnimalOriginUnknown:
+		reason = e.t("problem.animal_origin_unknown")
+	case obx.WarnFootwearMaterialsMissing:
+		reason = e.t("problem.footwear_materials_missing")
+	case obx.WarnFibrePercentagesNot100:
+		reason = e.t("problem.fibre_percentages_not_100")
 	}
 	// The portal's own detail is English and often more precise: English
 	// readers get it instead of obx's reason, others get it after it.
@@ -192,13 +200,18 @@ var _ = register(map[string]string{
 	"err.not_implemented":     "this portal does not offer that ({detail}).",
 	"err.server":              "the portal had a problem (error {status}). Try again later; if it keeps happening, tell the portal's administrator.",
 
-	"problem.row":               "row {row}",
-	"problem.column":            "column {column}",
-	"problem.invalid_gtin":      "this EAN is not valid",
-	"problem.gtin_conflict":     "this EAN is already used by another article",
-	"problem.position_conflict": "two images have the same position",
-	"problem.unknown_parent":    "the article or colour is not in the catalog",
-	"problem.files_missing":     "files are missing",
-	"problem.media_type":        "this kind of file is not accepted",
-	"problem.too_large":         "the file is too large",
+	"problem.row": "row {row}",
+	// Label completeness warnings (0.2): the portal still publishes the product.
+	"problem.fibre_composition_missing":  "the fibre composition is missing; EU law requires it on the label of textile products",
+	"problem.animal_origin_unknown":      "state whether the product contains non-textile parts of animal origin (yes or no)",
+	"problem.footwear_materials_missing": "the material of the upper, the lining and sock or the outer sole is missing; EU law requires it on footwear labels",
+	"problem.fibre_percentages_not_100":  "the fibre percentages of a part do not add up to 100",
+	"problem.column":                     "column {column}",
+	"problem.invalid_gtin":               "this EAN is not valid",
+	"problem.gtin_conflict":              "this EAN is already used by another article",
+	"problem.position_conflict":          "two images have the same position",
+	"problem.unknown_parent":             "the article or colour is not in the catalog",
+	"problem.files_missing":              "files are missing",
+	"problem.media_type":                 "this kind of file is not accepted",
+	"problem.too_large":                  "the file is too large",
 })
