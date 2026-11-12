@@ -81,6 +81,10 @@ The text report is written for someone who does not read API specs:
 4. **Optional checks not met** and **Skipped** (usually a missing credential or switch).
 5. **All checks** by id, and the preparation steps.
 
+After a full pass the report says how to get the result confirmed for free ("Compatible with Open
+Brand Exchange") and where to read about the paid listing as official partner:
+<https://openbrandexchange.com/en/partners/>.
+
 `--format markdown` gives the same as a table for an issue or a pull request, `--json` the complete
 report for machines, and `obx-conformance report report.json` shows a saved JSON report again. A run
 with `--only` is marked partial and never says CONFORMANT.
@@ -102,24 +106,6 @@ repository can do the same:
 The action builds `obx-conformance` from its own checkout, runs the profile (default `all`), puts the
 Markdown report in the job summary and fails the job when a required check fails. Outputs: `passed`,
 `failed` and `report` (the JSON file).
-
-**While the repositories are private**, another repository can only use this action, or check out
-obx-go, when access is granted. Either allow it once for the organisation (obx-go → Settings →
-Actions → General → Access: "Accessible from repositories in the openbrandexchange organization"),
-or add a secret `OBX_READ_TOKEN` (a fine-grained token with read access to obx-go's contents) to the
-portal repository and check out obx-go with it:
-
-```yaml
-- uses: actions/checkout@v4
-  with:
-    repository: openbrandexchange/obx-go
-    path: obx-go
-    token: ${{ secrets.OBX_READ_TOKEN }}
-- run: (cd obx-go && go build -o "$RUNNER_TEMP/obx-conformance" ./cmd/obx-conformance)
-- run: '"$RUNNER_TEMP/obx-conformance" all --url http://127.0.0.1:8080 --setup-code ci-code'
-```
-
-Once the repositories are public, neither is needed.
 
 ## The mock portal
 
