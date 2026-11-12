@@ -41,6 +41,7 @@ Usage:
   obx-conformance mock [--addr :8080]                run the in-memory mock node
   obx-conformance check --url <portal> [--client id:secret] [--json]
                                                      read-only online check (what openbrandexchange.com runs)
+  obx-conformance check-server [--addr :8080]        the online check over HTTP (POST /check)
   obx-conformance list                               list all tests
   obx-conformance report [--format text|markdown] <report.json>
                                                      show a saved --json report for people
@@ -109,6 +110,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, getenv fu
 		return runMock(ctx, args[1:], stdout, stderr, getenv)
 	case "check":
 		return runCheck(ctx, args[1:], stdout, stderr, getenv)
+	case "check-server":
+		return runCheckServer(ctx, args[1:], stdout, stderr, getenv)
 	case "report":
 		return runReport(args[1:], stdout, stderr)
 	case conformance.ProfileProtocol, conformance.ProfileIngest, conformance.ProfilePortal, conformance.ProfileSecurity, conformance.ProfileAll:
@@ -236,16 +239,36 @@ func runMock(ctx context.Context, args []string, stdout, stderr io.Writer, geten
 	setupCode := fs.String("setup-code", "", "setup code for --fresh (default OBX_SETUP_CODE or obx-setup-code)")
 	publicURL := fs.String("public-url", "", "public base URL (default: derived from each request)")
 	verbose := fs.Bool("verbose", false, "log every request")
+	readOnly := fs.Bool("read-only", false, "public demo: serve only the protocol's reads; writes, ingest, admin and portal are refused")
+	rateLimit := fs.Int("rate-limit", 0, "protocol requests per client per minute (default 600)")
+	var fullID, fullSecret string
+	fs.Func("client", "fix the unrestricted API key as id:secret (or OBX_MOCK_CLIENT), for a public demo", func(v string) error {
+		return splitPair(v, &fullID, &fullSecret)
+	})
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
 		return 2
 	}
+	if v := getenv("OBX_MOCK_CLIENT"); v != "" && fullID == "" {
+		if err := splitPair(v, &fullID, &fullSecret); err != nil {
+			fmt.Fprintf(stderr, "obx-conformance mock: OBX_MOCK_CLIENT: %v\n", err)
+			return 2
+		}
+	}
+	if *readOnly && *fresh {
+		fmt.Fprintln(stderr, "obx-conformance mock: --read-only needs the fixtures (not --fresh)")
+		return 2
+	}
 	if *setupCode == "" {
 		*setupCode = getenv("OBX_SETUP_CODE")
 	}
-	opts := mock.Options{Fixtures: !*fresh, ClientRenditions: *clientRenditions, AllowPrivateURLs: *allowPrivate, SetupCode: *setupCode, PublicURL: *publicURL}
+	opts := mock.Options{Fixtures: !*fresh, ClientRenditions: *clientRenditions, AllowPrivateURLs: *allowPrivate, SetupCode: *setupCode, PublicURL: *publicURL,
+		ReadOnly: *readOnly, RateLimit: *rateLimit, FullClientID: fullID, FullClientSecret: fullSecret}
+	if *readOnly {
+		opts.AllowPrivateURLs = false
+	}
 	if *verbose {
 		opts.Logger = log.New(stderr, "mock ", log.LstdFlags)
 	}
@@ -257,7 +280,10 @@ func runMock(ctx context.Context, args []string, stdout, stderr io.Writer, geten
 	}
 	base := "http://" + ln.Addr().String()
 	fmt.Fprintf(stdout, "OBX mock node listening on %s (discovery: %s/.well-known/obx)\n", base, base)
-	if *fresh {
+	if *readOnly {
+		c := n.Credentials()
+		fmt.Fprintf(stdout, "Read-only demo node with the Kestrel Outfitters fixtures. Public API key (read-only): %s (secret not printed)\n", c.Full.ClientID)
+	} else if *fresh {
 		fmt.Fprintf(stdout, "Fresh node. Setup code: %s\n  obx-conformance all --url %s --setup-code %s\n", n.SetupCode(), base, n.SetupCode())
 	} else {
 		c := n.Credentials()

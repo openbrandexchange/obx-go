@@ -6,6 +6,26 @@ All notable changes to obx-go are listed here. The format follows
 change the Go API; the `obx` command line, its exit codes and the file formats
 it reads stay compatible within a minor version.
 
+## [Unreleased]
+
+### Added
+
+- **Online check**: `obx-conformance check` runs the read-only part of the
+  protocol profile against a portal on the internet (safe dialer, https only,
+  request and byte budget, secrets redacted); `--stream` prints one JSON line
+  per finished test. `obx-conformance check-server` serves it over HTTP
+  (`POST /check`) for the compatibility checker on openbrandexchange.com;
+  `deploy/checker` holds its Cloudflare deployment.
+- `obx-conformance mock --read-only --client id:secret`: a public read-only
+  demo portal with a fixed API key (`mock.Options.ReadOnly`,
+  `FullClientID`/`FullClientSecret`).
+- `conformance.Config.Progress` and `Result.OnlineTier`.
+
+### Changed
+
+- The safe dialer also refuses 0/8, 198.18/15, 240/4, NAT64 (64:ff9b::/96)
+  and 6to4 (2002::/16).
+
 ## [0.2.0] - 2026-11-12
 
 For Open Brand Exchange specification 0.2.0: product data for fashion, shoes,

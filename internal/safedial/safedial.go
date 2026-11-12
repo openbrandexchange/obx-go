@@ -1,7 +1,8 @@
 // Package safedial refuses outbound connections to addresses a portal must
 // never reach on behalf of a user (security.md section 5): loopback, private,
 // link-local (including cloud metadata such as 169.254.169.254), CGNAT,
-// multicast and unspecified addresses.
+// multicast, unspecified and reserved addresses (0/8, 198.18/15, 240/4) and
+// the NAT64 and 6to4 prefixes.
 //
 // The check runs on the address the connection is actually made to, after DNS
 // resolution and for every redirect, so the resolved address is pinned for the
@@ -19,6 +20,31 @@ import (
 )
 
 var cgnat = &net.IPNet{IP: net.IPv4(100, 64, 0, 0), Mask: net.CIDRMask(10, 32)}
+
+// reserved are ranges that are not public unicast destinations: "this
+// network" (0/8), benchmarking (198.18/15, also used by fake-IP DNS of
+// proxies), the reserved class E block with broadcast (240/4), and the IPv6
+// translation prefixes NAT64 (64:ff9b::/96) and 6to4 (2002::/16), which
+// embed an IPv4 address that could be private.
+var reserved = []struct {
+	net    *net.IPNet
+	reason string
+}{
+	{mustCIDR("0.0.0.0/8"), "reserved (this network)"},
+	{mustCIDR("198.18.0.0/15"), "reserved (benchmarking)"},
+	{mustCIDR("240.0.0.0/4"), "reserved"},
+	{mustCIDR("64:ff9b::/96"), "NAT64"},
+	{mustCIDR("64:ff9b:1::/48"), "NAT64"},
+	{mustCIDR("2002::/16"), "6to4"},
+}
+
+func mustCIDR(s string) *net.IPNet {
+	_, n, err := net.ParseCIDR(s)
+	if err != nil {
+		panic(err)
+	}
+	return n
+}
 
 // Reason returns why ip is refused, or "" when it may be used. With
 // allowPrivate (the development switch OBX_ALLOW_PRIVATE_URLS) loopback,
@@ -43,6 +69,11 @@ func Reason(ip net.IP, allowPrivate bool) string {
 		return "private"
 	case cgnat.Contains(ip):
 		return "shared (CGNAT)"
+	}
+	for _, r := range reserved {
+		if r.net.Contains(ip) {
+			return r.reason
+		}
 	}
 	return ""
 }

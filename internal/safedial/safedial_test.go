@@ -30,6 +30,14 @@ func TestReason(t *testing.T) {
 		{"0.0.0.0", "unspecified", "unspecified"},
 		{"224.0.0.1", "link-local", "link-local"},
 		{"239.1.1.1", "multicast", "multicast"},
+		{"0.1.2.3", "reserved (this network)", ""},
+		{"198.18.0.1", "reserved (benchmarking)", ""},
+		{"198.19.255.254", "reserved (benchmarking)", ""},
+		{"198.20.0.1", "", ""},
+		{"240.0.0.1", "reserved", ""},
+		{"255.255.255.255", "reserved", ""},
+		{"64:ff9b::a00:1", "NAT64", ""},
+		{"2002:a00:1::1", "6to4", ""},
 	}
 	for _, c := range cases {
 		ip := net.ParseIP(c.ip)

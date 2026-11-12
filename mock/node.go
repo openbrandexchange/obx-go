@@ -65,6 +65,17 @@ type Options struct {
 	Logger *log.Logger
 	// Clock replaces time.Now (for expiry tests).
 	Clock func() time.Time
+	// ReadOnly serves the node as a public demo: only the protocol's reads
+	// are answered (GET, HEAD and OPTIONS, the token request and the GTIN
+	// lookup). Every other protocol request that would change state
+	// (access requests, exports, usage events, webhooks) answers 403, and
+	// the ingest API, the node admin API and the portal answer 404. The
+	// data stays as loaded; a restart resets the node.
+	ReadOnly bool
+	// FullClientID and FullClientSecret fix the unrestricted fixture API
+	// key (Credentials().Full), so that a public demo keeps its published
+	// key across restarts. Both or neither.
+	FullClientID, FullClientSecret string
 }
 
 // Node is an in-memory OBX node. It implements http.Handler.
@@ -233,10 +244,39 @@ func (n *Node) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set(obx.HeaderVersion, obx.Version)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	iw := &interceptWriter{ResponseWriter: w}
+	if n.opts.ReadOnly && !n.readOnlyAllowed(iw, r) {
+		if n.opts.Logger != nil {
+			n.opts.Logger.Printf("%s %s -> %d refused (read-only)", r.Method, r.URL.Path, iw.status)
+		}
+		return
+	}
 	n.mux.ServeHTTP(iw, r)
 	if n.opts.Logger != nil {
 		n.opts.Logger.Printf("%s %s -> %d (%s)", r.Method, r.URL.Path, iw.status, time.Since(start).Round(time.Millisecond))
 	}
+}
+
+// readOnlyAllowed decides a request of a ReadOnly node; when it is refused,
+// the answer has been written.
+func (n *Node) readOnlyAllowed(w http.ResponseWriter, r *http.Request) bool {
+	p := r.URL.Path
+	ingest := p == obx.PathIngest || strings.HasPrefix(p, obx.PathIngest+"/")
+	if ingest || p != obx.PathDiscovery && p != obx.PathAPIBase && !strings.HasPrefix(p, obx.PathAPIBase+"/") {
+		writeProblem(w, problem(obx.ErrNotFound, "this is a read-only demo node: only the OBX protocol API is served"))
+		return false
+	}
+	switch r.Method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return true
+	}
+	if r.Method == http.MethodPost && (p == obx.PathAPIBase+"/oauth/token" || p == obx.PathAPIBase+"/products:by-gtin") {
+		return true
+	}
+	if _, pattern := n.mux.Handler(r); pattern == "" {
+		return true // no route: the mux answers 404 or 405
+	}
+	writeProblem(w, problem(obx.ErrForbidden, "this is a read-only demo node: requests that change data are refused"))
+	return false
 }
 
 // interceptWriter turns the plain-text 404/405 answers of http.ServeMux into

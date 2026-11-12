@@ -37,7 +37,8 @@ func runCheck(ctx context.Context, args []string, stdout, stderr io.Writer, gete
 	asJSON := fs.Bool("json", false, "print the report as JSON")
 	fs.IntVar(&o.MaxRequests, "max-requests", 800, "maximum HTTP requests for the whole check")
 	maxMiB := fs.Int64("max-mib", 64, "maximum MiB of responses for the whole check")
-	fs.DurationVar(&o.MinInterval, "min-interval", 20*time.Millisecond, "minimum time between two requests")
+	fs.DurationVar(&o.MinInterval, "min-interval", 100*time.Millisecond, "minimum time between two requests")
+	stream := fs.Bool("stream", false, "print every result as a JSON line as soon as its test finished, then the report")
 	fs.BoolVar(&o.AllowInsecure, "allow-insecure", false, "allow http and private addresses (local portals only)")
 	timeout := fs.Duration("timeout", 20*time.Second, "timeout per HTTP request")
 	total := fs.Duration("total-timeout", 3*time.Minute, "timeout for the whole check")
@@ -78,22 +79,33 @@ func runCheck(ctx context.Context, args []string, stdout, stderr io.Writer, gete
 	cfg.HTTPClient = &http.Client{Timeout: *timeout}
 	ctx, cancel := context.WithTimeout(ctx, *total)
 	defer cancel()
+	var lines *json.Encoder
+	if *stream {
+		lines = json.NewEncoder(stdout)
+		cfg.Progress = func(r conformance.Result) { lines.Encode(streamLine{Type: "result", Result: &r}) }
+	}
 	rep, err := conformance.Run(ctx, []string{conformance.ProfileProtocol}, cfg)
 	if err != nil {
 		fmt.Fprintf(stderr, "obx-conformance: %v\n", err)
 		return 2
 	}
-	switch *format {
-	case "json":
+	switch {
+	case *stream:
+		lines.Encode(streamLine{Type: "report", Report: rep})
+	case *format == "json":
 		enc := json.NewEncoder(stdout)
 		enc.SetIndent("", "  ")
 		enc.Encode(rep)
-	case "markdown":
+	case *format == "markdown":
 		printMarkdown(stdout, rep)
 	default:
 		printReport(stdout, rep)
 		fmt.Fprintf(stdout, "Online check: %d requests, %.1f MiB received.\n", rep.Requests, float64(rep.Bytes)/(1<<20))
 	}
+	return checkExit(rep)
+}
+
+func checkExit(rep *conformance.Report) int {
 	if rep.SetupError != "" {
 		return 2
 	}
@@ -101,6 +113,15 @@ func runCheck(ctx context.Context, args []string, stdout, stderr io.Writer, gete
 		return 1
 	}
 	return 0
+}
+
+// streamLine is one line of --stream and of the check server's NDJSON
+// answer: a result as soon as its test finished, then the report.
+type streamLine struct {
+	Type   string              `json:"type"`
+	Result *conformance.Result `json:"result,omitempty"`
+	Report *conformance.Report `json:"report,omitempty"`
+	Error  *checkError         `json:"error,omitempty"`
 }
 
 func splitPair(v string, id, secret *string) error {

@@ -94,6 +94,9 @@ func (n *Node) loadFixtures() error {
 			scopes = append(scopes, obx.ScopeMediaOriginal)
 		}
 		cl, secret := n.newClient(rt, name+" software", scopes)
+		if name == "Example Store" && n.opts.FullClientID != "" && n.opts.FullClientSecret != "" {
+			cl.clientID, cl.secretHash, secret = n.opts.FullClientID, hashSecret(n.opts.FullClientSecret), n.opts.FullClientSecret
+		}
 		return ClientCredentials{RetailerID: rt.id, ClientID: cl.clientID, ClientSecret: secret}
 	}
 	c.Full = mk("Example Store", nil, nil)

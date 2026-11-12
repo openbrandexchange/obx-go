@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -26,9 +27,14 @@ type Online struct {
 	MaxRequests int
 	// MaxBytes caps the response bytes of the whole run (default 64 MiB).
 	MaxBytes int64
-	// MinInterval is the minimum time between two requests (default 20 ms,
-	// at most 50 requests per second).
+	// MinInterval is the minimum time between two requests (default 100 ms,
+	// at most 10 requests per second).
 	MinInterval time.Duration
+	// MaxRetryAfter is the longest Retry-After of a 429 answer that the
+	// check waits for (default 2 s). A longer one stops the run: the
+	// remaining tests are skipped with "rate limited" instead of the check
+	// waiting minutes for the portal.
+	MaxRetryAfter time.Duration
 	// MaxRedirects per request (default 3).
 	MaxRedirects int
 	// AllowInsecure allows http:// and loopback/private addresses (tests and
@@ -69,8 +75,8 @@ var onlineTier = map[string]string{
 	"P-CAT-1":   OnlineFixtures,
 	"P-CAT-5":   OnlineFixtures,
 	"P-MEDIA-1": OnlineFixtures,
-	"P-MEDIA-2": OnlineFixtures,
-	"P-MEDIA-3": OnlineFixtures,
+	"P-MEDIA-2": OnlineAPIKey,   // without fixtures: the first images of the catalog, no originals
+	"P-MEDIA-3": OnlineAPIKey,   // without fixtures: the derived rules, not byte-identical originals
 	"P-AUTH-3":  OnlineFixtures, // only with a second key without originals
 	"P-FEED-4":  OnlineFixtures, // only with a key restricted to brand kestrel; no export, no live part
 }
@@ -95,6 +101,10 @@ func (r *runner) online() bool { return r.cfg.Online != nil }
 // request or byte budget.
 var ErrBudget = errors.New("conformance: request budget of the online check used up")
 
+// ErrRateLimited is returned by every request after the portal answered 429
+// with a Retry-After longer than Online.MaxRetryAfter.
+var ErrRateLimited = errors.New("conformance: the portal rate-limited the online check")
+
 // budget is the transport of a read-only run: it refuses non-https URLs
 // (unless AllowInsecure), paces requests and caps their number and bytes.
 type budget struct {
@@ -106,6 +116,7 @@ type budget struct {
 	bytes    int64
 	last     time.Time
 	spent    bool
+	limited  time.Duration // Retry-After of the 429 that stopped the run
 }
 
 func newBudget(next http.RoundTripper, o Online) *budget {
@@ -116,7 +127,10 @@ func newBudget(next http.RoundTripper, o Online) *budget {
 		o.MaxBytes = 64 << 20
 	}
 	if o.MinInterval <= 0 {
-		o.MinInterval = 20 * time.Millisecond
+		o.MinInterval = 100 * time.Millisecond
+	}
+	if o.MaxRetryAfter <= 0 {
+		o.MaxRetryAfter = 2 * time.Second
 	}
 	if o.MaxRedirects <= 0 {
 		o.MaxRedirects = 3
@@ -124,10 +138,17 @@ func newBudget(next http.RoundTripper, o Online) *budget {
 	return &budget{next: next, o: o}
 }
 
-func (b *budget) exhausted() bool {
+// stopped returns why the run cannot send more requests, or "".
+func (b *budget) stopped() string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	return b.spent
+	switch {
+	case b.limited > 0:
+		return fmt.Sprintf("the portal rate-limited the check (429 with Retry-After %s); try again later", b.limited.Round(time.Second))
+	case b.spent:
+		return "the request budget of the online check was used up"
+	}
+	return ""
 }
 
 func (b *budget) usage() (int, int64) {
@@ -141,6 +162,10 @@ func (b *budget) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, fmt.Errorf("conformance: the online check only connects over https, not to %s", req.URL.Redacted())
 	}
 	b.mu.Lock()
+	if b.limited > 0 {
+		b.mu.Unlock()
+		return nil, ErrRateLimited
+	}
 	if b.spent || b.requests >= b.o.MaxRequests {
 		b.spent = true
 		b.mu.Unlock()
@@ -164,8 +189,34 @@ func (b *budget) RoundTrip(req *http.Request) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
+	if resp.StatusCode == http.StatusTooManyRequests {
+		if wait := retryAfter(resp.Header); wait > b.o.MaxRetryAfter {
+			// Waiting minutes is no use for a visitor; stop the run here.
+			resp.Body.Close()
+			b.mu.Lock()
+			b.limited = wait
+			b.mu.Unlock()
+			return nil, ErrRateLimited
+		}
+	}
 	resp.Body = &countingBody{ReadCloser: resp.Body, b: b}
 	return resp, nil
+}
+
+// retryAfter reads Retry-After (seconds or an HTTP date); a 429 without it
+// counts as one minute.
+func retryAfter(h http.Header) time.Duration {
+	v := strings.TrimSpace(h.Get("Retry-After"))
+	if v == "" {
+		return time.Minute
+	}
+	if n, err := strconv.Atoi(v); err == nil {
+		return time.Duration(max(n, 0)) * time.Second
+	}
+	if t, err := http.ParseTime(v); err == nil {
+		return max(time.Until(t), 0)
+	}
+	return time.Minute
 }
 
 type countingBody struct {
@@ -239,6 +290,12 @@ func (r *runner) onlineGate(id string) string {
 		if !r.fixturesPresent {
 			return "not checked online: needs a test account with the Kestrel test data (spec fixtures/kestrel)"
 		}
+		if id == "P-AUTH-3" && r.cfg.NoOriginalClientID == "" {
+			return "not checked online: needs a second test API key without access to originals; run obx-conformance locally"
+		}
+		if id == "P-FEED-4" && r.cfg.SecondClientID == "" {
+			return "not checked online: needs a second test API key restricted to one brand; run obx-conformance locally"
+		}
 	}
 	return ""
 }
@@ -248,30 +305,39 @@ func (r *runner) onlineGate(id string) string {
 // have given).
 var tokenPattern = regexp.MustCompile(`("(?:access_token|client_secret|refresh_token)"\s*:\s*")[^"]*(")|\bobx(?:at|s|i|r)_[A-Za-z0-9_\-]+`)
 
+// clean removes the run's secrets and any token from s.
+func (r *runner) clean(s string) string {
+	for _, sec := range []string{r.cfg.ClientSecret, r.cfg.SecondClientSecret, r.cfg.NoOriginalClientSecret} {
+		if len(sec) >= 8 {
+			s = strings.ReplaceAll(s, sec, "[redacted]")
+		}
+	}
+	return tokenPattern.ReplaceAllStringFunc(s, func(m string) string {
+		if sub := tokenPattern.FindStringSubmatch(m); sub[1] != "" {
+			return sub[1] + "[redacted]" + sub[2]
+		}
+		return "[redacted]"
+	})
+}
+
+// cleanAll returns a cleaned copy of msgs.
+func (r *runner) cleanAll(msgs []string) []string {
+	if msgs == nil {
+		return nil
+	}
+	out := make([]string, len(msgs))
+	for i, m := range msgs {
+		out[i] = r.clean(m)
+	}
+	return out
+}
+
 // redact removes the run's secrets and any token from the report messages,
 // so that an online report can be shown, stored and shared.
 func (r *runner) redact() {
-	secrets := []string{r.cfg.ClientSecret, r.cfg.SecondClientSecret, r.cfg.NoOriginalClientSecret}
-	clean := func(s string) string {
-		for _, sec := range secrets {
-			if len(sec) >= 8 {
-				s = strings.ReplaceAll(s, sec, "[redacted]")
-			}
-		}
-		return tokenPattern.ReplaceAllStringFunc(s, func(m string) string {
-			if sub := tokenPattern.FindStringSubmatch(m); sub[1] != "" {
-				return sub[1] + "[redacted]" + sub[2]
-			}
-			return "[redacted]"
-		})
-	}
 	for i := range r.report.Results {
-		for j, m := range r.report.Results[i].Messages {
-			r.report.Results[i].Messages[j] = clean(m)
-		}
+		r.report.Results[i].Messages = r.cleanAll(r.report.Results[i].Messages)
 	}
-	for i, s := range r.report.Setup {
-		r.report.Setup[i] = clean(s)
-	}
-	r.report.SetupError = clean(r.report.SetupError)
+	r.report.Setup = r.cleanAll(r.report.Setup)
+	r.report.SetupError = r.clean(r.report.SetupError)
 }

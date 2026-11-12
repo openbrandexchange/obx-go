@@ -76,6 +76,10 @@ type Config struct {
 	// protocol profile, no writes, no operator, a capped request budget and
 	// a transport that refuses private addresses.
 	Online *Online
+	// Progress, when set, is called with every result as soon as the test
+	// has finished (in an online check before the report is redacted, so
+	// the caller gets a redacted copy).
+	Progress func(Result)
 }
 
 // Status of a test.
@@ -97,6 +101,10 @@ type Result struct {
 	// Online is "partial" when a read-only run checked only part of the
 	// test (the messages say which part was not checked).
 	Online string `json:"online,omitempty"`
+	// OnlineTier is set in a read-only run: what the test needs online
+	// (OnlineAnonymous, OnlineAPIKey, OnlineFixtures) or "local" when it
+	// only runs with obx-conformance on the brand's side.
+	OnlineTier string `json:"online_tier,omitempty"`
 }
 
 // Report is the outcome of a run.
@@ -351,33 +359,37 @@ func Run(ctx context.Context, profiles []string, cfg Config) (*Report, error) {
 			continue
 		}
 		res := Result{ID: tc.id, Profile: tc.profile, Title: tc.title, Required: tc.required}
+		if r.online() {
+			if why := r.onlineGate(tc.id); why != "" {
+				res.Status, res.Messages = StatusSkip, []string{why}
+				r.add(res)
+				continue
+			}
+		}
 		if setupErr != nil {
 			res.Status = StatusFail
 			res.Messages = []string{"setup failed: " + setupErr.Error()}
 			if !tc.required {
 				res.Status = StatusSkip
 			}
-			r.report.Results = append(r.report.Results, res)
+			r.add(res)
 			continue
 		}
 		if r.online() {
-			if why := r.onlineGate(tc.id); why != "" {
-				res.Status, res.Messages = StatusSkip, []string{why}
-				r.report.Results = append(r.report.Results, res)
-				continue
-			}
-			if r.budget.exhausted() {
-				res.Status, res.Messages = StatusSkip, []string{"not checked online: the request budget of the online check was used up"}
-				r.report.Results = append(r.report.Results, res)
+			if why := r.budget.stopped(); why != "" {
+				res.Status, res.Messages = StatusSkip, []string{"not checked online: " + why}
+				r.add(res)
 				continue
 			}
 		}
 		r.runTest(ctx, tc, &res)
-		if r.online() && r.budget.exhausted() && res.Status == StatusFail {
-			res.Status = StatusSkip
-			res.Messages = append(res.Messages, "not checked online: the request budget of the online check was used up during this test")
+		if r.online() && res.Status == StatusFail {
+			if why := r.budget.stopped(); why != "" {
+				res.Status = StatusSkip
+				res.Messages = append(res.Messages, "not checked online: "+why+" during this test")
+			}
 		}
-		r.report.Results = append(r.report.Results, res)
+		r.add(res)
 	}
 	if r.budget != nil {
 		r.report.Requests, r.report.Bytes = r.budget.usage()
@@ -400,6 +412,23 @@ func Run(ctx context.Context, profiles []string, cfg Config) (*Report, error) {
 		r.report.Software = r.discovery.Node.Software + " " + r.discovery.Node.Version
 	}
 	return r.report, nil
+}
+
+// add records a result and reports it to Config.Progress.
+func (r *runner) add(res Result) {
+	if r.online() {
+		res.OnlineTier = onlineTier[res.ID]
+		if res.OnlineTier == "" {
+			res.OnlineTier = "local"
+		}
+	}
+	r.report.Results = append(r.report.Results, res)
+	if r.cfg.Progress != nil {
+		if r.online() {
+			res.Messages = r.cleanAll(res.Messages)
+		}
+		r.cfg.Progress(res)
+	}
 }
 
 func (r *runner) selected(id string) bool {

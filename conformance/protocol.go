@@ -854,12 +854,52 @@ func testAssetFixtures(t *T) {
 	}
 }
 
+// onlineAssets returns up to n images of whatever catalog the key sees, for
+// the media checks of an online run without the Kestrel test data.
+func (t *T) onlineAssets(n int) []*obx.Asset {
+	page, err := t.r.full.Products(t.ctx, client.ProductsQuery{Limit: 10})
+	t.Check(err, "list products")
+	var out []*obx.Asset
+	for _, p := range page.Items {
+		for _, ref := range p.Assets {
+			if len(out) == n {
+				return out
+			}
+			a, err := t.r.full.Asset(t.ctx, ref.ID)
+			t.Check(err, "asset "+ref.ID)
+			out = append(out, a)
+		}
+	}
+	if len(out) == 0 {
+		t.Skip("not checked online: the API key sees no product with images")
+	}
+	return out
+}
+
 func testRenditionHTTP(t *T) {
+	type target struct {
+		label string
+		a     *obx.Asset
+	}
+	var targets []target
+	names := obx.RenditionNames
+	if t.r.online() && !t.r.fixturesPresent {
+		t.partialf("originals are not downloaded online without the Kestrel test data; web, square and thumb of %s were checked", "the first images of the catalog")
+		names = obx.DerivedRenditionNames
+		for _, a := range t.onlineAssets(2) {
+			targets = append(targets, target{a.ID, a})
+		}
+	} else {
+		for _, ext := range []string{"KO-1001_NVY_1", "KO-1002_OLV_1", "KO-1003_RST_3"} {
+			a, err := t.r.full.Asset(t.ctx, t.assetID(ext))
+			t.Check(err, "asset "+ext)
+			targets = append(targets, target{ext, a})
+		}
+	}
 	checked := 0
-	for _, ext := range []string{"KO-1001_NVY_1", "KO-1002_OLV_1", "KO-1003_RST_3"} {
-		a, err := t.r.full.Asset(t.ctx, t.assetID(ext))
-		t.Check(err, "asset "+ext)
-		for _, name := range obx.RenditionNames {
+	for _, tg := range targets {
+		ext, a := tg.label, tg.a
+		for _, name := range names {
 			rd := a.Renditions.Get(name)
 			if rd == nil {
 				t.Errorf("%s has no %s rendition", ext, name)
@@ -927,6 +967,13 @@ func sha(b []byte) string {
 }
 
 func testRenditionRules(t *T) {
+	if t.r.online() && !t.r.fixturesPresent {
+		t.partialf("byte-identical originals (needs the Kestrel test data); the rules for web, square and thumb were checked on the first images of the catalog")
+		for _, a := range t.onlineAssets(2) {
+			t.checkDerived(a.ID, a, a.Width, a.Height)
+		}
+		return
+	}
 	var info map[string]struct {
 		SHA256 string `json:"sha256"`
 		Width  int    `json:"width"`
@@ -963,41 +1010,7 @@ func testRenditionRules(t *T) {
 		if !bytes.Equal(ob.Bytes(), fixture) {
 			t.Errorf("%s: the original is not byte-identical to %s", ext, file)
 		}
-		for _, name := range obx.DerivedRenditionNames {
-			rd := a.Renditions.Get(name)
-			var buf bytes.Buffer
-			if _, err := t.r.full.Download(t.ctx, rd, &buf); err != nil {
-				t.Errorf("%s %s: %v", ext, name, err)
-				continue
-			}
-			if renditions.DetectContentType(buf.Bytes()) != "image/jpeg" || rd.ContentType != "image/jpeg" {
-				t.Errorf("%s %s is not a JPEG", ext, name)
-			}
-			cfg, _, err := image.DecodeConfig(bytes.NewReader(buf.Bytes()))
-			if err != nil {
-				t.Errorf("%s %s cannot be decoded: %v", ext, name, err)
-				continue
-			}
-			if cfg.Width != rd.Width || cfg.Height != rd.Height {
-				t.Errorf("%s %s: file is %dx%d, the asset says %dx%d", ext, name, cfg.Width, cfg.Height, rd.Width, rd.Height)
-			}
-			long := max(cfg.Width, cfg.Height)
-			switch name {
-			case obx.RenditionWeb:
-				if long > 2000 || cfg.Width > info[file].Width || cfg.Height > info[file].Height {
-					t.Errorf("%s web is %dx%d (max 2000, never upscaled from %dx%d)", ext, cfg.Width, cfg.Height, info[file].Width, info[file].Height)
-				}
-			case obx.RenditionThumb:
-				if long > 600 || cfg.Width > info[file].Width {
-					t.Errorf("%s thumb is %dx%d (max 600)", ext, cfg.Width, cfg.Height)
-				}
-			case obx.RenditionSquare:
-				web := a.Renditions.Web
-				if cfg.Width != cfg.Height || cfg.Width != max(web.Width, web.Height) {
-					t.Errorf("%s square is %dx%d, want a square of the web image's longest side (%d)", ext, cfg.Width, cfg.Height, max(web.Width, web.Height))
-				}
-			}
-		}
+		t.checkDerived(ext, a, info[file].Width, info[file].Height)
 	}
 }
 
@@ -1268,5 +1281,45 @@ func testProblems(t *T) {
 	t.r.mu.Unlock()
 	for _, s := range v {
 		t.Errorf("%s", s)
+	}
+}
+
+// checkDerived checks the web, square and thumb renditions of a against the
+// rules (JPEG, size limits, never upscaled from origW x origH).
+func (t *T) checkDerived(ext string, a *obx.Asset, origW, origH int) {
+	for _, name := range obx.DerivedRenditionNames {
+		rd := a.Renditions.Get(name)
+		var buf bytes.Buffer
+		if _, err := t.r.full.Download(t.ctx, rd, &buf); err != nil {
+			t.Errorf("%s %s: %v", ext, name, err)
+			continue
+		}
+		if renditions.DetectContentType(buf.Bytes()) != "image/jpeg" || rd.ContentType != "image/jpeg" {
+			t.Errorf("%s %s is not a JPEG", ext, name)
+		}
+		cfg, _, err := image.DecodeConfig(bytes.NewReader(buf.Bytes()))
+		if err != nil {
+			t.Errorf("%s %s cannot be decoded: %v", ext, name, err)
+			continue
+		}
+		if cfg.Width != rd.Width || cfg.Height != rd.Height {
+			t.Errorf("%s %s: file is %dx%d, the asset says %dx%d", ext, name, cfg.Width, cfg.Height, rd.Width, rd.Height)
+		}
+		long := max(cfg.Width, cfg.Height)
+		switch name {
+		case obx.RenditionWeb:
+			if long > 2000 || cfg.Width > origW || cfg.Height > origH {
+				t.Errorf("%s web is %dx%d (max 2000, never upscaled from %dx%d)", ext, cfg.Width, cfg.Height, origW, origH)
+			}
+		case obx.RenditionThumb:
+			if long > 600 || cfg.Width > origW {
+				t.Errorf("%s thumb is %dx%d (max 600)", ext, cfg.Width, cfg.Height)
+			}
+		case obx.RenditionSquare:
+			web := a.Renditions.Web
+			if cfg.Width != cfg.Height || cfg.Width != max(web.Width, web.Height) {
+				t.Errorf("%s square is %dx%d, want a square of the web image's longest side (%d)", ext, cfg.Width, cfg.Height, max(web.Width, web.Height))
+			}
+		}
 	}
 }

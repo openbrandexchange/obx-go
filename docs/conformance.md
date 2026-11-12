@@ -89,20 +89,40 @@ Brand Exchange") and where to read about the paid listing as official partner:
 report for machines, and `obx-conformance report report.json` shows a saved JSON report again. A run
 with `--only` is marked partial and never says CONFORMANT.
 
-## The online check (prototype)
+## The online check
 
-`obx-conformance check --url https://portal.example [--client id:secret] [--json]` is the read-only
-check that a public checker (openbrandexchange.com) can run against a portal on the internet. It runs
-only the protocol tests, and only the parts that do not write or need a brand-side step; it never
-creates API keys, access requests, exports, webhooks or usage events. Every connection is checked
-against loopback, private, link-local (cloud metadata), CGNAT and multicast addresses, only https is
-used, redirects are limited to 3 and a run is capped at 800 requests and 64 MiB. Secrets can be
-given as `OBX_CHECK_CLIENT=id:secret` instead of a flag, and are redacted from the report together
-with any token. A read-only report is always partial: it is never a conformance claim.
+`obx-conformance check --url https://portal.example [--client id:secret] [--json|--stream]` is the
+read-only check that the compatibility checker on openbrandexchange.com runs against a portal on the
+internet. It runs only the protocol tests, and only the parts that do not write or need a brand-side
+step; it never creates API keys, access requests, exports, webhooks or usage events. Every
+connection is checked against loopback, private, link-local (cloud metadata), CGNAT, multicast and
+reserved addresses (0/8, 198.18/15, 240/4) and the NAT64 and 6to4 prefixes; only https is used,
+redirects are limited to 3, requests are paced at one per 100 ms and a run is capped at 800 requests
+and 64 MiB. A 429 with a Retry-After longer than 2 seconds stops the run: the remaining tests are
+skipped as rate limited instead of the check waiting. Secrets can be given as
+`OBX_CHECK_CLIENT=id:secret` instead of a flag, and are redacted from the report together with any
+token. A read-only report is always partial: it is never a conformance claim. `--stream` prints one
+JSON line per finished test (`{"type":"result",…}`) and then `{"type":"report",…}`.
 
 `obx-conformance list` shows per test what the online check needs: `anonymous`, `api_key` (one API
 key; fixture parts are skipped on other data) or `fixtures` (an API key of a test account with the
-Kestrel test data); `-` means not checked online.
+Kestrel test data); `-` means not checked online. Without the Kestrel data, P-MEDIA-2 and P-MEDIA-3
+check the first images of the catalog (web, square and thumb; originals are not downloaded).
+
+`obx-conformance check-server [--addr :8080]` serves the same check over HTTP for the website's
+container: `POST /check` with `{"url": "https://portal.example", "client": {"id": "…", "secret":
+"…"}}` answers the JSON report, or with `Accept: application/x-ndjson` the `--stream` lines. It
+refuses IP addresses, ports other than 443 and host names that resolve to a non-public address
+before the check starts, runs at most `--max-concurrent` checks (default 2) and logs only metadata
+(host, duration, counts), never the key. The deployment is in `deploy/checker`.
+
+### The public demo portal
+
+`obx-conformance mock --read-only --client id:secret` serves the mock with the Kestrel data as a
+public demo: only the protocol's reads are answered (GET, the token request and the GTIN lookup);
+access requests, exports, usage events and webhooks answer 403, the ingest API, the admin API and the
+portal 404. The data lives in memory, so a restart resets it. Its API key is published on purpose: it
+can only read the demo data. Every online-runnable check passes against it.
 
 ## In CI
 

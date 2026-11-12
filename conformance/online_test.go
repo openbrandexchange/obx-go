@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/openbrandexchange/obx-go/conformance"
 	"github.com/openbrandexchange/obx-go/mock"
@@ -40,7 +41,9 @@ func (w *writeWatch) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 func onlineRun(t *testing.T, base string, cfg conformance.Config) *conformance.Report {
 	t.Helper()
 	cfg.BaseURL = base
-	cfg.Online = &conformance.Online{AllowInsecure: true}
+	if cfg.Online == nil {
+		cfg.Online = &conformance.Online{AllowInsecure: true, MinInterval: time.Millisecond}
+	}
 	rep, err := conformance.Run(context.Background(), []string{conformance.ProfileProtocol}, cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -141,13 +144,15 @@ func TestOnlineCheckWithoutFixtures(t *testing.T) {
 	rep := onlineRun(t, srv.URL, conformance.Config{ClientID: key.Client.ClientID, ClientSecret: key.ClientSecret})
 	logOnline(t, rep)
 	st := statuses(rep)
-	for id, want := range map[string]string{"P-FEED-1": "pass", "P-CAT-2": "pass", "P-CAT-6": "pass", "P-CAT-1": "skip", "P-MEDIA-2": "skip", "P-ACC-1": "skip"} {
+	for id, want := range map[string]string{"P-FEED-1": "pass", "P-CAT-2": "pass", "P-CAT-6": "pass", "P-CAT-1": "skip", "P-MEDIA-2": "pass", "P-MEDIA-3": "pass", "P-ACC-1": "skip"} {
 		if st[id].Status != want {
 			t.Errorf("%s: %s, want %s (%v)", id, st[id].Status, want, st[id].Messages)
 		}
 	}
-	if st["P-FEED-1"].Online != "partial" {
-		t.Errorf("P-FEED-1 without fixtures must be partial")
+	for _, id := range []string{"P-FEED-1", "P-MEDIA-2", "P-MEDIA-3"} {
+		if st[id].Online != "partial" {
+			t.Errorf("%s without fixtures must be partial", id)
+		}
 	}
 }
 
@@ -158,7 +163,7 @@ func TestOnlineCheckBudget(t *testing.T) {
 	srv := httptest.NewServer(n)
 	defer srv.Close()
 	rep, err := conformance.Run(context.Background(), []string{conformance.ProfileProtocol}, conformance.Config{BaseURL: srv.URL,
-		ClientID: c.Full.ClientID, ClientSecret: c.Full.ClientSecret, Online: &conformance.Online{AllowInsecure: true, MaxRequests: 40}})
+		ClientID: c.Full.ClientID, ClientSecret: c.Full.ClientSecret, Online: &conformance.Online{AllowInsecure: true, MaxRequests: 40, MinInterval: time.Millisecond}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,5 +220,100 @@ func TestOnlineReportIsRedacted(t *testing.T) {
 	}
 	if statuses(rep)["P-AUTH-1"].Status != conformance.StatusFail {
 		t.Errorf("P-AUTH-1 must fail when a wrong secret gets a token")
+	}
+}
+
+// A portal that answers 429 with a long Retry-After stops the check at once:
+// the remaining tests are skipped as rate limited, nothing fails, and the
+// check does not wait for the Retry-After.
+func TestOnlineCheckStopsOn429(t *testing.T) {
+	n := mock.New(mock.Options{Fixtures: true})
+	c := n.Credentials()
+	var count int
+	var mu sync.Mutex
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		count++
+		limited := count > 30
+		mu.Unlock()
+		if limited {
+			w.Header().Set("Retry-After", "600")
+			w.Header().Set("Content-Type", obx.MediaTypeProblem)
+			w.WriteHeader(http.StatusTooManyRequests)
+			w.Write([]byte(`{"type":"about:blank","title":"slow down","status":429,"obx_error":"rate_limited"}`))
+			return
+		}
+		n.ServeHTTP(w, r)
+	}))
+	defer srv.Close()
+	start := time.Now()
+	var progress []string
+	rep := onlineRun(t, srv.URL, conformance.Config{ClientID: c.Full.ClientID, ClientSecret: c.Full.ClientSecret,
+		Progress: func(r conformance.Result) { progress = append(progress, r.ID) }})
+	logOnline(t, rep)
+	if d := time.Since(start); d > 30*time.Second {
+		t.Errorf("the check took %s; it must not wait for Retry-After", d)
+	}
+	limited := 0
+	for _, r := range rep.Results {
+		if r.Status == conformance.StatusFail {
+			t.Errorf("%s failed: %v", r.ID, r.Messages)
+		}
+		if strings.Contains(strings.Join(r.Messages, " "), "rate-limited") {
+			limited++
+		}
+	}
+	if limited == 0 {
+		t.Errorf("no test says the check was rate-limited")
+	}
+	if len(progress) != len(rep.Results) {
+		t.Errorf("progress reported %d results, the report has %d", len(progress), len(rep.Results))
+	}
+}
+
+// The public demo: a read-only mock with a fixed key passes every online
+// check, and refuses writes, ingest and admin.
+func TestOnlineCheckAgainstReadOnlyDemo(t *testing.T) {
+	n := mock.New(mock.Options{Fixtures: true, ReadOnly: true, FullClientID: "obxc_demo", FullClientSecret: "obxs_public-demo-key"})
+	srv := httptest.NewServer(n)
+	defer srv.Close()
+	rep := onlineRun(t, srv.URL, conformance.Config{ClientID: "obxc_demo", ClientSecret: "obxs_public-demo-key"})
+	logOnline(t, rep)
+	for _, r := range rep.Results {
+		if r.OnlineTier == "" {
+			t.Errorf("%s has no online tier", r.ID)
+		}
+		want := conformance.StatusPass
+		if r.OnlineTier == "local" || r.ID == "P-AUTH-3" || r.ID == "P-FEED-4" {
+			want = conformance.StatusSkip
+		}
+		if r.Status != want {
+			t.Errorf("%s: %s, want %s: %v", r.ID, r.Status, want, r.Messages)
+		}
+	}
+	for _, c := range []struct {
+		method, path string
+		status       int
+	}{
+		{http.MethodPost, "/obx/v1/exports", http.StatusForbidden},
+		{http.MethodPost, "/obx/v1/webhooks", http.StatusForbidden},
+		{http.MethodPost, "/obx/v1/access-requests", http.StatusForbidden},
+		{http.MethodPost, obx.PathAdminAPI + "/session/login", http.StatusNotFound},
+		{http.MethodGet, obx.PathAdminAPI + "/setup", http.StatusNotFound},
+		{http.MethodGet, obx.PathIngest, http.StatusNotFound},
+		{http.MethodPut, obx.PathIngest + "/products/x", http.StatusNotFound},
+		{http.MethodGet, "/obx/v1/products", http.StatusUnauthorized},
+		{http.MethodDelete, "/obx/v1/changes", http.StatusMethodNotAllowed},
+	} {
+		req, _ := http.NewRequest(c.method, srv.URL+c.path, strings.NewReader("{}"))
+		req.Header.Set("Content-Type", "application/json")
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != c.status {
+			t.Errorf("%s %s: %d, want %d", c.method, c.path, res.StatusCode, c.status)
+		}
 	}
 }
