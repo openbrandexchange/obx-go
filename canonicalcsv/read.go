@@ -53,9 +53,12 @@ func normalizeHeader(raw string) column {
 	base = strings.NewReplacer(" ", "_", "-", "_").Replace(base)
 	c := column{raw: raw, base: base}
 	if hasLang {
-		if base == "attr" {
+		switch base {
+		case "attr":
 			c.lang = strings.TrimSpace(lang) // attribute key, kept as written
-		} else {
+		case featurePrefix:
+			c.lang = NormalizeKey(lang) // feature key, matched case-insensitively
+		default:
 			c.lang = NormalizeLanguageTag(lang)
 		}
 	}

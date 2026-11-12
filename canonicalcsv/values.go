@@ -37,10 +37,13 @@ func NormalizeKey(s string) string {
 	return strings.TrimRight(b.String(), "_")
 }
 
-// Recommended fibre and part keys (docs/import-format.md section 1.4).
+// Recommended fibre and part keys (docs/import-format.md section 1.4): the
+// English names of Annex I of Regulation (EU) No 1007/2011 where one exists,
+// and the non-textile materials. Recycled and organic content are flags of a
+// fibre, not fibres (0.2).
 var (
-	FiberKeys = []string{"cotton", "organic_cotton", "recycled_cotton", "linen", "hemp", "silk", "wool", "merino_wool", "lambswool", "cashmere", "alpaca", "mohair", "viscose", "lyocell", "modal", "cupro", "acetate", "polyester", "recycled_polyester", "polyamide", "recycled_polyamide", "elastane", "acrylic", "polypropylene", "polyurethane", "leather", "suede", "down", "feather", "rubber", "metal", "other"}
-	PartKeys  = []string{"main", "outer", "lining", "filling", "trim", "sole", "upper", "insole"}
+	FiberKeys = []string{"cotton", "linen", "hemp", "silk", "wool", "merino_wool", "lambswool", "cashmere", "alpaca", "mohair", "viscose", "lyocell", "modal", "cupro", "acetate", "polyester", "polyamide", "elastane", "acrylic", "polypropylene", "polyurethane", "leather", "suede", "down", "feather", "rubber", "metal", "other"}
+	PartKeys  = []string{"main", "outer", "lining", "filling", "padding", "trim", "pocket_lining", "shell", "handle", "strap", "upper", "sole", "insole"}
 )
 
 // CareCodes are the ISO 3758-aligned care codes (docs/import-format.md section 1.5).
@@ -55,25 +58,32 @@ var CareCodes = []string{
 
 // ItemTypes and TargetGroups are the recommended keys (docs/protocol.md 5.2).
 var (
-	ItemTypes    = []string{"t_shirt", "top", "shirt", "blouse", "polo", "sweater", "cardigan", "hoodie", "sweatshirt", "vest", "jacket", "coat", "blazer", "suit", "dress", "skirt", "trousers", "jeans", "shorts", "jumpsuit", "leggings", "underwear", "lingerie", "nightwear", "swimwear", "socks", "shoes", "sneakers", "boots", "sandals", "bag", "backpack", "wallet", "belt", "hat", "cap", "scarf", "gloves", "tie", "jewelry", "watch", "eyewear", "accessory", "home", "generic_product"}
+	ItemTypes    = []string{"t_shirt", "top", "shirt", "blouse", "polo", "sweater", "cardigan", "hoodie", "sweatshirt", "vest", "jacket", "coat", "blazer", "suit", "dress", "skirt", "trousers", "jeans", "shorts", "jumpsuit", "leggings", "underwear", "lingerie", "nightwear", "swimwear", "socks", "shoes", "sneakers", "boots", "sandals", "bag", "backpack", "luggage", "wallet", "belt", "hat", "cap", "scarf", "gloves", "tie", "jewelry", "watch", "eyewear", "accessory", "home", "generic_product"}
 	TargetGroups = []string{"women", "men", "unisex", "girls", "boys", "kids", "baby"}
 )
+
+var fiberFlag = regexp.MustCompile(`(?i)\s*\((recycled|organic)\)\s*$`)
 
 // ParseMaterials parses the materials grammar:
 //
 //	materials := part (";" part)*
 //	part      := [part_name ":"] fiber ("," fiber)*
-//	fiber     := number "%" fiber_key
+//	fiber     := number "%" fiber_key flag*
+//	flag      := "(recycled)" | "(organic)"
 //
-// It returns warnings (for example percentages that do not sum to 100) next
-// to the parsed value; err is set when the text does not follow the grammar.
+// A flag sets Recycled or Organic on the fibre, and the 0.1 keys
+// recycled_<fibre> and organic_<fibre> are normalised to the fibre with the
+// flag (obx.NormalizeFiber), so "100% recycled_polyester" and "100% polyester
+// (recycled)" give the same materials. err is set when the text does not
+// follow the grammar. Percentages that do not sum to 100 are not an error:
+// the node reports them as the label warning fibre_percentages_not_100
+// (import-format.md rule 10), so the returned warnings are for other notes.
 func ParseMaterials(s string) (obx.Materials, []string, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return nil, nil, nil
 	}
 	var out obx.Materials
-	var warnings []string
 	for _, rawPart := range strings.Split(s, ";") {
 		rawPart = strings.TrimSpace(rawPart)
 		if rawPart == "" {
@@ -89,7 +99,6 @@ func ParseMaterials(s string) (obx.Materials, []string, error) {
 			}
 		}
 		part := obx.MaterialPart{Part: partName}
-		sum := 0.0
 		for _, rawFiber := range strings.Split(body, ",") {
 			rawFiber = strings.TrimSpace(rawFiber)
 			if rawFiber == "" {
@@ -103,34 +112,51 @@ func ParseMaterials(s string) (obx.Materials, []string, error) {
 			if err != nil || pct < 0 || pct > 100 || math.IsNaN(pct) {
 				return nil, nil, fmt.Errorf("%q: %q is not a percentage between 0 and 100", rawFiber, strings.TrimSpace(num))
 			}
-			fiber := NormalizeKey(key)
-			if !IsKey(fiber) {
+			f := obx.Fiber{Percentage: pct}
+			for {
+				m := fiberFlag.FindStringSubmatch(key)
+				if m == nil {
+					break
+				}
+				if strings.EqualFold(m[1], "recycled") {
+					f.Recycled = true
+				} else {
+					f.Organic = true
+				}
+				key = key[:len(key)-len(m[0])]
+			}
+			f.Fiber = NormalizeKey(key)
+			if !IsKey(f.Fiber) {
 				return nil, nil, fmt.Errorf("%q: fibre %q is not a valid key", rawFiber, strings.TrimSpace(key))
 			}
-			part.Fibers = append(part.Fibers, obx.Fiber{Fiber: fiber, Percentage: pct})
-			sum += pct
+			part.Fibers = append(part.Fibers, obx.NormalizeFiber(f))
 		}
 		if len(part.Fibers) == 0 {
 			return nil, nil, fmt.Errorf("part %q has no fibres", partName)
-		}
-		if math.Abs(sum-100) > 0.01 {
-			warnings = append(warnings, fmt.Sprintf("percentages of %s add up to %g, not 100", partName, sum))
 		}
 		out = append(out, part)
 	}
 	if len(out) == 0 {
 		return nil, nil, fmt.Errorf("no materials found")
 	}
-	return out, warnings, nil
+	return out, nil, nil
 }
 
-// FormatMaterials writes materials in the grammar ParseMaterials reads.
+// FormatMaterials writes materials in the grammar ParseMaterials reads, with
+// the fibre flags as "(recycled)" and "(organic)".
 func FormatMaterials(m obx.Materials) string {
 	parts := make([]string, 0, len(m))
 	for _, p := range m {
 		fibers := make([]string, 0, len(p.Fibers))
 		for _, f := range p.Fibers {
-			fibers = append(fibers, strconv.FormatFloat(f.Percentage, 'f', -1, 64)+"% "+f.Fiber)
+			s := strconv.FormatFloat(f.Percentage, 'f', -1, 64) + "% " + f.Fiber
+			if f.Recycled {
+				s += " (recycled)"
+			}
+			if f.Organic {
+				s += " (organic)"
+			}
+			fibers = append(fibers, s)
 		}
 		parts = append(parts, p.Part+": "+strings.Join(fibers, ", "))
 	}

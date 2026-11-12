@@ -63,6 +63,10 @@ type Present struct {
 	Langs map[string]map[string]bool
 	// Attrs holds the keys of the attr:<key> columns.
 	Attrs map[string]bool
+	// Features holds the keys of the feature:<key> columns. Rule 9 holds per
+	// key for features and per column for measurements (the measurement
+	// columns are in Plain).
+	Features map[string]bool
 }
 
 // Errors counts problems with severity error.
@@ -82,6 +86,7 @@ var productColumns = map[string]bool{
 	"brand": true, "product_id": true, "style_number": true, "name": true, "description": true,
 	"item_type": true, "target_group": true, "season": true, "collection": true, "gpc_brick": true,
 	"materials": true, "care": true, "country_of_origin": true, "dpp_url": true, "status": true,
+	"item_subtype": true, "contains_animal_origin": true, "footwear_materials": true, "certifications": true,
 	// image_files is written by exports; imports read images from files, not from this column.
 	"image_files": true,
 }
@@ -89,10 +94,14 @@ var productColumns = map[string]bool{
 var variantColumns = map[string]bool{
 	"variant_id": true, "gtin": true, "sku": true, "color_code": true, "color_name": true,
 	"supplier_color": true, "size": true, "size_system": true, "variant_status": true,
+	"color_family": true, "size_length": true,
+	"height_cm": true, "width_cm": true, "depth_cm": true, "weight_kg": true, "volume_l": true, "volume_expanded_l": true,
+	"handle_drop_cm": true, "strap_length_cm": true, "laptop_max_inch": true, "heel_height_cm": true, "shaft_height_cm": true, "inseam_cm": true,
 }
 
 var productAliases = map[string]string{
 	"style": "style_number", "ean": "gtin", "barcode": "gtin", "colour_code": "color_code", "colour_name": "color_name",
+	"colour_family": "color_family",
 }
 
 var localizedColumns = map[string]bool{"name": true, "description": true, "color_name": true, "alt_text": true}
@@ -120,6 +129,7 @@ func ParseProducts(r io.Reader, file string, opts Options) (*ProductsFile, error
 	idx := map[string]int{}           // plain column → index
 	langIdx := map[string][]langCol{} // localized base → tagged columns
 	attrIdx := map[string]int{}
+	featIdx := map[string]int{}
 	for i, c := range t.columns {
 		base := c.base
 		if a, ok := productAliases[base]; ok {
@@ -133,6 +143,20 @@ func ParseProducts(r io.Reader, file string, opts Options) (*ProductsFile, error
 				continue
 			}
 			attrIdx[key] = i
+		case base == featurePrefix && c.lang != "":
+			key := c.lang
+			if !IsKey(key) {
+				out.Problems = append(out.Problems, problem(file, noRow, c.raw, obx.ErrValidationFailed, obx.SeverityWarning, fmt.Sprintf("feature key %q must be lowercase letters, digits and _; column ignored", key), ""))
+				continue
+			}
+			if _, dup := featIdx[key]; dup {
+				out.Problems = append(out.Problems, problem(file, noRow, c.raw, obx.ErrValidationFailed, obx.SeverityWarning, fmt.Sprintf("column %q appears twice; the first one is used", featurePrefix+":"+key), ""))
+				continue
+			}
+			if _, reg := obx.FeatureRegistry[key]; !reg {
+				out.Problems = append(out.Problems, problem(file, noRow, featurePrefix+":"+key, obx.ErrValidationFailed, obx.SeverityWarning, fmt.Sprintf("feature %q is not in the feature registry; its cells are stored as text", key), ""))
+			}
+			featIdx[key] = i
 		case localizedColumns[base] && base != "alt_text" && c.lang != "":
 			langIdx[base] = append(langIdx[base], langCol{c.lang, i})
 		case (productColumns[base] || variantColumns[base]) && c.lang == "":
@@ -148,7 +172,7 @@ func ParseProducts(r io.Reader, file string, opts Options) (*ProductsFile, error
 			out.Problems = append(out.Problems, problem(file, noRow, c.raw, obx.ErrValidationFailed, obx.SeverityWarning, fmt.Sprintf("unknown column %q ignored", strings.TrimSpace(c.raw)), ""))
 		}
 	}
-	out.Present = Present{Plain: map[string]bool{}, Langs: map[string]map[string]bool{}, Attrs: map[string]bool{}}
+	out.Present = Present{Plain: map[string]bool{}, Langs: map[string]map[string]bool{}, Attrs: map[string]bool{}, Features: map[string]bool{}}
 	for base := range idx {
 		out.Present.Plain[base] = true
 	}
@@ -164,6 +188,9 @@ func ParseProducts(r io.Reader, file string, opts Options) (*ProductsFile, error
 	}
 	for k := range attrIdx {
 		out.Present.Attrs[k] = true
+	}
+	for k := range featIdx {
+		out.Present.Features[k] = true
 	}
 	col := func(name string) int {
 		if i, ok := idx[name]; ok {
@@ -184,8 +211,14 @@ func ParseProducts(r io.Reader, file string, opts Options) (*ProductsFile, error
 		attrKeys = append(attrKeys, k)
 	}
 	sort.Strings(attrKeys)
+	featKeys := make([]string, 0, len(featIdx))
+	for k := range featIdx {
+		featKeys = append(featKeys, k)
+	}
+	sort.Strings(featKeys)
 
 	byKey := map[string]*Product{}
+	families := map[string]string{} // product key + colour code → colour family
 	seenVariant := map[string]int{} // external id → row
 	seenGTIN := map[string]int{}    // gtin14 → row
 
@@ -250,6 +283,50 @@ func ParseProducts(r io.Reader, file string, opts Options) (*ProductsFile, error
 			}
 			in.Materials = m
 		}
+		if v := rp.get(col("item_subtype")); v != "" {
+			k := NormalizeKey(v)
+			if !IsKey(k) {
+				rp.fail("item_subtype", obx.ErrValidationFailed, "item_subtype must be a key such as cabin or crossbody", v)
+			}
+			in.ItemSubtype = &k
+		}
+		if v := rp.get(col("contains_animal_origin")); v != "" {
+			b, err := ParseBool(v)
+			if err != nil {
+				rp.fail("contains_animal_origin", obx.ErrValidationFailed, "contains_animal_origin must be yes or no", v)
+			} else {
+				in.ContainsAnimalOrigin = &b
+			}
+		}
+		if v := rp.get(col("footwear_materials")); v != "" {
+			f, err := ParseFootwearMaterials(v)
+			if err != nil {
+				rp.fail("footwear_materials", obx.ErrValidationFailed, err.Error(), v)
+			}
+			in.FootwearMaterials = f
+		}
+		if v := rp.get(col("certifications")); v != "" {
+			c, err := ParseCertifications(v)
+			if err != nil {
+				rp.fail("certifications", obx.ErrValidationFailed, err.Error(), v)
+			}
+			in.Certifications = c
+		}
+		for _, k := range featKeys {
+			v := rp.get(featIdx[k])
+			if v == "" {
+				continue
+			}
+			val, _, err := ParseFeature(k, v)
+			if err != nil {
+				rp.fail(featurePrefix+":"+k, obx.ErrValidationFailed, fmt.Sprintf("feature %s: %v", k, err), v)
+				continue
+			}
+			if in.Features == nil {
+				in.Features = &obx.Features{}
+			}
+			in.Features.Set(k, val)
+		}
 		if v := rp.get(col("care")); v != "" {
 			c, warns, err := ParseCare(v)
 			if err != nil {
@@ -292,6 +369,15 @@ func ParseProducts(r io.Reader, file string, opts Options) (*ProductsFile, error
 				hasVariant = true
 			}
 		}
+		variantOnly := []string{"color_family", "size_length"}
+		variantOnly = append(variantOnly, MeasurementColumns...)
+		if !hasVariant {
+			for _, c := range variantOnly {
+				if v := rp.get(col(c)); v != "" {
+					rp.warn(c, c+" is ignored on a row without variant columns (gtin, variant_id, sku, color_code or size)", v)
+				}
+			}
+		}
 		if hasVariant {
 			vi := obx.VariantInput{ProductExternalID: key}
 			color := rp.get(col("color_code"))
@@ -319,7 +405,47 @@ func ParseProducts(r io.Reader, file string, opts Options) (*ProductsFile, error
 			}
 			vi.SKU = rp.opt(col("sku"))
 			vi.Size = rp.opt(col("size"))
+			vi.SizeLength = rp.optMax(col("size_length"), "size_length", 64)
 			vi.SizeSystem = rp.opt(col("size_system"))
+			if v := rp.get(col("color_family")); v != "" {
+				fam, err := ParseColorFamily(v)
+				if err != nil {
+					rp.fail("color_family", obx.ErrValidationFailed, err.Error(), v)
+				} else {
+					vi.Color.Family = &fam
+					fk := key + "\x00" + color
+					if prev, ok := families[fk]; ok && prev != fam {
+						rp.warn("color_family", fmt.Sprintf("differs from an earlier row of colour %s (%s); every variant of one colour should have the same family", color, prev), v)
+					} else if !ok {
+						families[fk] = fam
+					}
+				}
+			}
+			var ms obx.Measurements
+			for _, c := range MeasurementColumns {
+				v := rp.get(col(c))
+				if v == "" {
+					continue
+				}
+				if c == "strap_length_cm" {
+					r, err := ParseStrapLength(v)
+					if err != nil {
+						rp.fail(c, obx.ErrValidationFailed, err.Error(), v)
+						continue
+					}
+					ms.StrapLengthCM = r
+					continue
+				}
+				n, err := ParseMeasurement(v)
+				if err != nil {
+					rp.fail(c, obx.ErrValidationFailed, err.Error(), v)
+					continue
+				}
+				ms.SetNumber(c, &n)
+			}
+			if !ms.IsEmpty() {
+				vi.Measurements = &ms
+			}
 			vi.Status = rp.status("variant_status", col("variant_status"))
 			vid := rp.get(col("variant_id"))
 			if vid == "" {
@@ -415,6 +541,7 @@ func mergeProduct(rp *rowParser, p *Product, in obx.ProductInput, brand string) 
 		warnDiff(col, **dst, *src)
 	}
 	mergeStr("item_type", &p.Input.ItemType, in.ItemType)
+	mergeStr("item_subtype", &p.Input.ItemSubtype, in.ItemSubtype)
 	mergeStr("target_group", &p.Input.TargetGroup, in.TargetGroup)
 	mergeStr("season", &p.Input.Season, in.Season)
 	mergeStr("collection", &p.Input.Collection, in.Collection)
@@ -431,6 +558,32 @@ func mergeProduct(rp *rowParser, p *Product, in obx.ProductInput, brand string) 
 		p.Input.Care = in.Care
 	} else if in.Care != nil {
 		warnDiff("care", FormatCare(p.Input.Care), FormatCare(in.Care))
+	}
+	if p.Input.ContainsAnimalOrigin == nil {
+		p.Input.ContainsAnimalOrigin = in.ContainsAnimalOrigin
+	} else if in.ContainsAnimalOrigin != nil {
+		warnDiff("contains_animal_origin", fmt.Sprint(*p.Input.ContainsAnimalOrigin), fmt.Sprint(*in.ContainsAnimalOrigin))
+	}
+	if p.Input.FootwearMaterials == nil {
+		p.Input.FootwearMaterials = in.FootwearMaterials
+	} else if in.FootwearMaterials != nil {
+		warnDiff("footwear_materials", FormatFootwearMaterials(p.Input.FootwearMaterials), FormatFootwearMaterials(in.FootwearMaterials))
+	}
+	if p.Input.Certifications == nil {
+		p.Input.Certifications = in.Certifications
+	} else if in.Certifications != nil {
+		warnDiff("certifications", FormatCertifications(p.Input.Certifications), FormatCertifications(in.Certifications))
+	}
+	for _, k := range in.Features.Keys() {
+		v, _ := in.Features.Get(k)
+		if p.Input.Features == nil {
+			p.Input.Features = &obx.Features{}
+		}
+		if cur, ok := p.Input.Features.Get(k); ok {
+			warnDiff(featurePrefix+":"+k, FormatFeature(cur), FormatFeature(v))
+			continue
+		}
+		p.Input.Features.Set(k, v)
 	}
 	for k, v := range in.Attributes {
 		if p.Input.Attributes == nil {

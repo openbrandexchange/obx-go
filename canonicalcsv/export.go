@@ -26,10 +26,18 @@ type ExportOptions struct {
 }
 
 // ExportHeader returns the export columns for the given languages and
-// attribute keys: the canonical import columns in documented order (without
-// status columns, since an export only contains published content) plus
-// image_files.
+// attribute keys, with a feature column for every key of the feature
+// registry; see ExportColumns.
 func ExportHeader(languages, attrKeys []string) []string {
+	return ExportColumns(languages, obx.FeatureKeys, attrKeys)
+}
+
+// ExportColumns returns the export columns: the canonical import columns in
+// documented order (without status columns, since an export only contains
+// published content), feature:<key> for each of featureKeys (the registry
+// keys, then the other keys the products have, sorted), attr:<key> for each
+// of attrKeys, and image_files.
+func ExportColumns(languages, featureKeys, attrKeys []string) []string {
 	h := []string{"brand", "product_id", "style_number"}
 	for _, l := range languages {
 		h = append(h, "name:"+l)
@@ -37,7 +45,11 @@ func ExportHeader(languages, attrKeys []string) []string {
 	for _, l := range languages {
 		h = append(h, "description:"+l)
 	}
-	h = append(h, "item_type", "target_group", "season", "collection", "gpc_brick", "materials", "care", "country_of_origin", "dpp_url")
+	h = append(h, "item_type", "item_subtype", "target_group", "season", "collection", "gpc_brick", "materials",
+		"contains_animal_origin", "footwear_materials", "care", "country_of_origin", "certifications", "dpp_url")
+	for _, k := range featureKeys {
+		h = append(h, featurePrefix+":"+k)
+	}
 	for _, k := range attrKeys {
 		h = append(h, "attr:"+k)
 	}
@@ -45,8 +57,9 @@ func ExportHeader(languages, attrKeys []string) []string {
 	for _, l := range languages {
 		h = append(h, "color_name:"+l)
 	}
-	h = append(h, "supplier_color", "size", "size_system", "image_files")
-	return h
+	h = append(h, "color_family", "supplier_color", "size", "size_length", "size_system")
+	h = append(h, MeasurementColumns...)
+	return append(h, "image_files")
 }
 
 // WriteExport writes products as a canonical CSV that can be imported again:
@@ -73,11 +86,12 @@ func WriteExport(w io.Writer, products []obx.ProductDetail, opts ExportOptions) 
 		attrKeys = append(attrKeys, k)
 	}
 	sort.Strings(attrKeys)
+	featKeys := featureKeysOf(products)
 	cw := csv.NewWriter(w)
 	if opts.Delimiter != 0 {
 		cw.Comma = opts.Delimiter
 	}
-	if err := cw.Write(ExportHeader(langs, attrKeys)); err != nil {
+	if err := cw.Write(ExportColumns(langs, featKeys, attrKeys)); err != nil {
 		return err
 	}
 	for _, p := range products {
@@ -88,8 +102,17 @@ func WriteExport(w io.Writer, products []obx.ProductDetail, opts ExportOptions) 
 		for _, l := range langs {
 			base = append(base, p.Description[l])
 		}
-		base = append(base, obx.Str(p.ItemType), obx.Str(p.TargetGroup), obx.Str(p.Season), obx.Str(p.Collection),
-			obx.Str(p.GPCBrick), FormatMaterials(p.Materials), FormatCare(p.Care), obx.Str(p.CountryOfOrigin), obx.Str(p.DPPURL))
+		animal := ""
+		if p.ContainsAnimalOrigin != nil {
+			animal = FormatFeature(*p.ContainsAnimalOrigin)
+		}
+		base = append(base, obx.Str(p.ItemType), obx.Str(p.ItemSubtype), obx.Str(p.TargetGroup), obx.Str(p.Season), obx.Str(p.Collection),
+			obx.Str(p.GPCBrick), FormatMaterials(p.Materials), animal, FormatFootwearMaterials(p.FootwearMaterials), FormatCare(p.Care),
+			obx.Str(p.CountryOfOrigin), FormatCertifications(p.Certifications), obx.Str(p.DPPURL))
+		for _, k := range featKeys {
+			v, _ := p.Features.Get(k)
+			base = append(base, FormatFeature(v))
+		}
 		for _, k := range attrKeys {
 			v := ""
 			if a, ok := p.Attributes[k]; ok && a != nil {
@@ -122,7 +145,11 @@ func WriteExport(w io.Writer, products []obx.ProductDetail, opts ExportOptions) 
 			for _, l := range langs {
 				r = append(r, v.Color.Name[l])
 			}
-			r = append(r, obx.Str(v.Color.SupplierColor), obx.Str(v.Size), obx.Str(v.SizeSystem), imagesFor(v.Color.Code))
+			r = append(r, obx.Str(v.Color.Family), obx.Str(v.Color.SupplierColor), obx.Str(v.Size), obx.Str(v.SizeLength), obx.Str(v.SizeSystem))
+			for _, c := range MeasurementColumns {
+				r = append(r, FormatMeasurement(v.Measurements, c))
+			}
+			r = append(r, imagesFor(v.Color.Code))
 			rows = append(rows, r)
 		}
 		if len(rows) == 0 {
@@ -131,7 +158,11 @@ func WriteExport(w io.Writer, products []obx.ProductDetail, opts ExportOptions) 
 			for range langs {
 				r = append(r, "")
 			}
-			r = append(r, "", "", "", imagesFor(""))
+			r = append(r, "", "", "", "", "")
+			for range MeasurementColumns {
+				r = append(r, "")
+			}
+			r = append(r, imagesFor(""))
 			rows = append(rows, r)
 		}
 		for _, r := range rows {

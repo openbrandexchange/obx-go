@@ -66,7 +66,7 @@ func TestKestrelFixture(t *testing.T) {
 	for _, p := range pf.Products {
 		variants += len(p.Variants)
 	}
-	if len(pf.Products) != 8 || variants != 40 || pf.Rows != 40 {
+	if len(pf.Products) != 11 || variants != 46 || pf.Rows != 46 {
 		t.Fatalf("got %d products, %d variants, %d rows", len(pf.Products), variants, pf.Rows)
 	}
 	ko1005 := pf.Products[4]
@@ -102,8 +102,8 @@ func TestKestrelFixture(t *testing.T) {
 			assets[a.ExternalID] = a
 		}
 	}
-	if len(assets) != 27 {
-		t.Fatalf("want 27 assets, got %d", len(assets))
+	if len(assets) != 35 {
+		t.Fatalf("want 35 assets, got %d", len(assets))
 	}
 	model := assets["KO-1003_RST_3"].Input
 	if model.Role != "model" || model.View != nil || model.Provenance == nil || !*model.Provenance.AIGenerated || obx.Str(model.Provenance.Generator) != "fictional-image-model 1.0" || model.AltText["nl"] == "" {
@@ -193,7 +193,6 @@ func TestProductRowProblems(t *testing.T) {
 		{2, "gtin", obx.ErrInvalidGTIN, obx.SeverityError},
 		{3, "gtin", obx.ErrGTINConflict, obx.SeverityError},
 		{4, "color_code", obx.ErrValidationFailed, obx.SeverityError},
-		{5, "materials", obx.ErrValidationFailed, obx.SeverityWarning},
 		{5, "care", obx.ErrValidationFailed, obx.SeverityWarning},
 		{6, "materials", obx.ErrValidationFailed, obx.SeverityError},
 	}
@@ -233,11 +232,14 @@ func TestExportRoundTrip(t *testing.T) {
 	var details []obx.ProductDetail
 	for _, p := range pf.Products {
 		d := obx.ProductDetail{Product: obx.Product{ExternalID: p.ExternalID, BrandID: "b1", StyleNumber: p.Input.StyleNumber, Name: p.Input.Name,
-			Description: p.Input.Description, ItemType: p.Input.ItemType, TargetGroup: p.Input.TargetGroup, Season: p.Input.Season,
-			Collection: p.Input.Collection, Materials: p.Input.Materials, Care: p.Input.Care, CountryOfOrigin: p.Input.CountryOfOrigin}}
+			Description: p.Input.Description, ItemType: p.Input.ItemType, ItemSubtype: p.Input.ItemSubtype, TargetGroup: p.Input.TargetGroup, Season: p.Input.Season,
+			Collection: p.Input.Collection, Materials: p.Input.Materials, ContainsAnimalOrigin: p.Input.ContainsAnimalOrigin,
+			FootwearMaterials: p.Input.FootwearMaterials, Care: p.Input.Care, CountryOfOrigin: p.Input.CountryOfOrigin,
+			Certifications: p.Input.Certifications, Features: p.Input.Features}}
 		for _, v := range p.Variants {
 			g14, _ := obx.ValidateGTIN(obx.Str(v.Input.GTIN))
-			d.Variants = append(d.Variants, obx.Variant{ExternalID: v.ExternalID, GTIN: &g14, GTINOriginal: v.Input.GTIN, SKU: v.Input.SKU, Color: v.Input.Color, Size: v.Input.Size, SizeSystem: v.Input.SizeSystem})
+			d.Variants = append(d.Variants, obx.Variant{ExternalID: v.ExternalID, GTIN: &g14, GTINOriginal: v.Input.GTIN, SKU: v.Input.SKU, Color: v.Input.Color,
+				Size: v.Input.Size, SizeLength: v.Input.SizeLength, SizeSystem: v.Input.SizeSystem, Measurements: v.Input.Measurements})
 		}
 		details = append(details, d)
 	}
@@ -256,7 +258,7 @@ func TestExportRoundTrip(t *testing.T) {
 	if len(again.Problems) != 0 {
 		t.Fatalf("re-import problems: %+v", again.Problems)
 	}
-	if len(again.Products) != 8 {
+	if len(again.Products) != 11 {
 		t.Fatalf("re-import got %d products", len(again.Products))
 	}
 	for i, p := range again.Products {
@@ -270,6 +272,14 @@ func TestExportRoundTrip(t *testing.T) {
 		}
 		if len(p.Variants) != len(pf.Products[i].Variants) {
 			t.Errorf("variants differ for %s", p.ExternalID)
+			continue
+		}
+		for j, v := range p.Variants {
+			a, _ := json.Marshal(v.Input)
+			b, _ := json.Marshal(pf.Products[i].Variants[j].Input)
+			if !bytes.Equal(a, b) {
+				t.Errorf("variant %s differs after round trip:\n%s\n%s", v.ExternalID, a, b)
+			}
 		}
 	}
 }
