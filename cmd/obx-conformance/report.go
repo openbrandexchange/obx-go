@@ -69,6 +69,9 @@ func (c *profileCount) text() string {
 
 func verdict(rep *conformance.Report) string {
 	names := append([]string(nil), rep.Profiles...)
+	if rep.ReadOnly && rep.SetupError == "" && rep.OK() {
+		return fmt.Sprintf("every online check passed (%d of %d checks ran). The other checks need writes or brand-side steps; run obx-conformance locally for the full result.", rep.Passed, len(rep.Results))
+	}
 	if rep.OK() && rep.Partial {
 		return "every selected check passed. Only some checks ran (--only), so this is not a conformance claim."
 	}

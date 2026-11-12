@@ -15,6 +15,7 @@ import (
 
 	"github.com/openbrandexchange/obx-go/client"
 	"github.com/openbrandexchange/obx-go/ingest"
+	"github.com/openbrandexchange/obx-go/internal/safedial"
 	"github.com/openbrandexchange/obx-go/nodeadmin"
 	"github.com/openbrandexchange/obx-go/obx"
 )
@@ -86,6 +87,8 @@ func (r *runner) bootstrap(ctx context.Context, want map[string]bool) error {
 	}
 	if d, err := r.newClient("", "").Discovery(ctx); err == nil {
 		r.discovery = d
+	} else if r.online() && errors.Is(err, safedial.ErrRefused) {
+		return fmt.Errorf("the portal address is not a public internet address: %w", err)
 	}
 	if r.admin != nil {
 		kestrel, err := r.admin.BrandID(ctx, "kestrel")
@@ -168,6 +171,15 @@ func (r *runner) bootstrap(ctx context.Context, want map[string]bool) error {
 			r.info = info
 		}
 	}
+	if r.online() {
+		if r.full != nil {
+			if _, err := r.full.Token(ctx); err != nil {
+				return fmt.Errorf("the API key does not work (token request): %w", err)
+			}
+			return r.ensureFixtures(ctx)
+		}
+		return nil
+	}
 	if want[ProfileProtocol] && r.full == nil {
 		return errors.New("the protocol profile needs an API key (--client-id/--client-secret) or admin credentials")
 	}
@@ -233,6 +245,11 @@ func (r *runner) ensureFixtures(ctx context.Context) error {
 			present = true
 		}
 	}
+	if !present && r.online() {
+		r.note("the API key does not see the Kestrel test data; checks that need it are skipped")
+		return nil
+	}
+	r.fixturesPresent = present
 	if !present {
 		if r.ing == nil {
 			return errors.New("the node has no fixture data: load fixtures/kestrel with the node's own import, or give an upload key (--token) so the suite imports it")
@@ -246,6 +263,7 @@ func (r *runner) ensureFixtures(ctx context.Context) error {
 			return fmt.Errorf("import fixtures/kestrel: job %s, problems: %s", job.Status, short(probs))
 		}
 		r.note("imported fixtures/kestrel (%d created)", job.ImportRun.Counts.Created)
+		r.fixturesPresent = true
 	}
 	if r.full != nil {
 		return r.loadIDs(ctx)

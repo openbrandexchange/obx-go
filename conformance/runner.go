@@ -72,6 +72,10 @@ type Config struct {
 	// requests, changing a product) on nodes without the Node Admin API or
 	// the Ingest API. See Operator.
 	Operator Operator
+	// Online makes the run a read-only online check (see Online): only the
+	// protocol profile, no writes, no operator, a capped request budget and
+	// a transport that refuses private addresses.
+	Online *Online
 }
 
 // Status of a test.
@@ -90,6 +94,9 @@ type Result struct {
 	Status   string   `json:"status"`
 	Messages []string `json:"messages,omitempty"`
 	Millis   int64    `json:"duration_ms"`
+	// Online is "partial" when a read-only run checked only part of the
+	// test (the messages say which part was not checked).
+	Online string `json:"online,omitempty"`
 }
 
 // Report is the outcome of a run.
@@ -111,6 +118,11 @@ type Report struct {
 	// SetupError is set when the suite could not prepare the run (no
 	// connection, wrong credentials); every test then fails or is skipped.
 	SetupError string `json:"setup_error,omitempty"`
+	// ReadOnly is set for an online check (Config.Online); Requests and
+	// Bytes are what it sent and received.
+	ReadOnly bool  `json:"read_only,omitempty"`
+	Requests int   `json:"requests,omitempty"`
+	Bytes    int64 `json:"bytes,omitempty"`
 }
 
 // OK reports whether every required test passed.
@@ -207,6 +219,8 @@ type runner struct {
 	replayRan          bool
 	portalClient       *nodeadmin.Client
 	portalRetailerRec  *nodeadmin.Retailer
+	fixturesPresent    bool
+	budget             *budget
 
 	mu         sync.Mutex
 	violations []string
@@ -286,7 +300,15 @@ func Run(ctx context.Context, profiles []string, cfg Config) (*Report, error) {
 			return nil, fmt.Errorf("conformance: unknown profile %q (use protocol, ingest, portal, security or all)", p)
 		}
 	}
-	r := &runner{cfg: cfg, fixtures: cfg.Fixtures, report: &Report{BaseURL: base, SpecCommit: specdata.SpecCommit(), StartedAt: time.Now().UTC(), Partial: len(cfg.Only) > 0}}
+	if cfg.Online != nil {
+		if len(want) != 1 || !want[ProfileProtocol] {
+			return nil, errors.New("conformance: the online check runs the protocol profile only")
+		}
+		if cfg.AdminEmail != "" || cfg.SetupCode != "" || cfg.IngestToken != "" || cfg.Operator != nil || cfg.RateLimitTest {
+			return nil, errors.New("conformance: the online check is read-only: no admin login, setup code, upload key, operator or rate-limit test")
+		}
+	}
+	r := &runner{cfg: cfg, fixtures: cfg.Fixtures, report: &Report{BaseURL: base, SpecCommit: specdata.SpecCommit(), StartedAt: time.Now().UTC(), Partial: len(cfg.Only) > 0 || cfg.Online != nil, ReadOnly: cfg.Online != nil}}
 	if r.fixtures == nil {
 		r.fixtures = specdata.Fixtures()
 	}
@@ -305,7 +327,19 @@ func Run(ctx context.Context, profiles []string, cfg Config) (*Report, error) {
 			timeout = cfg.HTTPClient.Timeout
 		}
 	}
-	r.hc = &http.Client{Transport: recorder{next: inner, r: r}, Timeout: timeout}
+	var checkRedirect func(*http.Request, []*http.Request) error
+	if cfg.Online != nil {
+		if cfg.HTTPClient == nil || cfg.HTTPClient.Transport == nil {
+			inner = onlineTransport(*cfg.Online)
+		}
+		r.budget = newBudget(inner, *cfg.Online)
+		inner = r.budget
+		checkRedirect = onlineRedirects(r.budget.o, r.budget.o.MaxRedirects)
+		if cfg.HTTPClient == nil || cfg.HTTPClient.Timeout == 0 {
+			timeout = 20 * time.Second
+		}
+	}
+	r.hc = &http.Client{Transport: recorder{next: inner, r: r}, Timeout: timeout, CheckRedirect: checkRedirect}
 	r.raw = &httpx.Doer{HTTP: r.hc, MaxRetries: -1}
 	start := time.Now()
 	setupErr := r.bootstrap(ctx, want)
@@ -326,8 +360,30 @@ func Run(ctx context.Context, profiles []string, cfg Config) (*Report, error) {
 			r.report.Results = append(r.report.Results, res)
 			continue
 		}
+		if r.online() {
+			if why := r.onlineGate(tc.id); why != "" {
+				res.Status, res.Messages = StatusSkip, []string{why}
+				r.report.Results = append(r.report.Results, res)
+				continue
+			}
+			if r.budget.exhausted() {
+				res.Status, res.Messages = StatusSkip, []string{"not checked online: the request budget of the online check was used up"}
+				r.report.Results = append(r.report.Results, res)
+				continue
+			}
+		}
 		r.runTest(ctx, tc, &res)
+		if r.online() && r.budget.exhausted() && res.Status == StatusFail {
+			res.Status = StatusSkip
+			res.Messages = append(res.Messages, "not checked online: the request budget of the online check was used up during this test")
+		}
 		r.report.Results = append(r.report.Results, res)
+	}
+	if r.budget != nil {
+		r.report.Requests, r.report.Bytes = r.budget.usage()
+	}
+	if r.online() {
+		r.redact()
 	}
 	for _, res := range r.report.Results {
 		switch res.Status {
@@ -370,6 +426,9 @@ func (r *runner) runTest(ctx context.Context, tc testCase, res *Result) {
 				case skipTest:
 					res.Status = StatusSkip
 					res.Messages = append(res.Messages, x.msg)
+				case stopOnline:
+					res.Online = "partial"
+					res.Messages = append(res.Messages, "not checked online: "+x.msg)
 				default:
 					t.failed = true
 					res.Messages = append(res.Messages, fmt.Sprintf("panic: %v", v))

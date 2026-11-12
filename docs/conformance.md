@@ -89,6 +89,21 @@ Brand Exchange") and where to read about the paid listing as official partner:
 report for machines, and `obx-conformance report report.json` shows a saved JSON report again. A run
 with `--only` is marked partial and never says CONFORMANT.
 
+## The online check (prototype)
+
+`obx-conformance check --url https://portal.example [--client id:secret] [--json]` is the read-only
+check that a public checker (openbrandexchange.com) can run against a portal on the internet. It runs
+only the protocol tests, and only the parts that do not write or need a brand-side step; it never
+creates API keys, access requests, exports, webhooks or usage events. Every connection is checked
+against loopback, private, link-local (cloud metadata), CGNAT and multicast addresses, only https is
+used, redirects are limited to 3 and a run is capped at 800 requests and 64 MiB. Secrets can be
+given as `OBX_CHECK_CLIENT=id:secret` instead of a flag, and are redacted from the report together
+with any token. A read-only report is always partial: it is never a conformance claim.
+
+`obx-conformance list` shows per test what the online check needs: `anonymous`, `api_key` (one API
+key; fixture parts are skipped on other data) or `fixtures` (an API key of a test account with the
+Kestrel test data); `-` means not checked online.
+
 ## In CI
 
 In this repository's own CI the mock portal is checked through the conformance action. A portal

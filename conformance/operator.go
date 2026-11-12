@@ -201,6 +201,9 @@ func (t *T) newThrowawayKey(name string, brands []string) *apiKey {
 }
 
 func (t *T) needOperator(what string) {
+	if t.r.online() {
+		t.onlineStop("%s needs a brand-side step", what)
+	}
 	if !t.r.canOperate() {
 		t.Skip("%s needs admin credentials (--admin-user/--admin-password or --setup-code) or an operator (--operator-hook, --operator-prompt)", what)
 	}
