@@ -68,6 +68,10 @@ type Config struct {
 	RateLimitTest bool
 	// Log receives progress lines (optional).
 	Log io.Writer
+	// Operator does the brand-side steps (API keys, grants, approving access
+	// requests, changing a product) on nodes without the Node Admin API or
+	// the Ingest API. See Operator.
+	Operator Operator
 }
 
 // Status of a test.

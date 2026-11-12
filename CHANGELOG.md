@@ -12,6 +12,11 @@ First release, for Open Brand Exchange specification 0.1.0.
 
 ### Added
 
+- **Conformance for nodes without the Ingest or Node Admin API.** The OBX
+  standard is the read side; how a node gets its data is its own business. A
+  node loads `fixtures/kestrel` with its own import, and an operator does the
+  few brand-side steps the protocol tests need: `--operator-hook <program>`,
+  `--operator-prompt`, or `conformance.Config.Operator` in Go tests.
 - **`obx` command** for brands: `login` (paste an access key, or sign in and
   let obx create one), `push` (products.csv, assets.csv and images, from a
   folder, separate files or one zip), `watch` (publish whatever lands in a

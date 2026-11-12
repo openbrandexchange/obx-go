@@ -268,24 +268,28 @@ func testAuthErrors(t *T) {
 	res, err = t.r.do(t.ctx, http.MethodGet, base+"/changes", nil, bearerHeader("obxat_not-a-real-token"))
 	t.Check(err, "GET /changes")
 	t.expectStatus(res, http.StatusUnauthorized, obx.ErrInvalidToken, "unknown token")
-	t.needAdmin("revocation")
-	c := t.r.throwawayClient("OBX conformance: revocation", nil)
+	t.needOperator("revocation")
+	c := t.newThrowawayKey("OBX conformance: revocation", nil)
 	tok, err := c.Token(t.ctx)
 	t.Check(err, "token of a new API key")
 	if res := t.get(c, "/grant"); res.status != http.StatusOK {
 		t.Fatalf("GET /grant with a new API key: %d", res.status)
 	}
-	clients, err := t.r.adminClients(t.ctx)
-	t.Check(err, "list API keys")
-	var revoked bool
-	for _, cl := range clients {
-		if cl.ClientID == c.id {
-			t.Check(t.r.admin.RevokeAPIClient(t.ctx, cl.ID), "revoke API key")
-			revoked = true
+	if t.r.admin != nil {
+		clients, err := t.r.adminClients(t.ctx)
+		t.Check(err, "list API keys")
+		var revoked bool
+		for _, cl := range clients {
+			if cl.ClientID == c.id {
+				t.Check(t.r.admin.RevokeAPIClient(t.ctx, cl.ID), "revoke API key")
+				revoked = true
+			}
 		}
-	}
-	if !revoked {
-		t.Fatalf("the new API key is not in the admin list")
+		if !revoked {
+			t.Fatalf("the new API key is not in the admin list")
+		}
+	} else {
+		t.opStep(Action{Name: ActRevokeAPIKey, Params: map[string]string{"client_id": c.id}, Hint: "Revoke the API key with this client id."})
 	}
 	res, err = t.r.do(t.ctx, http.MethodGet, base+"/grant", nil, bearerHeader(tok))
 	t.Check(err, "GET /grant")
@@ -361,8 +365,9 @@ func testAccessRequest(t *T) {
 		t.Skip("capability access_requests not offered")
 	}
 	anon := t.r.newClient("", "")
+	retailerName := "Conformance Boutique " + randomSuffix()
 	ar, err := anon.RequestAccess(t.ctx, obx.AccessRequestInput{
-		Retailer: obx.AccessRequestRetailer{Name: "Conformance Boutique " + randomSuffix(), Country: obx.Ptr("NL")},
+		Retailer: obx.AccessRequestRetailer{Name: retailerName, Country: obx.Ptr("NL")},
 		Contact:  obx.AccessRequestContact{Name: "Robin Example", Email: "robin+" + randomSuffix() + "@boutique.example", Language: obx.Ptr("nl")},
 		Access:   []string{"api"}, RequestedBrandIDs: []string{}})
 	t.Check(err, "POST /access-requests")
@@ -377,9 +382,14 @@ func testAccessRequest(t *T) {
 	if _, err := anon.PollAccessRequest(t.ctx, ar.ID, "obxr_wrong"); err == nil {
 		t.Errorf("polling with a wrong request token succeeded")
 	}
-	t.needAdmin("approving the request")
-	_, err = t.r.admin.Approve(t.ctx, ar.ID, nodeadmin.ApproveInput{CreateAPIClient: obx.Ptr(true)})
-	t.Check(err, "approve")
+	t.needOperator("approving the request")
+	if t.r.admin != nil {
+		_, err = t.r.admin.Approve(t.ctx, ar.ID, nodeadmin.ApproveInput{CreateAPIClient: obx.Ptr(true)})
+		t.Check(err, "approve")
+	} else {
+		t.opStep(Action{Name: ActApproveAccessRequest, Params: map[string]string{"request_id": ar.ID, "retailer_name": retailerName},
+			Hint: "Approve the access request from this retailer, with API access (an API key)."})
+	}
 	st, err = anon.PollAccessRequest(t.ctx, ar.ID, ar.RequestToken)
 	t.Check(err, "poll after approval")
 	if st.Status != "approved" || st.Credentials == nil || st.Credentials.ClientSecret == nil || *st.Credentials.ClientSecret == "" {
@@ -553,15 +563,20 @@ func testRestricted(t *T) {
 			return nil
 		}), "manifest")
 	}
-	if t.r.ing == nil {
-		t.Notef("live entries not checked (no upload key)")
+	if t.r.ing == nil && t.r.cfg.Operator == nil {
+		t.Notef("live entries not checked (no upload key or operator)")
 		return
 	}
 	cur2 := f.cursor
 	cur1 := t.liveCursor(t.r.full)
-	_, err = t.r.ing.Patch(t.ctx, obx.KindProduct, "KT-2001", map[string]any{"season": "SS27"}, nil)
-	t.Check(err, "change KT-2001")
-	defer t.r.ing.Patch(t.ctx, obx.KindProduct, "KT-2001", map[string]any{"season": "SS26"}, nil)
+	if t.r.ing != nil {
+		_, err = t.r.ing.Patch(t.ctx, obx.KindProduct, "KT-2001", map[string]any{"season": "SS27"}, nil)
+		t.Check(err, "change KT-2001")
+		defer t.r.ing.Patch(t.ctx, obx.KindProduct, "KT-2001", map[string]any{"season": "SS26"}, nil)
+	} else {
+		t.opStep(productAction(ActUpdateProduct, "KT-2001", "Change the season of this product.", "field", "season", "value", "SS27"))
+		defer t.r.operate(t.ctx, productAction(ActUpdateProduct, "KT-2001", "Change the season of this product back.", "field", "season", "value", "SS26"))
+	}
 	live1, _ := t.newEntries(t.r.full, cur1)
 	live2, _ := t.newEntries(t.r.second, cur2)
 	if len(live1) == 0 {
@@ -575,12 +590,17 @@ func testRestricted(t *T) {
 }
 
 func testGrantResync(t *T) {
-	t.needAdmin("changing a grant")
-	c := t.r.throwawayClient("OBX conformance: grant change", nil)
+	t.needOperator("changing a grant")
+	c := t.newThrowawayKey("OBX conformance: grant change", nil)
 	cursor := t.liveCursor(c)
 	kestrel := t.r.brandIDs["kestrel"]
-	_, err := t.r.admin.PatchRetailer(t.ctx, c.retailerID, map[string]any{"brand_ids": []string{kestrel}})
-	t.Check(err, "change the grant")
+	if t.r.admin != nil {
+		_, err := t.r.admin.PatchRetailer(t.ctx, c.retailerID, map[string]any{"brand_ids": []string{kestrel}})
+		t.Check(err, "change the grant")
+	} else {
+		t.opStep(Action{Name: ActSetGrant, Params: map[string]string{"client_id": c.id, "brands": "kestrel"},
+			Hint: "Let the retailer of this API key see only brand kestrel."})
+	}
 	live, _ := t.newEntries(c, cursor)
 	found := false
 	for _, ch := range live {
@@ -715,12 +735,18 @@ func testInvisible404(t *T) {
 		t.expectStatus(t.get(t.r.second, "/assets/"+t.assetID("KT-2001_BLK_1")), http.StatusNotFound, obx.ErrNotFound, "image outside the grant")
 		t.expectStatus(t.get(t.r.second, "/brands/"+t.r.brandIDs["kestrel-trail"]), http.StatusNotFound, obx.ErrNotFound, "brand outside the grant")
 	}
-	if t.r.ing == nil {
+	switch {
+	case t.r.ing != nil:
+		_, err := t.r.ing.Unpublish(t.ctx, obx.KindProduct, "KO-1006")
+		t.Check(err, "unpublish KO-1006")
+		defer t.r.ing.Publish(t.ctx, obx.KindProduct, "KO-1006")
+	case t.r.cfg.Operator != nil:
+		t.opStep(productAction(ActUnpublishProduct, "KO-1006", "Unpublish this product (retailers must no longer see it)."))
+		defer t.r.operate(t.ctx, productAction(ActPublishProduct, "KO-1006", "Publish this product again."))
+	default:
+		t.Notef("unpublishing not checked (no upload key or operator)")
 		return
 	}
-	_, err := t.r.ing.Unpublish(t.ctx, obx.KindProduct, "KO-1006")
-	t.Check(err, "unpublish KO-1006")
-	defer t.r.ing.Publish(t.ctx, obx.KindProduct, "KO-1006")
 	t.expectStatus(t.get(t.r.full, "/products/"+t.productID("KO-1006")), http.StatusNotFound, obx.ErrNotFound, "unpublished product")
 	t.expectStatus(t.get(t.r.full, "/assets/"+t.assetID("KO-1006_NVY_1")), http.StatusNotFound, obx.ErrNotFound, "image of an unpublished product")
 }

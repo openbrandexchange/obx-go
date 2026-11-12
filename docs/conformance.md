@@ -16,6 +16,41 @@ fixtures and runs every profile. Against a portal that is already set up, pass `
 `--no-original-client id:secret`) and an access key (`--token obxi_…`) for the protocol and ingest
 profiles; tests that need what you did not give are skipped, not failed.
 
+## Portals without the Ingest or Node Admin API
+
+The standard is what retailers' software reads: the **protocol** profile. How a portal gets its data
+and how a brand manages its retailers is up to the portal, so it needs neither the Ingest API nor the
+Node Admin API to be conformant. Such a portal:
+
+1. loads `fixtures/kestrel` from the spec (company "Kestrel Outfitters", brands `kestrel` and
+   `kestrel-trail`) with its own import, into a test account;
+2. runs the protocol profile with an **operator** that does the brand-side steps the tests need
+   while they run.
+
+```sh
+obx-conformance protocol --url https://portal.example --operator-hook ./obx-operator.sh
+obx-conformance protocol --url https://portal.example --operator-prompt     # do each step by hand
+```
+
+The hook is run once per step with the action name as its argument and the step as JSON on stdin
+(`{"action": …, "params": {…}, "result": […], "hint": "…"}`). It prints a JSON object with the
+`result` keys on stdout, or nothing, and exits 0; any other exit code fails the test. Brands are
+external ids (`kestrel`, `kestrel-trail`) or `all`; products are fixture external ids.
+
+| Action | Params | Result |
+|---|---|---|
+| `create_api_key` | `name`, `brands`, `originals` (`true`/`false`) | `client_id`, `client_secret` |
+| `revoke_api_key` | `client_id` | |
+| `approve_access_request` | `request_id`, `retailer_name` | |
+| `set_grant` | `client_id`, `brands` | |
+| `update_product` | `external_id`, `field` (`season`), `value` | |
+| `unpublish_product`, `publish_product` | `external_id` | |
+
+In Go tests, set `conformance.Config.Operator` to a `conformance.OperatorFunc` that calls the
+portal's own code; see `conformance/operator_test.go`. API keys you pass with `--client`,
+`--second-client` and `--no-original-client` are used instead of asking the operator for them.
+P-FEED-5 (the ingest replay) is skipped on such portals.
+
 ## Reading the report
 
 The text report is written for someone who does not read API specs:

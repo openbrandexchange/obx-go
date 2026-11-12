@@ -54,6 +54,14 @@ suite creates retailers, API keys and upload keys itself):
   (each pair also as one flag: --client id:secret, --second-client …, --no-original-client …)
   --token             upload key with ingest:read, ingest:write and ingest:delete
 
+Nodes without the admin or ingest API (only the protocol is the standard):
+load fixtures/kestrel with the node's own import, then let an operator do the
+brand-side steps (create, restrict and revoke API keys, approve an access
+request, change and unpublish a product):
+  --operator-hook     program run for every step: action as argument, JSON on
+                      stdin, JSON result on stdout (see docs/conformance.md)
+  --operator-prompt   ask on the terminal to do each step by hand
+
 "all" on a fresh node is the reference run: it completes setup (Kestrel
 Outfitters, brand "kestrel", languages nl,en), imports fixtures/kestrel and
 runs every profile.
@@ -140,6 +148,8 @@ func runSuite(ctx context.Context, profile string, args []string, stdout, stderr
 	verbose := fs.Bool("verbose", false, "print progress")
 	fs.BoolVar(&cfg.RateLimitTest, "rate-limit-test", false, "hammer an endpoint until it answers 429 (node must run with a low limit)")
 	timeout := fs.Duration("timeout", 2*time.Minute, "timeout per HTTP request")
+	opHook := fs.String("operator-hook", "", "program that does the brand-side steps on a node without the admin or ingest API (action as argument, JSON on stdin)")
+	opPrompt := fs.Bool("operator-prompt", false, "ask on the terminal to do the brand-side steps by hand (nodes without the admin or ingest API)")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -168,6 +178,15 @@ func runSuite(ctx context.Context, profile string, args []string, stdout, stderr
 	}
 	if *verbose {
 		cfg.Log = stderr
+	}
+	switch {
+	case *opHook != "" && *opPrompt:
+		fmt.Fprintln(stderr, "obx-conformance: use --operator-hook or --operator-prompt, not both")
+		return 2
+	case *opHook != "":
+		cfg.Operator = conformance.HookOperator{Path: *opHook, Stderr: stderr}
+	case *opPrompt:
+		cfg.Operator = &conformance.PromptOperator{In: os.Stdin, Out: stderr}
 	}
 	cfg.HTTPClient = &http.Client{Timeout: *timeout}
 	rep, err := conformance.Run(ctx, []string{profile}, cfg)

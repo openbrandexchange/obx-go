@@ -167,6 +167,7 @@ Or run it: `obx-conformance mock` (prints test credentials), `obx-conformance mo
 obx-conformance all --url http://localhost:8080 --setup-code <code>        # fresh node: setup, fixtures, every profile
 obx-conformance protocol --url https://node.example --admin-user admin@brand.example --admin-password …
 obx-conformance protocol --url https://node.example --client obxc_…:obxs_…
+obx-conformance protocol --url https://node.example --operator-hook ./obx-operator.sh   # node without admin or ingest API
 obx-conformance all --url … --setup-code … --format markdown > report.md    # for an issue or pull request
 obx-conformance all --url … --setup-code … --json > report.json             # for machines
 obx-conformance report report.json                                          # show a saved report again

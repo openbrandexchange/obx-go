@@ -129,6 +129,29 @@ func (r *runner) bootstrap(ctx context.Context, want map[string]bool) error {
 			}
 		}
 	}
+	if r.admin == nil && cfg.Operator != nil && want[ProfileProtocol] {
+		type need struct {
+			id, secret *string
+			name       string
+			brands     []string
+			originals  bool
+		}
+		for _, n := range []need{
+			{&cfg.ClientID, &cfg.ClientSecret, "OBX conformance: all brands", nil, true},
+			{&cfg.SecondClientID, &cfg.SecondClientSecret, "OBX conformance: Kestrel only", []string{"kestrel"}, true},
+			{&cfg.NoOriginalClientID, &cfg.NoOriginalClientSecret, "OBX conformance: no originals", nil, false},
+		} {
+			if *n.id != "" {
+				continue
+			}
+			k, err := r.operatorKey(ctx, n.name, n.brands, n.originals)
+			if err != nil {
+				return fmt.Errorf("operator: %w", err)
+			}
+			*n.id, *n.secret = k.id, k.secret
+			r.note("the operator created API key %q", n.name)
+		}
+	}
 	if cfg.ClientID != "" {
 		r.full = r.newClient(cfg.ClientID, cfg.ClientSecret)
 		r.fullCreds = [2]string{cfg.ClientID, cfg.ClientSecret}
@@ -212,7 +235,7 @@ func (r *runner) ensureFixtures(ctx context.Context) error {
 	}
 	if !present {
 		if r.ing == nil {
-			return errors.New("the node has no fixture data and no upload key was given to import fixtures/kestrel")
+			return errors.New("the node has no fixture data: load fixtures/kestrel with the node's own import, or give an upload key (--token) so the suite imports it")
 		}
 		job, err := r.importFixtures(ctx, "package")
 		if err != nil {
