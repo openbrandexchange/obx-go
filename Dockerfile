@@ -11,7 +11,7 @@ ARG VERSION=dev
 RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.Version=${VERSION}" -o /out/obx ./cmd/obx \
  && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.Version=${VERSION}" -o /out/obx-conformance ./cmd/obx-conformance
 
-FROM alpine:3.22
+FROM alpine:3.24
 RUN apk add --no-cache ca-certificates tzdata && adduser -D -u 10001 obx
 COPY --from=build /out/obx /out/obx-conformance /usr/local/bin/
 USER obx
