@@ -1,0 +1,42 @@
+// obx-checker: the online compatibility check of openbrandexchange.com.
+// Deploy from this folder:
+//   CLOUDFLARE_ACCOUNT_ID=34a316f1061b80c0053fffe17c0413c6 npx wrangler deploy
+// Secrets (wrangler secret put): TURNSTILE_SECRET, IP_SALT, OPERATOR_TOKEN (optional:
+// skips Turnstile, not the limits, for the owner's own tests; delete it when not needed).
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "obx-checker",
+	"main": "src/index.js",
+	"compatibility_date": "2026-11-01",
+	// Only reachable through the website's service binding.
+	"workers_dev": false,
+	"preview_urls": false,
+	"observability": { "enabled": true },
+	"containers": [
+		{
+			"class_name": "CheckerContainer",
+			"image": "./Dockerfile",
+			"image_build_context": "../..",
+			"instance_type": "lite",
+			"max_instances": 2,
+			"constraints": { "jurisdiction": "eu" }
+		}
+	],
+	"durable_objects": {
+		"bindings": [
+			{ "name": "CHECKER", "class_name": "CheckerContainer" },
+			{ "name": "LIMITER", "class_name": "Limiter" }
+		]
+	},
+	"migrations": [{ "tag": "v1", "new_sqlite_classes": ["CheckerContainer", "Limiter"] }],
+	"r2_buckets": [{ "binding": "REPORTS", "bucket_name": "obx-check-reports", "jurisdiction": "eu" }],
+	"vars": {
+		"PER_IP_PER_HOUR": "5",
+		"COOLDOWN_SECONDS": "600",
+		"PER_HOST_PER_DAY": "10",
+		"DAILY_CAP": "200",
+		"MAX_RUNNING": "2",
+		"DEMO_HOST": "obx-demo.richardlindhout96.workers.dev",
+		"TURNSTILE_HOSTNAMES": "openbrandexchange.com,openbrandexchange.pages.dev"
+	}
+}

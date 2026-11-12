@@ -237,7 +237,7 @@ func runMock(ctx context.Context, args []string, stdout, stderr io.Writer, geten
 	clientRenditions := fs.Bool("client-renditions", false, "behave like a node without an image library")
 	allowPrivate := fs.Bool("allow-private-urls", true, "allow webhook/import targets on private addresses (development)")
 	setupCode := fs.String("setup-code", "", "setup code for --fresh (default OBX_SETUP_CODE or obx-setup-code)")
-	publicURL := fs.String("public-url", "", "public base URL (default: derived from each request)")
+	publicURL := fs.String("public-url", "", "public base URL (default OBX_PUBLIC_URL, else derived from each request)")
 	verbose := fs.Bool("verbose", false, "log every request")
 	readOnly := fs.Bool("read-only", false, "public demo: serve only the protocol's reads; writes, ingest, admin and portal are refused")
 	rateLimit := fs.Int("rate-limit", 0, "protocol requests per client per minute (default 600)")
@@ -260,6 +260,9 @@ func runMock(ctx context.Context, args []string, stdout, stderr io.Writer, geten
 	if *readOnly && *fresh {
 		fmt.Fprintln(stderr, "obx-conformance mock: --read-only needs the fixtures (not --fresh)")
 		return 2
+	}
+	if *publicURL == "" {
+		*publicURL = getenv("OBX_PUBLIC_URL")
 	}
 	if *setupCode == "" {
 		*setupCode = getenv("OBX_SETUP_CODE")

@@ -1,0 +1,30 @@
+// obx-demo: the public read-only OBX demo portal (Kestrel test data).
+// Deploy from deploy/checker:
+//   CLOUDFLARE_ACCOUNT_ID=34a316f1061b80c0053fffe17c0413c6 npx wrangler deploy -c demo/wrangler.jsonc
+{
+	"$schema": "../node_modules/wrangler/config-schema.json",
+	"name": "obx-demo",
+	"main": "src/index.js",
+	"compatibility_date": "2026-11-01",
+	"workers_dev": true,
+	"preview_urls": false,
+	"observability": { "enabled": true },
+	"containers": [
+		{
+			"class_name": "DemoContainer",
+			"image": "./Dockerfile",
+			"image_build_context": "../../..",
+			"instance_type": "lite",
+			"max_instances": 1,
+			"constraints": { "jurisdiction": "eu" }
+		}
+	],
+	"durable_objects": { "bindings": [{ "name": "DEMO", "class_name": "DemoContainer" }] },
+	"migrations": [{ "tag": "v1", "new_sqlite_classes": ["DemoContainer"] }],
+	"ratelimits": [{ "name": "PER_IP", "namespace_id": "1001", "simple": { "limit": 1200, "period": 60 } }],
+	"vars": {
+		// Public on purpose: the demo is read-only (see docs/conformance.md).
+		"DEMO_CLIENT": "obxc_demo-kestrel:obxs_demo-read-only-public",
+		"PUBLIC_URL": "https://obx-demo.richardlindhout96.workers.dev"
+	}
+}

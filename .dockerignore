@@ -1,3 +1,6 @@
 .git
 dist
 *.test
+node_modules
+**/node_modules
+**/.wrangler
