@@ -14,6 +14,8 @@ import (
 	"sync"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
 
 	"github.com/openbrandexchange/obx-go/obx"
 	"github.com/openbrandexchange/obx-go/renditions"
@@ -84,6 +86,14 @@ func validateInput(kind string, raw json.RawMessage) (json.RawMessage, []string,
 			delete(doc, k)
 		}
 	}
+	// ingest.md 3.4: an empty measurements or features object is stored as
+	// null (the schemas ask for at least one member).
+	switch kind {
+	case obx.KindProduct:
+		emptyToNull(doc, "features")
+	case obx.KindVariant:
+		emptyToNull(doc, "measurements")
+	}
 	clean, _ := json.Marshal(doc)
 	v, err := specdata.DefaultValidator()
 	if err != nil {
@@ -95,13 +105,55 @@ func validateInput(kind string, raw json.RawMessage) (json.RawMessage, []string,
 		if errors.As(err, &ve) {
 			for _, leaf := range leaves(ve) {
 				ptr := "/" + strings.Join(leaf.InstanceLocation, "/")
-				_ = p.WithField(ptr, obx.ErrValidationFailed, leaf.ErrorKind.LocalizedString(nil))
+				_ = p.WithField(ptr, obx.ErrValidationFailed, leaf.ErrorKind.LocalizedString(englishPrinter))
 			}
 		}
 		return nil, warnings, p
 	}
 	return clean, warnings, nil
 }
+
+// emptyToNull replaces an empty object member with null.
+func emptyToNull(doc map[string]any, key string) {
+	if m, ok := doc[key].(map[string]any); ok && len(m) == 0 {
+		doc[key] = nil
+	}
+}
+
+// normalizeProduct applies the 0.2 write rules (ingest.md 3.4) to a valid
+// product input: 0.1 fibre keys become the fibre with its flag, and empty
+// features or certifications are stored as null.
+func normalizeProduct(in *obx.ProductInput) {
+	in.Materials = in.Materials.Normalized()
+	if in.Features.IsEmpty() {
+		in.Features = nil
+	}
+	if len(in.Certifications) == 0 {
+		in.Certifications = nil
+	}
+}
+
+// normalizeVariant stores an empty measurements object as null.
+func normalizeVariant(in *obx.VariantInput) {
+	if in.Measurements.IsEmpty() {
+		in.Measurements = nil
+	}
+}
+
+// labelWarnings are the label completeness warnings of a product write
+// (ingest.md 3.4, import-format.md rule 10) as warning texts and details.
+func labelWarnings(in *obx.ProductInput) ([]string, []obx.WarningDetail) {
+	var texts []string
+	var details []obx.WarningDetail
+	for _, w := range in.LabelWarnings() {
+		texts = append(texts, w.Code+": "+w.Detail)
+		details = append(details, w.WarningDetail())
+	}
+	return texts, details
+}
+
+// englishPrinter renders schema errors (LocalizedString panics on a nil printer).
+var englishPrinter = message.NewPrinter(language.English)
 
 func leaves(ve *jsonschema.ValidationError) []*jsonschema.ValidationError {
 	if len(ve.Causes) == 0 {
@@ -176,6 +228,7 @@ func (s *state) put(w writer, kind, ext string, data json.RawMessage, ifMatch, o
 		nr = &cp
 	}
 	var statusIn *string
+	var details []obx.WarningDetail
 	switch kind {
 	case obx.KindBrand:
 		var in obx.BrandInput
@@ -188,6 +241,11 @@ func (s *state) put(w writer, kind, ext string, data json.RawMessage, ifMatch, o
 	case obx.KindProduct:
 		var in obx.ProductInput
 		json.Unmarshal(clean, &in)
+		normalizeProduct(&in)
+		if p := in.Features.Validate(); len(p) > 0 {
+			// The schema already checks the registry; this catches what it cannot.
+			return writeResult{}, problem(obx.ErrValidationFailed, "features: "+strings.Join(p, "; ")).WithField("/features", obx.ErrValidationFailed, p[0])
+		}
 		if in.BrandExternalID == nil {
 			if len(s.brands) != 1 {
 				return writeResult{}, problem(obx.ErrValidationFailed, "brand_external_id is required when the node has more than one brand").WithField("/brand_external_id", obx.ErrValidationFailed, "required")
@@ -205,9 +263,12 @@ func (s *state) put(w writer, kind, ext string, data json.RawMessage, ifMatch, o
 		}
 		statusIn, in.Status = in.Status, nil
 		nr.product, nr.parentExt = &in, b.extID
+		texts, d := labelWarnings(&in)
+		warnings, details = append(warnings, texts...), d
 	case obx.KindVariant:
 		var in obx.VariantInput
 		json.Unmarshal(clean, &in)
+		normalizeVariant(&in)
 		prod := s.products[in.ProductExternalID]
 		if prod == nil {
 			return writeResult{}, problemf(obx.ErrUnknownParent, "product %s does not exist", in.ProductExternalID)
@@ -274,7 +335,7 @@ func (s *state) put(w writer, kind, ext string, data json.RawMessage, ifMatch, o
 	nr.status = status
 	nr.input = s.storedInput(nr)
 	if existing != nil && (bytes.Equal(existing.input, nr.input) || s.sameData(existing, nr)) && existing.status == nr.status {
-		return s.result(existing, op, obx.ResultUnchanged, warnings), nil
+		return s.result(existing, op, obx.ResultUnchanged, warnings, details), nil
 	}
 	if kind == obx.KindAsset {
 		if p := s.applyAssetFiles(nr, existing); p != nil {
@@ -290,7 +351,7 @@ func (s *state) put(w writer, kind, ext string, data json.RawMessage, ifMatch, o
 	nr.updatedAt = now
 	s.store(existing, nr)
 	s.commit()
-	return s.result(nr, op, res, warnings), nil
+	return s.result(nr, op, res, warnings, details), nil
 }
 
 // storedInput is the canonical input document (with status) kept for
@@ -348,13 +409,13 @@ func (s *state) noteChange(r *record) {
 	s.markDirty(r.id, r)
 }
 
-func (s *state) result(r *record, op, res string, warnings []string) writeResult {
+func (s *state) result(r *record, op, res string, warnings []string, details []obx.WarningDetail) writeResult {
 	status := http.StatusOK
 	if res == obx.ResultCreated {
 		status = http.StatusCreated
 	}
 	vis := s.visibility(r, s.n.now())
-	return writeResult{status: status, res: obx.IngestResult{Op: op, Kind: r.kind, ExternalID: r.extID, Result: res, ID: ptr(r.id), Visibility: &vis, ETag: ptr(r.etag()), Warnings: warnings}}
+	return writeResult{status: status, res: obx.IngestResult{Op: op, Kind: r.kind, ExternalID: r.extID, Result: res, ID: ptr(r.id), Visibility: &vis, ETag: ptr(r.etag()), Warnings: warnings, WarningDetails: details}}
 }
 
 // positionTaken returns the external id of another asset of the product with
@@ -656,7 +717,7 @@ func (s *state) assetOrder(w writer, productExt string, order obx.AssetOrder) ([
 	for i, id := range order.AssetExternalIDs {
 		a := s.assets[id]
 		if a.asset.Position == i+1 {
-			out = append(out, s.result(a, obx.IngestOpPatch, obx.ResultUnchanged, nil).res)
+			out = append(out, s.result(a, obx.IngestOpPatch, obx.ResultUnchanged, nil, nil).res)
 			continue
 		}
 		cp := *a
@@ -666,7 +727,7 @@ func (s *state) assetOrder(w writer, productExt string, order obx.AssetOrder) ([
 		cp.input = s.storedInput(&cp)
 		cp.updatedAt = now
 		s.store(a, &cp)
-		out = append(out, s.result(&cp, obx.IngestOpPatch, obx.ResultUpdated, nil).res)
+		out = append(out, s.result(&cp, obx.IngestOpPatch, obx.ResultUpdated, nil, nil).res)
 	}
 	s.commit()
 	return out, nil
@@ -694,7 +755,7 @@ func (s *state) putAssetFile(w writer, ext, name string, data []byte, contentTyp
 	}
 	cur := a.files[name]
 	if cur == ref && (a.pending == nil) {
-		return s.result(a, obx.IngestOpUpsert, obx.ResultUnchanged, nil), nil
+		return s.result(a, obx.IngestOpUpsert, obx.ResultUnchanged, nil, nil), nil
 	}
 	fr := &obx.FileRef{SHA256: ref.SHA256, Width: ptr(ref.Width), Height: ptr(ref.Height)}
 	if name == obx.RenditionOriginal {
@@ -733,7 +794,7 @@ func (s *state) putAssetFile(w writer, ext, name string, data []byte, contentTyp
 	cp.updatedAt = s.n.now()
 	s.store(a, &cp)
 	s.commit()
-	return s.result(&cp, obx.IngestOpUpsert, obx.ResultUpdated, nil), nil
+	return s.result(&cp, obx.IngestOpUpsert, obx.ResultUpdated, nil, nil), nil
 }
 
 // acceptBytes validates and stores an uploaded file.

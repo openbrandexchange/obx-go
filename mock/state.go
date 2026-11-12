@@ -392,9 +392,10 @@ func (s *state) productRepr(r *record) obx.Product {
 		attrs = in.Attributes
 	}
 	return obx.Product{ID: r.id, ExternalID: r.extID, BrandID: brandID, StyleNumber: in.StyleNumber, Name: in.Name,
-		Description: nilIfEmpty(in.Description), ItemType: in.ItemType, GPCBrick: in.GPCBrick, TargetGroup: in.TargetGroup,
-		Season: in.Season, Collection: in.Collection, Materials: in.Materials, Care: in.Care, CountryOfOrigin: in.CountryOfOrigin,
-		DPPURL: in.DPPURL, Attributes: attrs, CreatedAt: r.createdAt, UpdatedAt: r.protoAt}
+		Description: nilIfEmpty(in.Description), ItemType: in.ItemType, ItemSubtype: in.ItemSubtype, GPCBrick: in.GPCBrick, TargetGroup: in.TargetGroup,
+		Season: in.Season, Collection: in.Collection, Materials: in.Materials, ContainsAnimalOrigin: in.ContainsAnimalOrigin,
+		FootwearMaterials: in.FootwearMaterials, Care: in.Care, CountryOfOrigin: in.CountryOfOrigin, Certifications: in.Certifications,
+		DPPURL: in.DPPURL, Features: in.Features, Attributes: attrs, CreatedAt: r.createdAt, UpdatedAt: r.protoAt}
 }
 
 func nilIfEmpty(t obx.LocalizedText) obx.LocalizedText {
@@ -407,7 +408,8 @@ func nilIfEmpty(t obx.LocalizedText) obx.LocalizedText {
 func (s *state) variantRepr(r *record) obx.Variant {
 	in := r.variant
 	p := s.products[r.parentExt]
-	v := obx.Variant{ID: r.id, ExternalID: r.extID, SKU: in.SKU, Color: in.Color, Size: in.Size, SizeSystem: in.SizeSystem, UpdatedAt: r.protoAt}
+	v := obx.Variant{ID: r.id, ExternalID: r.extID, SKU: in.SKU, Color: in.Color, Size: in.Size, SizeLength: in.SizeLength,
+		SizeSystem: in.SizeSystem, Measurements: in.Measurements, UpdatedAt: r.protoAt}
 	v.Color.Name = nilIfEmpty(v.Color.Name)
 	if p != nil {
 		v.ProductID = p.id

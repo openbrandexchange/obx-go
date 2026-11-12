@@ -433,6 +433,14 @@ func (n *Node) runImport(in *importInput, trigger string, wr writer) (*obx.Impor
 				continue
 			}
 			count(res.res.Result)
+			// import-format.md rule 10: the product as stored (the file's
+			// values plus what rule 9 kept), at the product's first row.
+			if stored := s.products[pp.ExternalID]; stored != nil && stored.product != nil {
+				for _, lw := range stored.product.LabelWarnings() {
+					problems = append(problems, obx.ImportRowError{File: csvFile, Row: ptr(pp.Row), Column: ptr(lw.Column),
+						Severity: obx.SeverityWarning, ObxError: lw.Code, Detail: lw.Detail})
+				}
+			}
 		}
 		for _, v := range pp.Variants {
 			data := canonicalJSON(v.Input)
@@ -621,31 +629,45 @@ func keepImageFacts(data json.RawMessage, old *obx.AssetInput) json.RawMessage {
 
 // columnField maps a field of the write model to the products.csv column it
 // comes from: path is the JSON path in the input ("color.name"), column the
-// canonical column name; text fields are kept per language, attributes per key.
+// canonical column name; text fields are kept per language, attributes,
+// features and measurements per key (keyed says whether the file has the
+// column of a key).
 type columnField struct {
 	path, column string
-	text, attrs  bool
+	text         bool
+	keyed        func(present canonicalcsv.Present, key string) bool
 }
+
+var (
+	attrColumn        = func(p canonicalcsv.Present, k string) bool { return p.Attrs[k] }
+	featureColumn     = func(p canonicalcsv.Present, k string) bool { return p.Features[k] }
+	measurementColumn = func(p canonicalcsv.Present, k string) bool { return p.Plain[k] }
+)
 
 var productColumnFields = []columnField{
 	{path: "name", column: "name", text: true}, {path: "description", column: "description", text: true},
-	{path: "item_type", column: "item_type"}, {path: "target_group", column: "target_group"},
+	{path: "item_type", column: "item_type"}, {path: "item_subtype", column: "item_subtype"}, {path: "target_group", column: "target_group"},
 	{path: "season", column: "season"}, {path: "collection", column: "collection"},
-	{path: "gpc_brick", column: "gpc_brick"}, {path: "materials", column: "materials"}, {path: "care", column: "care"},
-	{path: "country_of_origin", column: "country_of_origin"}, {path: "dpp_url", column: "dpp_url"},
-	{path: "attributes", attrs: true},
+	{path: "gpc_brick", column: "gpc_brick"}, {path: "materials", column: "materials"},
+	{path: "contains_animal_origin", column: "contains_animal_origin"}, {path: "footwear_materials", column: "footwear_materials"},
+	{path: "care", column: "care"}, {path: "country_of_origin", column: "country_of_origin"},
+	{path: "certifications", column: "certifications"}, {path: "dpp_url", column: "dpp_url"},
+	{path: "features", keyed: featureColumn}, {path: "attributes", keyed: attrColumn},
 }
 
 var variantColumnFields = []columnField{
 	{path: "gtin", column: "gtin"}, {path: "sku", column: "sku"}, {path: "size", column: "size"},
-	{path: "size_system", column: "size_system"}, {path: "color.name", column: "color_name", text: true},
-	{path: "color.supplier_color", column: "supplier_color"},
+	{path: "size_length", column: "size_length"}, {path: "size_system", column: "size_system"},
+	{path: "color.name", column: "color_name", text: true}, {path: "color.family", column: "color_family"},
+	{path: "color.supplier_color", column: "supplier_color"}, {path: "measurements", keyed: measurementColumn},
 }
 
 // keepAbsentColumns applies import-format.md rule 9 to a product or variant
 // the node already has: a field whose column the file does not have keeps
-// its stored value (texts per language, attributes per key). An empty cell in
-// a column the file has still removes the value.
+// its stored value (texts per language; attributes, features and
+// measurements per key). An empty cell in a column the file has still
+// removes the value; when the last feature or measurement is removed the
+// object is null.
 func keepAbsentColumns(data, stored json.RawMessage, fields []columnField, present canonicalcsv.Present) json.RawMessage {
 	var cur, old map[string]any
 	if json.Unmarshal(data, &cur) != nil || json.Unmarshal(stored, &old) != nil {
@@ -667,14 +689,14 @@ func keepAbsentColumns(data, stored json.RawMessage, fields []columnField, prese
 			continue
 		}
 		switch {
-		case f.attrs:
+		case f.keyed != nil:
 			oldMap, _ := was.(map[string]any)
 			now, _ := parent[key].(map[string]any)
 			if now == nil {
 				now = map[string]any{}
 			}
 			for k, v := range oldMap {
-				if _, stated := now[k]; !stated && !present.Attrs[k] {
+				if _, stated := now[k]; !stated && !f.keyed(present, k) {
 					now[k] = v
 				}
 			}
