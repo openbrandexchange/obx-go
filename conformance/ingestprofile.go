@@ -33,10 +33,12 @@ func init() {
 	register(p, "I-VAL-1", "invalid GTIN, duplicate GTIN, position conflict, unknown parent", true, testValidation)
 	register(p, "I-IMP-1", "re-importing fixtures/kestrel as package and as files is unchanged with no entries", true, testReimport)
 	register(p, "I-IMP-2", "import with an images_manifest gives the same result", true, testManifestImport)
-	register(p, "I-IMP-3", "mirror import unpublishes exactly what is missing; mass unpublish refused; zip slip refused", true, testMirror)
+	register(p, "I-IMP-3", "mirror import unpublishes exactly what is missing; one of the nine Kestrel products → mass_unpublish_refused; zip slip refused", true, testMirror)
 	register(p, "I-IMP-4", "row problems carry file, row, column and code; the job still succeeds", true, testRowErrors)
 	register(p, "I-IMP-5", "an import without assets.csv keeps the images' embargo, credit, alt text and AI label", true, testImportKeepsImageFacts)
 	register(p, "I-IMP-6", "a column the file does not have keeps the field; an empty cell removes it", true, testImportKeepsAbsentColumns)
+	register(p, "I-IMP-7", "the 0.2 columns: fixtures/imports 1 to 6 give the expected counts, errors, change entries and fields (rule 9 per key)", true, testImportArticleColumns)
+	register(p, "I-IMP-8", "label completeness warnings: label-warnings.csv as a dry run gives exactly the expected codes; fixtures/kestrel none", true, testLabelWarnings)
 }
 
 func testIngestInfo(t *T) {
@@ -841,7 +843,7 @@ func testMirror(t *T) {
 	if t.r.full != nil {
 		_, cursor = t.newEntries(t.r.full, cursor)
 	}
-	// (b) a mirror with only KO-1001 of the six Kestrel products is refused.
+	// (b) a mirror with only KO-1001 of the nine Kestrel products is refused.
 	req, err = t.r.fixtureImport(t.ctx, "files", func(row []string) bool { return row[1] == "KO-1001" })
 	t.Check(err, "build import")
 	req.Images, req.AssetsCSV, req.Manifest = nil, nil, nil
@@ -849,7 +851,7 @@ func testMirror(t *T) {
 	job, probs = t.runImport(req)
 	refused := (job.ImportRun != nil && job.ImportRun.Error != nil && job.ImportRun.Error.ObxError == obx.ErrMassUnpublishRefused) || hasCode(probs, obx.ErrMassUnpublishRefused)
 	if !refused {
-		t.Errorf("mirror with one of six products: want mass_unpublish_refused, got %s %s", job.Status, short(probs))
+		t.Errorf("mirror with one of the nine Kestrel products: want mass_unpublish_refused, got %s %s", job.Status, short(probs))
 	}
 	if rec, err := t.r.ing.Get(t.ctx, obx.KindProduct, "KO-1002"); err != nil || rec.Status != obx.StatusPublished {
 		t.Errorf("a refused mirror import unpublished KO-1002")
@@ -889,9 +891,9 @@ func hasCode(probs []obx.ImportRowError, code string) bool {
 
 func testRowErrors(t *T) {
 	csv := "brand,style_number,name:en,gtin,color_code,size,mystery\n" +
-		"Kestrel,OBX-CONF-IMP4,Conformance Test Scarf,2000100901014,GRY,S,x\n" +
-		"Kestrel,OBX-CONF-IMP4,Conformance Test Scarf,2000100901021,GRY,M,x\n" +
-		"Kestrel,OBX-CONF-IMP4,Conformance Test Scarf,2000100901025,GRY,L,x\n"
+		"Kestrel,OBX-CONF-IMP4,Conformance Test Scarf,2000199901018,GRY,S,x\n" +
+		"Kestrel,OBX-CONF-IMP4,Conformance Test Scarf,2000199901025,GRY,M,x\n" +
+		"Kestrel,OBX-CONF-IMP4,Conformance Test Scarf,2000199901029,GRY,L,x\n"
 	job, probs := t.runImport(&ingest.ImportRequest{CSV: &ingest.File{Name: "products.csv", Data: []byte(csv)}, Options: obx.ImportOptions{Mode: obx.ImportModeUpsert}})
 	defer t.r.ing.Delete(t.ctx, obx.KindProduct, "OBX-CONF-IMP4")
 	if job.Status != obx.JobSucceeded {
@@ -934,7 +936,7 @@ func testRowErrors(t *T) {
 			t.Errorf("errors_only returned a %s", p.Severity)
 		}
 	}
-	if _, err := t.r.ing.Get(t.ctx, obx.KindVariant, "2000100901021"); err != nil {
+	if _, err := t.r.ing.Get(t.ctx, obx.KindVariant, "2000199901025"); err != nil {
 		t.Errorf("the good row M was not imported: %v", err)
 	}
 }

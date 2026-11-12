@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/csv"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -42,10 +43,12 @@ func init() {
 	register(p, "P-FEED-4", "restricted retailer only sees brand kestrel", true, testRestricted)
 	registerPhase(phaseOf[ProfileIngest]+1, p, "P-FEED-5", "ingest replay produces exactly expected-changes.json", true, testReplayFeed)
 	register(p, "P-FEED-6", "grant change → grant entry with resync:true", true, testGrantResync)
-	register(p, "P-CAT-1", "products KO-1001 and KO-1005 match the expected fixtures", true, testProductFixtures)
+	register(p, "P-CAT-1", "products KO-1001 and KO-1005 match the expected fixtures, including the 0.2 article data", true, testProductFixtures)
 	register(p, "P-CAT-2", "GET /products pagination is complete and stable; ids= filter", true, testProductList)
 	register(p, "P-CAT-3", "GTIN lookup matches the expected fixture; 2001 codes → limit_exceeded", true, testGTINLookup)
 	register(p, "P-CAT-4", "invisible objects answer 404, never 403", true, testInvisible404)
+	register(p, "P-CAT-5", "article data round trip: KO-1008, KO-1009, KO-1010 and KT-2001 match the expected fixtures", true, testArticleRoundTrip)
+	register(p, "P-CAT-6", "article data shape over the whole snapshot: 0.2 properties present, valid, normalised fibres, no empty objects", true, testArticleShape)
 	register(p, "P-MEDIA-1", "assets match the expected fixtures (AI, embargo, large original, no original)", true, testAssetFixtures)
 	register(p, "P-MEDIA-2", "renditions: sha256, ETag, OBX-Content-SHA256, Range, If-None-Match, signed URLs", true, testRenditionHTTP)
 	register(p, "P-MEDIA-3", "originals byte-identical; web ≤ 2000, thumb ≤ 600, square is square, JPEG, never upscaled", true, testRenditionRules)
@@ -172,7 +175,9 @@ func testDiscovery(t *T) {
 		t.Errorf("api_base %q does not end in /obx/v1", d.APIBase)
 	}
 	if d.ObxVersion != obx.Version {
-		t.Errorf("obx_version %q, want %q", d.ObxVersion, obx.Version)
+		// P-DISC-1 does not ask for a version; the article data tests
+		// (P-CAT-1, P-CAT-5, P-CAT-6) show what a 0.1 node misses.
+		t.Notef("obx_version %q; this suite checks protocol %s", d.ObxVersion, obx.Version)
 	}
 	if len(d.Languages) == 0 {
 		t.Errorf("languages is empty")
@@ -464,6 +469,31 @@ func testSnapshot(t *T) {
 	}
 }
 
+// brandProductCount counts the products of a brand (by its name in the brand
+// column) in kestrel/products.csv.
+func (t *T) brandProductCount(brand string) int {
+	data, err := t.r.fixture("kestrel/products.csv")
+	t.Check(err, "read kestrel/products.csv")
+	rows, err := csv.NewReader(bytes.NewReader(data)).ReadAll()
+	t.Check(err, "parse kestrel/products.csv")
+	seen := map[string]bool{}
+	for _, r := range rows[1:] {
+		if len(r) > 1 && r[0] == brand {
+			seen[r[1]] = true
+		}
+	}
+	return len(seen)
+}
+
+// fixtureCount returns a count of expected/counts.json (brands, products,
+// variants, assets).
+func (t *T) fixtureCount(what string) int {
+	want, err := t.r.fixtureJSON("expected/counts.json")
+	t.Check(err, "expected/counts.json")
+	n, _ := want.(map[string]any)[what].(float64)
+	return int(n)
+}
+
 func key(ch obx.Change) string { return ch.Type + "/" + ch.Op + "/" + ch.ID }
 
 func testPaging(t *T) {
@@ -526,8 +556,8 @@ func testRestricted(t *T) {
 			products++
 		}
 	}
-	if products != 6 {
-		t.Errorf("restricted snapshot has %d products, want the 6 of brand kestrel", products)
+	if want := t.brandProductCount("Kestrel"); products != want {
+		t.Errorf("restricted snapshot has %d products, want the %d of brand kestrel", products, want)
 	}
 	res := t.get(t.r.second, "/products/"+t.productID("KT-2001"))
 	t.expectStatus(res, http.StatusNotFound, obx.ErrNotFound, "GET a kestrel-trail product with the restricted key")
@@ -684,8 +714,8 @@ func testProductList(t *T) {
 	if strings.Join(all, ",") != strings.Join(paged, ",") {
 		t.Errorf("paging with limit=3 gives %v, limit=100 gives %v", paged, all)
 	}
-	if len(all) != 8 {
-		t.Errorf("GET /products lists %d products, want 8", len(all))
+	if want := t.fixtureCount("products"); len(all) != want {
+		t.Errorf("GET /products lists %d products, want %d", len(all), want)
 	}
 	ids := []string{t.productID("KO-1001"), t.productID("KT-2002"), "prd_does-not-exist"}
 	page, err := t.r.full.Products(t.ctx, client.ProductsQuery{IDs: ids, Limit: 100})
@@ -976,8 +1006,8 @@ func testExport(t *T) {
 	if header == nil {
 		t.Fatalf("the manifest has no header line")
 	}
-	if header.Counts == nil || header.Counts.Products != products || products != 6 {
-		t.Errorf("header counts %+v, product lines %d, want 6 kestrel products", header.Counts, products)
+	if want := t.brandProductCount("Kestrel"); header.Counts == nil || header.Counts.Products != products || products != want {
+		t.Errorf("header counts %+v, product lines %d, want %d kestrel products", header.Counts, products, want)
 	}
 	entries := map[string][]byte{}
 	for _, p := range e.Parts {

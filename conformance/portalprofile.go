@@ -574,13 +574,14 @@ func testPortal(t *T) {
 	}
 	var list nodeadmin.PortalProductList
 	t.call(c, http.MethodGet, "/portal/products?limit=5", nil, &list)
-	if list.Total != 8 || len(list.Items) != 5 || list.NextCursor == nil {
+	total := t.fixtureCount("products")
+	if list.Total != total || len(list.Items) != 5 || list.NextCursor == nil {
 		t.Errorf("product list: total %d, %d items (limit 5), next %v", list.Total, len(list.Items), list.NextCursor)
 	}
 	var page2 nodeadmin.PortalProductList
 	t.call(c, http.MethodGet, "/portal/products?limit=5&cursor="+url.QueryEscape(obx.Str(list.NextCursor)), nil, &page2)
-	if len(page2.Items) != 3 {
-		t.Errorf("second page: %d items, want 3", len(page2.Items))
+	if want := min(5, total-5); len(page2.Items) != want {
+		t.Errorf("second page: %d items, want %d", len(page2.Items), want)
 	}
 	var filtered nodeadmin.PortalProductList
 	t.call(c, http.MethodGet, "/portal/products?item_type=jacket&q=waxed", nil, &filtered)
@@ -720,8 +721,8 @@ func testPortalRestricted(t *T) {
 	c, _ := t.portalUser("OBX conformance: portal kestrel only", nodeadmin.RetailerInput{BrandIDs: &[]string{kestrel}})
 	var list nodeadmin.PortalProductList
 	t.call(c, http.MethodGet, "/portal/products?limit=100", nil, &list)
-	if list.Total != 6 {
-		t.Errorf("restricted retailer sees %d products, want 6", list.Total)
+	if want := t.brandProductCount("Kestrel"); list.Total != want {
+		t.Errorf("restricted retailer sees %d products, want %d", list.Total, want)
 	}
 	for _, p := range list.Items {
 		if p.Brand.ID != kestrel {
