@@ -120,6 +120,7 @@
   "problem.column": "kolonna {column}",
   "problem.fibre_composition_missing": "il-kompożizzjoni tal-fibri nieqsa; l-UE teħtieġha fuq it-tikketta tal-prodotti tessili",
   "problem.fibre_percentages_not_100": "il-perċentwali tal-fibri ta' parti ma jammontawx għal 100",
+  "problem.material_unknown": "dan il-kodiċi tal-materjal mhuwiex fil-lista tal-materjali; jinżamm kif miktub, iċċekkja l-ortografija jew uża l-isem bl-Ingliż",
   "problem.files_missing": "hemm fajls neqsin",
   "problem.footwear_materials_missing": "il-materjal tal-wiċċ, tal-inforra u l-pettina jew tan-nagħla ta' barra nieqes; l-UE teħtieġu fuq it-tikketta tax-xedd tas-saqajn",
   "problem.gtin_conflict": "dan l-EAN diġà qed jintuża minn oġġett ieħor",

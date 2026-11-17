@@ -6,8 +6,9 @@
 //	obx-conformance protocol --url https://node.example --admin-user admin@brand.example --admin-password …
 //	obx-conformance mock --addr :8080
 //
-// Exit codes: 0 = every required test passed, 1 = a required test failed,
-// 2 = the suite could not run (usage or connection problem).
+// Exit codes: 0 = CONFORMANT (every required test ran and passed), 1 = NOT
+// CONFORMANT (a required test failed), 2 = INCOMPLETE (a required test was
+// skipped) or the suite could not run (usage or connection problem).
 package main
 
 import (
@@ -37,7 +38,8 @@ var Version = "dev"
 const usage = `obx-conformance checks an Open Brand Exchange node against the specification.
 
 Usage:
-  obx-conformance <profile> --url <node> [options]   profile: protocol, ingest, portal, security or all
+  obx-conformance <profile> --url <node> [options]   profile: protocol, ingest, portal, security, all,
+                                                     or several joined by commas (protocol,ingest)
   obx-conformance mock [--addr :8080]                run the in-memory mock node
   obx-conformance check --url <portal> [--client id:secret] [--json]
                                                      read-only online check (what openbrandexchange.com runs)
@@ -70,9 +72,14 @@ upgrade for P-FEED-7):
 Outfitters, brand "kestrel", languages nl,en), imports fixtures/kestrel and
 runs every profile.
 
+Several profiles in one run: protocol,ingest (P-FEED-5 reads the ingest replay).
+
 Report: --format text (default, for people), markdown or json (also --json).
-Exit codes: 0 = every required test passed, 1 = a required test failed,
-2 = the suite could not run.
+Exit codes: 0 = CONFORMANT (every required test ran and passed),
+1 = NOT CONFORMANT (a required test failed), 2 = INCOMPLETE (no required
+test failed but one was skipped; the report says what each needs) or the
+suite could not run. A run with --only exits 0 when every selected required
+test ran and passed (its verdict stays INCOMPLETE).
 Run "obx-conformance <profile> --help" for every option.
 `
 
@@ -115,15 +122,30 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, getenv fu
 		return runCheckServer(ctx, args[1:], stdout, stderr, getenv)
 	case "report":
 		return runReport(args[1:], stdout, stderr)
-	case conformance.ProfileProtocol, conformance.ProfileIngest, conformance.ProfilePortal, conformance.ProfileSecurity, conformance.ProfileAll:
-		return runSuite(ctx, args[0], args[1:], stdout, stderr, getenv)
+	}
+	if profiles, ok := parseProfiles(args[0]); ok {
+		return runSuite(ctx, profiles, args[1:], stdout, stderr, getenv)
 	}
 	fmt.Fprintf(stderr, "unknown command %q\n\n%s", args[0], usage)
 	return 2
 }
 
-func runSuite(ctx context.Context, profile string, args []string, stdout, stderr io.Writer, getenv func(string) string) int {
-	fs := flag.NewFlagSet(profile, flag.ContinueOnError)
+// parseProfiles reads a profile or several joined by commas.
+func parseProfiles(arg string) ([]string, bool) {
+	var out []string
+	for _, p := range strings.Split(arg, ",") {
+		switch p {
+		case conformance.ProfileProtocol, conformance.ProfileIngest, conformance.ProfilePortal, conformance.ProfileSecurity, conformance.ProfileAll:
+			out = append(out, p)
+		default:
+			return nil, false
+		}
+	}
+	return out, len(out) > 0
+}
+
+func runSuite(ctx context.Context, profiles []string, args []string, stdout, stderr io.Writer, getenv func(string) string) int {
+	fs := flag.NewFlagSet(strings.Join(profiles, ","), flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	var cfg conformance.Config
 	fs.StringVar(&cfg.BaseURL, "url", "", "node base URL (also --base)")
@@ -201,7 +223,7 @@ func runSuite(ctx context.Context, profile string, args []string, stdout, stderr
 		cfg.Operator = &conformance.PromptOperator{In: os.Stdin, Out: stderr}
 	}
 	cfg.HTTPClient = &http.Client{Timeout: *timeout}
-	rep, err := conformance.Run(ctx, []string{profile}, cfg)
+	rep, err := conformance.Run(ctx, profiles, cfg)
 	if err != nil {
 		fmt.Fprintf(stderr, "obx-conformance: %v\n", err)
 		return 2
@@ -221,13 +243,7 @@ func runSuite(ctx context.Context, profile string, args []string, stdout, stderr
 	default:
 		printReport(stdout, rep)
 	}
-	if rep.SetupError != "" {
-		return 2
-	}
-	if !rep.OK() {
-		return 1
-	}
-	return 0
+	return rep.ExitCode()
 }
 
 func runMock(ctx context.Context, args []string, stdout, stderr io.Writer, getenv func(string) string) int {
@@ -348,8 +364,8 @@ func runReport(args []string, stdout, stderr io.Writer) int {
 	} else {
 		printReport(stdout, &rep)
 	}
-	if !rep.OK() {
-		return 1
+	if rep.ReadOnly {
+		return checkExit(&rep)
 	}
-	return 0
+	return rep.ExitCode()
 }

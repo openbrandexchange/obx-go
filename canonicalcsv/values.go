@@ -67,13 +67,17 @@ var (
 	fiberQualifier = regexp.MustCompile(`\s*\(([^()]*)\)\s*$`)
 	// listInBrackets finds "(organic, recycled)": brackets hold one code each.
 	listInBrackets = regexp.MustCompile(`\([^()]*,[^()]*\)`)
+	// digitsOnly is a fibre that is only a number: the decimals of
+	// "95,5% cotton" after the comma split.
+	digitsOnly = regexp.MustCompile(`^[0-9]+$`)
 )
 
 // ParseMaterials parses the materials grammar:
 //
 //	materials := part (";" part)*
 //	part      := [part_name ":"] fiber ("," fiber)*
-//	fiber     := number "%" material_code qualifier*
+//	fiber     := [number "%"] material_code qualifier*
+//	number    := digits ["." digits]
 //	qualifier := "(" qualifier_code ")"
 //
 // Each qualifier in brackets ("(organic)", "(recycled)", "(post_consumer)" or
@@ -84,7 +88,9 @@ var (
 // first in the list (obx.NormalizeFiber), so "100% recycled_polyester" and
 // "100% polyester (recycled)" give the same materials. The result holds codes
 // only: the node adds the names. err is set when the text does not follow
-// the grammar. Percentages that do not sum to 100 are not an error: the node
+// the grammar; a fibre of digits only (from "95,5% cotton") is the error
+// "materials: decimal comma ...". A fibre without a percentage ("leather")
+// has Percentage nil. Percentages that do not sum to 100 are not an error: the node
 // reports them as the label warning fibre_percentages_not_100
 // (import-format.md rule 10), so the returned warnings are for other notes.
 func ParseMaterials(s string) (obx.Materials, []string, error) {
@@ -116,15 +122,19 @@ func ParseMaterials(s string) (obx.Materials, []string, error) {
 			if rawFiber == "" {
 				continue
 			}
-			num, key, ok := strings.Cut(rawFiber, "%")
-			if !ok {
-				return nil, nil, fmt.Errorf("%q: expected \"<percentage>%% <material>\"", rawFiber)
+			if digitsOnly.MatchString(rawFiber) {
+				return nil, nil, fmt.Errorf("materials: decimal comma in %q: write a percentage with a decimal point (95.5%%), the comma separates fibres", rawPart)
 			}
-			pct, err := strconv.ParseFloat(strings.TrimSpace(num), 64)
-			if err != nil || pct < 0 || pct > 100 || math.IsNaN(pct) {
-				return nil, nil, fmt.Errorf("%q: %q is not a percentage between 0 and 100", rawFiber, strings.TrimSpace(num))
+			f := obx.Fiber{}
+			key := rawFiber
+			if num, rest, ok := strings.Cut(rawFiber, "%"); ok {
+				pct, err := strconv.ParseFloat(strings.TrimSpace(num), 64)
+				if err != nil || pct < 0 || pct > 100 || math.IsNaN(pct) {
+					return nil, nil, fmt.Errorf("%q: %q is not a percentage between 0 and 100", rawFiber, strings.TrimSpace(num))
+				}
+				f.Percentage = &pct
+				key = rest
 			}
-			f := obx.Fiber{Percentage: pct}
 			for m := fiberQualifier.FindStringSubmatch(key); m != nil; m = fiberQualifier.FindStringSubmatch(key) {
 				key = key[:len(key)-len(m[0])]
 				q := NormalizeKey(m[1])
@@ -157,7 +167,10 @@ func FormatMaterials(m obx.Materials) string {
 	for _, p := range m {
 		fibers := make([]string, 0, len(p.Fibers))
 		for _, f := range p.Fibers {
-			s := strconv.FormatFloat(f.Percentage, 'f', -1, 64) + "% " + f.Material.Code
+			s := f.Material.Code
+			if f.Percentage != nil {
+				s = strconv.FormatFloat(*f.Percentage, 'f', -1, 64) + "% " + s
+			}
 			for _, q := range f.Qualifiers {
 				s += " (" + q.Code + ")"
 			}

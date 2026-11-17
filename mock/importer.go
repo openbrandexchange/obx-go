@@ -3,6 +3,8 @@ package mock
 import (
 	"archive/zip"
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,6 +29,9 @@ type importInput struct {
 	manifest  []obx.ManifestImage
 	options   obx.ImportOptions
 	fileInfos []obx.ImportRunFile
+	// partsHash identifies the request body for Idempotency-Key: the
+	// sha256 of every part, by field name (ingest.md 5).
+	partsHash string
 }
 
 type namedFile struct {
@@ -47,7 +52,7 @@ func (n *Node) parseImportForm(r *http.Request) (*importInput, *obx.Problem) {
 		}
 		return nil, problemf(obx.ErrInvalidRequest, "could not read the form: %v", err)
 	}
-	in := &importInput{}
+	in := &importInput{partsHash: multipartHash(r.MultipartForm)}
 	read := func(fh *multipart.FileHeader) ([]byte, error) {
 		f, err := fh.Open()
 		if err != nil {
@@ -118,6 +123,41 @@ func (n *Node) parseImportForm(r *http.Request) (*importInput, *obx.Problem) {
 		return nil, problem(obx.ErrInvalidRequest, "send a package, a csv, images or an images_manifest")
 	}
 	return in, nil
+}
+
+// multipartHash is the sha256 over every part of a form (field name, then
+// the sha256 of the part's bytes), so two imports with the same parts in the
+// same order per field have the same hash.
+func multipartHash(f *multipart.Form) string {
+	names := map[string]bool{}
+	for k := range f.Value {
+		names[k] = true
+	}
+	for k := range f.File {
+		names[k] = true
+	}
+	keys := make([]string, 0, len(names))
+	for k := range names {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	h := sha256.New()
+	for _, k := range keys {
+		for _, v := range f.Value[k] {
+			fmt.Fprintf(h, "%s\x00value\x00%s\n", k, hashBytes([]byte(v)))
+		}
+		for _, fh := range f.File[k] {
+			sum := ""
+			if rd, err := fh.Open(); err == nil {
+				ph := sha256.New()
+				io.Copy(ph, rd)
+				rd.Close()
+				sum = hex.EncodeToString(ph.Sum(nil))
+			}
+			fmt.Fprintf(h, "%s\x00file\x00%s\x00%s\n", k, fh.Filename, sum)
+		}
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // formJSON returns a JSON form field sent as a value or as a file part.
@@ -426,11 +466,33 @@ func (n *Node) runImport(in *importInput, trigger string, wr writer) (*obx.Impor
 		}
 		count(res.res.Result)
 	}
+	seenVariant := map[string]bool{} // variant external ids of this file (1.2.1)
 	for _, pp := range plan.Products {
-		if pp.Input != nil {
+		// import-format.md 1.2.1: which variant each row is. A row that
+		// cannot be written is skipped; a product all of whose rows are
+		// skipped is not written either.
+		type rowVariant struct {
+			v   canonicalcsv.Variant
+			ext string
+		}
+		var variants []rowVariant
+		for _, v := range pp.Variants {
+			ext, e := s.resolveVariant(pp.ExternalID, v, seenVariant)
+			if e != nil {
+				e.File = csvFile
+				problems = append(problems, *e)
+				continue
+			}
+			seenVariant[ext] = true
+			variants = append(variants, rowVariant{v, ext})
+		}
+		if pp.Input != nil && (len(pp.Variants) == 0 || len(variants) > 0) {
 			data := canonicalJSON(pp.Input)
 			if old := s.products[pp.ExternalID]; old != nil && old.product != nil && pf != nil {
 				data = keepAbsentColumns(data, canonicalJSON(old.product), productColumnFields, pf.Present)
+			}
+			if old := s.products[pp.ExternalID]; old != nil {
+				data = keepExtensions(data, old.input)
 			}
 			res, p := s.apply(wr, obx.IngestOpUpsert, obx.KindProduct, pp.ExternalID, data, "")
 			if p != nil {
@@ -439,20 +501,30 @@ func (n *Node) runImport(in *importInput, trigger string, wr writer) (*obx.Impor
 			}
 			count(res.res.Result)
 			// import-format.md rule 10: the product as stored (the file's
-			// values plus what rule 9 kept), at the product's first row.
+			// values plus what rule 9 kept), at the product's first row, then
+			// material_unknown (1.4).
 			if stored := s.products[pp.ExternalID]; stored != nil && stored.product != nil {
-				for _, lw := range stored.product.LabelWarnings() {
-					problems = append(problems, obx.ImportRowError{File: csvFile, Row: ptr(pp.Row), Column: ptr(lw.Column),
-						Severity: obx.SeverityWarning, ObxError: lw.Code, Detail: lw.Detail})
+				for _, lw := range append(stored.product.LabelWarnings(), materialUnknown(stored.product.Materials)...) {
+					e := obx.ImportRowError{File: csvFile, Row: ptr(pp.Row), Column: ptr(lw.Column),
+						Severity: obx.SeverityWarning, ObxError: lw.Code, Detail: lw.Detail}
+					if lw.Value != "" {
+						e.Value = ptr(lw.Value)
+					}
+					problems = append(problems, e)
 				}
 			}
 		}
-		for _, v := range pp.Variants {
+		for _, rv := range variants {
+			v := rv.v
+			v.Input.ProductExternalID = pp.ExternalID
 			data := canonicalJSON(v.Input)
-			if old := s.variants[v.ExternalID]; old != nil && old.variant != nil && pf != nil {
+			if old := s.variants[rv.ext]; old != nil && old.variant != nil && pf != nil {
 				data = keepAbsentColumns(data, canonicalJSON(old.variant), variantColumnFields, pf.Present)
 			}
-			res, p := s.apply(wr, obx.IngestOpUpsert, obx.KindVariant, v.ExternalID, data, "")
+			if old := s.variants[rv.ext]; old != nil {
+				data = keepExtensions(data, old.input)
+			}
+			res, p := s.apply(wr, obx.IngestOpUpsert, obx.KindVariant, rv.ext, data, "")
 			if p != nil {
 				rowErr(csvFile, v.Row, p)
 				continue
@@ -471,6 +543,7 @@ func (n *Node) runImport(in *importInput, trigger string, wr writer) (*obx.Impor
 			data := canonicalJSON(a.Input)
 			if old := s.assets[a.ExternalID]; old != nil && old.asset != nil {
 				data = keepImageFacts(data, old.asset)
+				data = keepExtensions(data, old.input)
 			}
 			res, p := s.apply(wr, obx.IngestOpUpsert, obx.KindAsset, a.ExternalID, data, "")
 			if p != nil {
@@ -574,8 +647,14 @@ func (n *Node) handleIngestImport(w http.ResponseWriter, r *http.Request) {
 	defer n.mu.Unlock()
 	s := n.st
 	key := r.Header.Get(obx.HeaderIdempotencyKey)
+	slot := "import:" + t.id + ":" + key
 	if key != "" {
-		if e, ok := s.idempotency["import:"+t.id+":"+key]; ok {
+		e, p := n.idempotent(slot, key, in.partsHash)
+		if p != nil {
+			writeProblem(w, p)
+			return
+		}
+		if e != nil {
 			w.Header().Set("Location", n.baseURL(r)+obx.PathIngest+"/jobs/"+e.ref)
 			writeJSON(w, http.StatusAccepted, n.jobView(r, s.jobs[e.ref]))
 			return
@@ -597,11 +676,114 @@ func (n *Node) handleIngestImport(w http.ResponseWriter, r *http.Request) {
 	j.Progress = obx.Progress{Done: run.Counts.Rows + run.Counts.Files, Total: ptr(run.Counts.Rows + run.Counts.Files)}
 	n.finishJob(j, run.Status)
 	if key != "" {
-		s.idempotency["import:"+t.id+":"+key] = idemEntry{ref: j.ID, at: n.now()}
+		s.idempotency[slot] = idemEntry{ref: j.ID, hash: in.partsHash, at: n.now()}
 	}
 	n.notifyAdmin(obx.EventIngestJobCompleted, map[string]string{"job_id": j.ID, "status": j.Status})
 	w.Header().Set("Location", n.baseURL(r)+obx.PathIngest+"/jobs/"+j.ID)
 	writeJSON(w, http.StatusAccepted, n.jobView(r, j))
+}
+
+// resolveVariant decides which variant a products.csv row is
+// (import-format.md 1.2.1): the variant_id when given; else the variant of
+// this product that has the row's GTIN; else the default id. A GTIN of a
+// variant of another product (or, with a variant_id, of another variant) is
+// gtin_conflict; a variant an earlier row of the file already wrote is
+// validation_failed. The returned error has no File.
+func (s *state) resolveVariant(productExt string, v canonicalcsv.Variant, seen map[string]bool) (string, *obx.ImportRowError) {
+	ext := v.ExternalID
+	rowErr := func(column, code, detail, value string) *obx.ImportRowError {
+		return &obx.ImportRowError{Row: ptr(v.Row), Column: ptr(column), Severity: obx.SeverityError, ObxError: code, Detail: detail, Value: ptr(value)}
+	}
+	if g := v.Input.GTIN; g != nil {
+		if g14, err := obx.ValidateGTIN(*g); err == nil {
+			if holder, ok := s.gtins[g14]; ok && holder != ext {
+				hv := s.variants[holder]
+				switch {
+				case hv != nil && hv.parentExt != productExt:
+					style := hv.parentExt
+					if hp := s.products[hv.parentExt]; hp != nil && hp.product != nil {
+						style = hp.product.StyleNumber
+					}
+					return "", rowErr("gtin", obx.ErrGTINConflict, fmt.Sprintf("EAN %s belongs to variant %s of product %s; remove it there first", *g, holder, style), *g)
+				case v.IDGiven:
+					return "", rowErr("gtin", obx.ErrGTINConflict, fmt.Sprintf("EAN %s belongs to variant %s of this product, not to %s", *g, holder, ext), *g)
+				default:
+					ext = holder
+				}
+			}
+		}
+	}
+	if seen[ext] {
+		return "", rowErr("variant_id", obx.ErrValidationFailed, fmt.Sprintf("an earlier row of this file is variant %s too; give each row its own variant_id", ext), ext)
+	}
+	return ext, nil
+}
+
+// keepExtensions keeps the extension members (x-<vendor>-<name>) of a
+// stored object that an import writes again: an import has no columns for
+// them and leaves them untouched (import-format.md rule 2, rule 9). Nested
+// objects (colour, rights, the parts and fibres of materials, care entries)
+// keep theirs when they are the same object (same member, or the same
+// position in a list of the same length with the same code).
+func keepExtensions(data, stored json.RawMessage) json.RawMessage {
+	var cur, old map[string]any
+	if json.Unmarshal(data, &cur) != nil || json.Unmarshal(stored, &old) != nil {
+		return data
+	}
+	if !mergeExtensions(cur, old) {
+		return data
+	}
+	return canonicalJSON(cur)
+}
+
+func mergeExtensions(cur, old map[string]any) bool {
+	changed := false
+	for k, v := range old {
+		if obx.IsExtensionKey(k) {
+			if _, ok := cur[k]; !ok {
+				cur[k] = v
+				changed = true
+			}
+			continue
+		}
+		switch ov := v.(type) {
+		case map[string]any:
+			if cv, ok := cur[k].(map[string]any); ok && mergeExtensions(cv, ov) {
+				changed = true
+			}
+		case []any:
+			cv, ok := cur[k].([]any)
+			if !ok || len(cv) != len(ov) {
+				continue
+			}
+			for i := range ov {
+				om, _ := ov[i].(map[string]any)
+				cm, _ := cv[i].(map[string]any)
+				if om != nil && cm != nil && sameTerm(om, cm) && mergeExtensions(cm, om) {
+					changed = true
+				}
+			}
+		}
+	}
+	return changed
+}
+
+// sameTerm reports whether two list entries are the same object: the same
+// code, part code or material code where they have one.
+func sameTerm(a, b map[string]any) bool {
+	code := func(m map[string]any, k string) any {
+		if k == "" {
+			return m["code"]
+		}
+		t, _ := m[k].(map[string]any)
+		return t["code"]
+	}
+	for _, k := range []string{"", "part", "material"} {
+		if fmt.Sprint(code(a, k)) != fmt.Sprint(code(b, k)) {
+			return false
+		}
+	}
+	return true
 }
 
 // keepImageFacts applies import-format.md rule 8 to an image the node already

@@ -73,11 +73,11 @@ func TestKestrelFixture(t *testing.T) {
 	if ko1005.ExternalID != "KO-1005" || obx.Str(ko1005.Input.ItemType) != "bag" || ko1005.Input.Name["nl"] != "Leren weekendtas" {
 		t.Fatalf("KO-1005 parsed wrong: %+v", ko1005.Input)
 	}
-	if got := canonicalcsv.FormatMaterials(ko1005.Input.Materials); got != "outer: 100% leather; lining: 100% cotton" {
+	if got := canonicalcsv.FormatMaterials(ko1005.Input.Materials); got != "outer: leather; lining: 100% cotton" {
 		t.Fatalf("materials %q", got)
 	}
 	v := ko1005.Variants[0]
-	if v.ExternalID != "2000100501016" || obx.Str(v.Input.GTIN) != "2000100501016" || v.Input.SizeSystem != nil || obx.Str(v.Input.Size) != "ONE SIZE" {
+	if v.ExternalID != "KO-1005-COG-ONE SIZE" || v.IDGiven || obx.Str(v.Input.GTIN) != "2000100501016" || v.Input.SizeSystem != nil || obx.Str(v.Input.Size) != "ONE SIZE" {
 		t.Fatalf("KO-1005 variant parsed wrong: %+v", v)
 	}
 	af, err := canonicalcsv.ParseAssets(bytes.NewReader(fixture(t, "kestrel/assets.csv")), "assets.csv", canonicalcsv.Options{})

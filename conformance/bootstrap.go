@@ -183,7 +183,7 @@ func (r *runner) bootstrap(ctx context.Context, want map[string]bool) error {
 	if want[ProfileProtocol] && r.full == nil {
 		return errors.New("the protocol profile needs an API key (--client-id/--client-secret) or admin credentials")
 	}
-	if want[ProfileIngest] && r.ing == nil {
+	if want[ProfileIngest] && r.ing == nil && r.offersIngest() {
 		return errors.New("the ingest profile needs an upload key (--token) or admin credentials")
 	}
 	if (want[ProfilePortal] || want[ProfileSecurity]) && r.admin == nil {

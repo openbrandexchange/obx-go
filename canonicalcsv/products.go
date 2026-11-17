@@ -25,11 +25,38 @@ func (o Options) lang() string {
 	return "en"
 }
 
-// Variant is one parsed variant row.
+// Variant is one parsed variant row. ExternalID is the variant_id cell
+// (IDGiven) or else the default id (DefaultVariantID). Which variant the row
+// is, is the node's decision (import-format.md 1.2.1): without a variant_id
+// a row whose GTIN belongs to a variant of the same product is that variant,
+// and two rows of one file that are the same variant are an error for the
+// later one; the parser cannot know either.
 type Variant struct {
 	Row        int
 	ExternalID string
+	IDGiven    bool
 	Input      obx.VariantInput
+}
+
+// DefaultVariantID is the default variant external id of
+// import-format.md 1.2.1: <style>-<color>-<size>[-<size_length>], the cells
+// as written (trimmed); an empty size or size_length is left out with its
+// "-"; control characters (U+0000-U+001F, U+007F) and "/" become "_".
+// Nothing else changes (spaces stay). The result may be longer than 200
+// characters (then a row needs a variant_id).
+func DefaultVariantID(style, color, size, sizeLength string) string {
+	parts := []string{strings.TrimSpace(style), strings.TrimSpace(color)}
+	for _, v := range []string{size, sizeLength} {
+		if v = strings.TrimSpace(v); v != "" {
+			parts = append(parts, v)
+		}
+	}
+	return strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f || r == '/' {
+			return '_'
+		}
+		return r
+	}, strings.Join(parts, "-"))
 }
 
 // Product is one product with its variants, in file order.
@@ -219,7 +246,6 @@ func ParseProducts(r io.Reader, file string, opts Options) (*ProductsFile, error
 
 	byKey := map[string]*Product{}
 	families := map[string]string{} // product key + colour code → colour family
-	seenVariant := map[string]int{} // external id → row
 	seenGTIN := map[string]int{}    // gtin14 → row
 
 	for ri, row := range t.rows {
@@ -388,13 +414,11 @@ func ParseProducts(r io.Reader, file string, opts Options) (*ProductsFile, error
 			}
 			vi.Color = obx.Color{Code: color, Name: rp.localized("color_name", col("color_name"), langIdx["color_name"], defLang)}
 			vi.Color.SupplierColor = rp.opt(col("supplier_color"))
-			var supplied string
 			if g := rp.get(col("gtin")); g != "" {
 				s, g14, err := NormalizeGTINCell(g)
 				if err != nil {
 					rp.fail("gtin", obx.ErrInvalidGTIN, "EAN "+err.Error(), g)
 				} else {
-					supplied = s
 					if prev, dup := seenGTIN[g14]; dup {
 						rp.fail("gtin", obx.ErrGTINConflict, fmt.Sprintf("EAN is also used on row %d", prev), g)
 					} else {
@@ -448,32 +472,24 @@ func ParseProducts(r io.Reader, file string, opts Options) (*ProductsFile, error
 			}
 			vi.Status = rp.status("variant_status", col("variant_status"))
 			vid := rp.get(col("variant_id"))
-			if vid == "" {
-				switch {
-				case supplied != "":
-					vid = supplied
-				case vi.Size != nil:
-					vid = style + "-" + color + "-" + strings.ReplaceAll(*vi.Size, "/", "-")
-				default:
-					vid = style + "-" + color
-				}
+			given := vid != ""
+			if !given {
+				vid = DefaultVariantID(style, color, obx.Str(vi.Size), obx.Str(vi.SizeLength))
 			}
 			if !obx.ValidExternalID(vid) {
-				rp.fail("variant_id", obx.ErrValidationFailed, "variant id must be 1-200 characters without \"/\"", vid)
-			} else if prev, dup := seenVariant[vid]; dup && !rp.failed {
-				rp.fail("variant_id", obx.ErrValidationFailed, fmt.Sprintf("variant %q is also on row %d", vid, prev), vid)
+				if given {
+					rp.fail("variant_id", obx.ErrValidationFailed, "variant id must be 1-200 characters without \"/\"", vid)
+				} else {
+					rp.fail("variant_id", obx.ErrValidationFailed, "the variant id made from style number, colour and size is longer than 200 characters; give a variant_id", vid)
+				}
 			}
-			variant = &Variant{Row: rowNo, ExternalID: vid, Input: vi}
+			variant = &Variant{Row: rowNo, ExternalID: vid, IDGiven: given, Input: vi}
 		}
 
 		if rp.failed {
 			out.Problems = append(out.Problems, rp.problems...)
 			continue
 		}
-		if variant != nil {
-			seenVariant[variant.ExternalID] = rowNo
-		}
-
 		p, exists := byKey[key]
 		if !exists {
 			p = &Product{Row: rowNo, ExternalID: key, Brand: brand, Input: in}

@@ -18,6 +18,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -35,7 +37,7 @@ func init() {
 	register(p, "P-DISC-1", "discovery document is public, valid, CORS *, api_base ends in /obx/v1", true, testDiscovery)
 	register(p, "P-DISC-2", "required capabilities present; missing optional capabilities answer 501", true, testCapabilities)
 	register(p, "P-AUTH-1", "token endpoint: client_secret_basic, invalid_client, invalid_scope", true, testTokenEndpoint)
-	register(p, "P-AUTH-2", "missing/invalid token and revoked client are refused", true, testAuthErrors)
+	register(p, "P-AUTH-2", "missing/invalid token → unauthorized/invalid_token; revoked client → access_revoked; token from before a secret rotation → invalid_token", true, testAuthErrors)
 	register(p, "P-AUTH-3", "without media:original no original anywhere, 403 on /renditions/original", true, testNoOriginal)
 	register(p, "P-ACC-1", "access request, status polling, credentials exactly once", true, testAccessRequest)
 	register(p, "P-FEED-1", "snapshot lists exactly the visible fixture objects in type order, then live", true, testSnapshot)
@@ -46,15 +48,15 @@ func init() {
 	register(p, "P-FEED-6", "grant change → grant entry with resync:true", true, testGrantResync)
 	register(p, "P-FEED-7", "cursors from before a spec upgrade → 410 cursor_expired; without a cursor works", true, testSpecUpgradeCursor)
 	register(p, "P-CAT-1", "products KO-1001 and KO-1005 match the expected fixtures, including the article data with names", true, testProductFixtures)
-	register(p, "P-CAT-2", "GET /products pagination is complete and stable; ids= filter", true, testProductList)
+	register(p, "P-CAT-2", "GET /products pagination is complete and stable; ids= filter; limit above the maximum clamps, limit=0 and limit=abc → 400 invalid_request", true, testProductList)
 	register(p, "P-CAT-3", "GTIN lookup matches the expected fixture; 2001 codes → limit_exceeded", true, testGTINLookup)
-	register(p, "P-CAT-4", "invisible objects answer 404, never 403", true, testInvisible404)
+	register(p, "P-CAT-4", "invisible objects answer 404, never 403; unpublishing KO-1006 gives the delete cascade, publishing it the upserts with GET's data", true, testInvisible404)
 	register(p, "P-CAT-5", "article data round trip: KO-1008, KO-1009, KO-1010 and KT-2001 match the expected fixtures", true, testArticleRoundTrip)
-	register(p, "P-CAT-6", "article data shape over the whole snapshot: properties present, valid, qualifiers instead of 0.1 keys, vocabulary names, categories and symbols, no empty objects", true, testArticleShape)
+	register(p, "P-CAT-6", "article data shape over the whole snapshot: properties present, valid, every fibre with percentage (number or null) and qualifiers, vocabulary names, categories and symbols, no empty objects; KO-1005 outer leather without a percentage", true, testArticleShape)
 	register(p, "P-MEDIA-1", "assets match the expected fixtures (AI, embargo, large original, no original)", true, testAssetFixtures)
-	register(p, "P-MEDIA-2", "renditions: sha256, ETag, OBX-Content-SHA256, Range, If-None-Match, signed URLs", true, testRenditionHTTP)
+	register(p, "P-MEDIA-2", "renditions: sha256, ETag, OBX-Content-SHA256, Range, If-None-Match, signed URLs; tampered or expired → 403 forbidden, neither signature nor token → 401", true, testRenditionHTTP)
 	register(p, "P-MEDIA-3", "originals byte-identical; web ≤ 2000, thumb ≤ 600, square is square, JPEG, never upscaled", true, testRenditionRules)
-	register(p, "P-EXP-1", "export: manifest, zip parts, hashes, changes_cursor", false, testExport)
+	register(p, "P-EXP-1", "export: manifest, zip parts, hashes, changes_cursor; Idempotency-Key gives the same export, another body → idempotency_key_reused", false, testExport)
 	register(p, "P-HOOK-1", "webhooks: signed webhook.test delivery; unsafe targets refused", false, testWebhooks)
 	register(p, "P-USE-1", "usage events accepted and counted", false, testUsage)
 	register(p, "P-RATE-1", "RateLimit headers; 429 carries Retry-After", true, testRateLimit)
@@ -139,7 +141,7 @@ func (t *T) newEntries(c *apiKey, cursor string) ([]obx.Change, string) {
 
 func (t *T) needAdmin(what string) {
 	if t.r.admin == nil {
-		t.Skip("%s needs admin credentials (--admin-user/--admin-password or --setup-code)", what)
+		t.SkipNeeds("admin credentials (--admin-user/--admin-password or --setup-code)", "%s needs admin credentials (--admin-user/--admin-password or --setup-code)", what)
 	}
 }
 
@@ -311,6 +313,59 @@ func testAuthErrors(t *T) {
 	res, err = t.r.tokenRequest(t.ctx, c.id, c.secret, "")
 	t.Check(err, "token")
 	t.expectStatus(res, http.StatusUnauthorized, "invalid_client", "token for a revoked API key")
+
+	// A rotated secret is no revocation (protocol.md 4.3): the access token
+	// issued with the old secret answers invalid_token, never access_revoked,
+	// and the new secret gets a working token.
+	r := t.newThrowawayKey("OBX conformance: rotation", nil)
+	oldTok, err := r.Token(t.ctx)
+	t.Check(err, "token of a new API key")
+	newSecret := t.rotateSecret(r)
+	res, err = t.r.do(t.ctx, http.MethodGet, base+"/grant", nil, bearerHeader(oldTok))
+	t.Check(err, "GET /grant")
+	t.expectStatus(res, http.StatusUnauthorized, obx.ErrInvalidToken, "access token issued with the secret before a rotation")
+	res, err = t.r.tokenRequest(t.ctx, r.id, newSecret, "")
+	t.Check(err, "token")
+	var tr obx.TokenResponse
+	if res.status != http.StatusOK || res.decode(&tr) != nil || tr.AccessToken == "" {
+		t.Fatalf("token with the new secret after the rotation: %d %s", res.status, truncate(res.body))
+	}
+	res, err = t.r.do(t.ctx, http.MethodGet, base+"/grant", nil, bearerHeader(tr.AccessToken))
+	t.Check(err, "GET /grant")
+	if res.status != http.StatusOK {
+		t.Errorf("token of the new secret after a rotation: GET /grant %d %s", res.status, truncate(res.body))
+	}
+}
+
+// rotateSecret gives an API key a new secret through the admin API or the
+// operator (rotate_client_secret) and returns it. Without either the test
+// is skipped.
+func (t *T) rotateSecret(c *apiKey) string {
+	if t.r.admin != nil {
+		clients, err := t.r.adminClients(t.ctx)
+		t.Check(err, "list API keys")
+		for _, cl := range clients {
+			if cl.ClientID == c.id {
+				rot, err := t.r.admin.RotateAPIClient(t.ctx, cl.ID)
+				t.Check(err, "rotate the API key's secret")
+				return rot.ClientSecret
+			}
+		}
+		t.Fatalf("the new API key is not in the admin list")
+	}
+	needs := "an operator that offers " + ActRotateClientSecret + " (or admin credentials)"
+	a := Action{Name: ActRotateClientSecret, Params: map[string]string{"client_id": c.id}, Result: []string{"client_secret"},
+		Hint: "Give the API key with this client id a new client secret (rotate it; do not revoke it) and enter the new secret. Leave it empty if the node cannot rotate secrets (the test is then skipped)."}
+	t.r.logf("operator: %s %v", a.Name, a.Params)
+	res, err := t.r.cfg.Operator.Do(t.ctx, a)
+	if errors.Is(err, ErrActionNotSupported) {
+		t.SkipNeeds(needs, "the rotation part was not checked: the operator does not offer %s", ActRotateClientSecret)
+	}
+	t.Check(err, "operator "+a.Name)
+	if res["client_secret"] == "" {
+		t.SkipNeeds(needs, "the rotation part was not checked: the operator returned no client_secret for %s", ActRotateClientSecret)
+	}
+	return res["client_secret"]
 }
 
 // throwawayClient creates a retailer and an API key through the admin API.
@@ -376,7 +431,7 @@ func testNoOriginal(t *T) {
 
 func testAccessRequest(t *T) {
 	if t.r.discovery != nil && !t.r.discovery.Has(obx.CapAccessRequests) {
-		t.Skip("capability access_requests not offered")
+		t.NotApplicable("capability access_requests not offered")
 	}
 	anon := t.r.newClient("", "")
 	retailerName := "Conformance Boutique " + randomSuffix()
@@ -688,7 +743,7 @@ func testSpecUpgradeCursor(t *T) {
 		t.onlineStop("simulating a spec upgrade needs a brand-side step")
 	}
 	if t.r.cfg.Operator == nil {
-		t.Skip("needs an operator that offers %s (--operator-hook, --operator-prompt or Config.Operator)", ActSimulateSpecUpgrade)
+		t.skipOptional("an operator that offers "+ActSimulateSpecUpgrade, "needs an operator that offers %s (--operator-hook, --operator-prompt or Config.Operator)", ActSimulateSpecUpgrade)
 	}
 	c := t.newThrowawayKey("OBX conformance: spec upgrade", nil)
 	cursor := t.liveCursor(c)
@@ -700,11 +755,11 @@ func testSpecUpgradeCursor(t *T) {
 	t.r.logf("operator: %s", a.Name)
 	res, err := t.r.cfg.Operator.Do(t.ctx, a)
 	if errors.Is(err, ErrActionNotSupported) {
-		t.Skip("the operator does not offer %s", ActSimulateSpecUpgrade)
+		t.skipOptional("an operator that offers "+ActSimulateSpecUpgrade, "the operator does not offer %s", ActSimulateSpecUpgrade)
 	}
 	t.Check(err, "operator "+a.Name)
 	if res["simulated"] != "true" {
-		t.Skip("the operator does not offer %s (no simulated: true)", ActSimulateSpecUpgrade)
+		t.skipOptional("an operator that offers "+ActSimulateSpecUpgrade, "the operator does not offer %s (no simulated: true)", ActSimulateSpecUpgrade)
 	}
 	old := t.get(c, "/changes?cursor="+url.QueryEscape(cursor))
 	t.expectStatus(old, http.StatusGone, obx.ErrCursorExpired, "cursor from before the spec upgrade")
@@ -777,6 +832,7 @@ func testProductList(t *T) {
 	if strings.Join(all, ",") != strings.Join(paged, ",") {
 		t.Errorf("paging with limit=3 gives %v, limit=100 gives %v", paged, all)
 	}
+	t.checkLimitClamp()
 	if t.r.online() && !t.r.fixturesPresent {
 		t.partialf("the number of products (needs the Kestrel test data)")
 		if len(all) < 2 {
@@ -798,6 +854,46 @@ func testProductList(t *T) {
 	t.Check(err, "ids filter")
 	if len(page.Items) != 2 {
 		t.Errorf("ids= with two known and one unknown id returned %d products", len(page.Items))
+	}
+}
+
+// checkLimitClamp is the limits part of P-CAT-2 (protocol.md 2.1): a limit
+// above the node's maximum is not an error, the node answers with at most
+// its maximum; a limit that is not an integer or below 1 is 400
+// invalid_request. Both on /products and /changes.
+func (t *T) checkLimitClamp() {
+	var limits obx.DiscoveryLimits
+	if t.r.discovery != nil {
+		limits = t.r.discovery.Limits
+	}
+	for _, ep := range []struct {
+		path string
+		max  int
+		name string
+	}{{"/products", limits.ProductsPageMax, "products_page_max"}, {"/changes", limits.ChangesPageMax, "changes_page_max"}} {
+		res := t.get(t.r.full, ep.path+"?limit=100000")
+		if res.status != http.StatusOK {
+			t.Errorf("GET %s?limit=100000: want 200 (a limit above the maximum clamps), got %d %s", ep.path, res.status, truncate(res.body))
+		} else {
+			var page struct {
+				Items   []json.RawMessage `json:"items"`
+				Changes []json.RawMessage `json:"changes"`
+			}
+			if err := res.decode(&page); err != nil {
+				t.Errorf("GET %s?limit=100000: %v", ep.path, err)
+			}
+			n := len(page.Items) + len(page.Changes)
+			switch {
+			case ep.max <= 0:
+				t.Errorf("the discovery document has no limits.%s", ep.name)
+			case n > ep.max:
+				t.Errorf("GET %s?limit=100000 returned %d entries, more than limits.%s %d", ep.path, n, ep.name, ep.max)
+			}
+		}
+		for _, bad := range []string{"0", "abc"} {
+			res := t.get(t.r.full, ep.path+"?limit="+bad)
+			t.expectStatus(res, http.StatusBadRequest, obx.ErrInvalidRequest, "GET "+ep.path+"?limit="+bad)
+		}
 	}
 }
 
@@ -845,23 +941,262 @@ func testInvisible404(t *T) {
 		t.expectStatus(t.get(t.r.second, "/assets/"+t.assetID("KT-2001_BLK_1")), http.StatusNotFound, obx.ErrNotFound, "image outside the grant")
 		t.expectStatus(t.get(t.r.second, "/brands/"+t.r.brandIDs["kestrel-trail"]), http.StatusNotFound, obx.ErrNotFound, "brand outside the grant")
 	}
-	switch {
-	case t.r.ing != nil:
-		_, err := t.r.ing.Unpublish(t.ctx, obx.KindProduct, "KO-1006")
-		t.Check(err, "unpublish KO-1006")
-		defer t.r.ing.Publish(t.ctx, obx.KindProduct, "KO-1006")
-	case t.r.cfg.Operator != nil:
-		t.opStep(productAction(ActUnpublishProduct, "KO-1006", "Unpublish this product (retailers must no longer see it)."))
-		defer t.r.operate(t.ctx, productAction(ActPublishProduct, "KO-1006", "Publish this product again."))
-	case t.r.online():
-		t.partialf("unpublished products answer 404 (needs a brand-side step)")
-		return
-	default:
-		t.Notef("unpublishing not checked (no upload key or operator)")
+	if t.r.online() {
+		t.partialf("unpublished products answer 404 and the feed's delete cascade (needs a brand-side step)")
 		return
 	}
-	t.expectStatus(t.get(t.r.full, "/products/"+t.productID("KO-1006")), http.StatusNotFound, obx.ErrNotFound, "unpublished product")
+	if t.r.ing == nil && t.r.cfg.Operator == nil {
+		t.SkipNeeds("an upload key, admin credentials or an operator that offers "+ActUnpublishProduct+" and "+ActPublishProduct,
+			"the unpublish half (404 and the feed's delete entries) needs an upload key, admin credentials or an operator")
+	}
+	const ext = "KO-1006"
+	pid := t.productID(ext)
+	before := t.get(t.r.full, "/products/"+pid)
+	var detail map[string]any
+	if before.status != http.StatusOK || before.decode(&detail) != nil {
+		t.Fatalf("GET %s: %d %s", ext, before.status, truncate(before.body))
+	}
+	objs := cascadeOrder(pid, detail)
+	cursor := t.liveCursor(t.r.full)
+	published := false
+	publish := func() {
+		if published {
+			return
+		}
+		published = true
+		if t.r.ing != nil {
+			_, err := t.r.ing.Publish(t.ctx, obx.KindProduct, ext)
+			t.Check(err, "publish "+ext+" again")
+			return
+		}
+		t.opStep(productAction(ActPublishProduct, ext, "Publish this product again."))
+	}
+	if t.r.ing != nil {
+		_, err := t.r.ing.Unpublish(t.ctx, obx.KindProduct, ext)
+		t.Check(err, "unpublish "+ext)
+	} else {
+		t.opStep(productAction(ActUnpublishProduct, ext, "Unpublish this product (retailers must no longer see it)."))
+	}
+	defer func() {
+		if !published {
+			published = true
+			if t.r.ing != nil {
+				t.r.ing.Publish(t.ctx, obx.KindProduct, ext)
+			} else {
+				t.r.operate(t.ctx, productAction(ActPublishProduct, ext, "Publish this product again."))
+			}
+		}
+	}()
+	t.expectStatus(t.get(t.r.full, "/products/"+pid), http.StatusNotFound, obx.ErrNotFound, "unpublished product")
 	t.expectStatus(t.get(t.r.full, "/assets/"+t.assetID("KO-1006_NVY_1")), http.StatusNotFound, obx.ErrNotFound, "image of an unpublished product")
+
+	// The feed says so (protocol.md 6.2, 6.3): one delete for the product,
+	// then its variants by external_id, then its assets by color_code (null
+	// first) and position; no data; strictly increasing seq.
+	live, cursor := t.newEntries(t.r.full, cursor)
+	got := cascadeEntries(live, objs)
+	t.checkCascade("after unpublishing "+ext, got, objs, obx.OpDelete)
+	for _, ch := range got {
+		if d := bytes.TrimSpace(ch.Data); len(d) > 0 && string(d) != "null" {
+			t.Errorf("after unpublishing %s: the delete entry of %s %s carries data", ext, ch.Type, ch.ExternalIDValue())
+		}
+	}
+
+	// Published again: upserts for the same objects in the same order, each
+	// with the data GET returns and valid against its schema.
+	publish()
+	live, _ = t.newEntries(t.r.full, cursor)
+	got = cascadeEntries(live, objs)
+	t.checkCascade("after publishing "+ext+" again", got, objs, obx.OpUpsert)
+	after := t.get(t.r.full, "/products/"+pid)
+	var fresh map[string]any
+	if after.status != http.StatusOK || after.decode(&fresh) != nil {
+		t.Fatalf("GET %s after publishing it again: %d %s", ext, after.status, truncate(after.body))
+	}
+	variantsByID := map[string]any{}
+	if vs, ok := fresh["variants"].([]any); ok {
+		for _, v := range vs {
+			if m, ok := v.(map[string]any); ok {
+				variantsByID[fmt.Sprint(m["id"])] = m
+			}
+		}
+	}
+	schemaFor := map[string]string{obx.ChangeProduct: "Product", obx.ChangeVariant: "Variant", obx.ChangeAsset: "Asset"}
+	for _, ch := range got {
+		if ch.Op != obx.OpUpsert {
+			continue
+		}
+		what := fmt.Sprintf("the upsert of %s %s", ch.Type, ch.ExternalIDValue())
+		t.validate(schemaFor[ch.Type], ch.Data, what)
+		var data map[string]any
+		if json.Unmarshal(ch.Data, &data) != nil {
+			t.Errorf("%s has no object as data", what)
+			continue
+		}
+		var want any
+		switch ch.Type {
+		case obx.ChangeProduct:
+			m := map[string]any{}
+			for k, v := range fresh {
+				if _, inData := data[k]; !inData && (k == "variants" || k == "assets") {
+					continue // ProductDetail embeds them; the product entry need not
+				}
+				m[k] = v
+			}
+			want = m
+		case obx.ChangeVariant:
+			want = variantsByID[ch.ID]
+		case obx.ChangeAsset:
+			res := t.get(t.r.full, "/assets/"+ch.ID)
+			var a map[string]any
+			if res.status == http.StatusOK && res.decode(&a) == nil {
+				want = a
+			}
+		}
+		if want == nil {
+			t.Errorf("%s: GET does not return the object", what)
+			continue
+		}
+		if diff := sameObject(data, want); diff != "" {
+			t.Errorf("%s: data differs from what GET returns: %s", what, diff)
+		}
+	}
+}
+
+// cascadeObject is one object of a product in the order of protocol.md 6.3.
+type cascadeObject struct{ kind, id, ext string }
+
+// cascadeOrder lists a product (ProductDetail as JSON) and its variants and
+// assets in the order of protocol.md 6.3: the product, the variants by
+// external_id, the assets by color_code (null first) and position.
+func cascadeOrder(pid string, detail map[string]any) []cascadeObject {
+	out := []cascadeObject{{obx.ChangeProduct, pid, fmt.Sprint(detail["external_id"])}}
+	type asset struct {
+		cascadeObject
+		color *string
+		pos   float64
+	}
+	var vs []cascadeObject
+	var as []asset
+	list := func(k string) []map[string]any {
+		var l []map[string]any
+		arr, _ := detail[k].([]any)
+		for _, e := range arr {
+			if m, ok := e.(map[string]any); ok {
+				l = append(l, m)
+			}
+		}
+		return l
+	}
+	for _, v := range list("variants") {
+		vs = append(vs, cascadeObject{obx.ChangeVariant, fmt.Sprint(v["id"]), fmt.Sprint(v["external_id"])})
+	}
+	for _, a := range list("assets") {
+		x := asset{cascadeObject: cascadeObject{obx.ChangeAsset, fmt.Sprint(a["id"]), fmt.Sprint(a["external_id"])}}
+		if c, ok := a["color_code"].(string); ok {
+			x.color = &c
+		}
+		x.pos, _ = a["position"].(float64)
+		as = append(as, x)
+	}
+	sort.SliceStable(vs, func(i, j int) bool { return vs[i].ext < vs[j].ext })
+	sort.SliceStable(as, func(i, j int) bool {
+		a, b := as[i], as[j]
+		switch {
+		case (a.color == nil) != (b.color == nil):
+			return a.color == nil
+		case a.color != nil && *a.color != *b.color:
+			return *a.color < *b.color
+		}
+		return a.pos < b.pos
+	})
+	out = append(out, vs...)
+	for _, a := range as {
+		out = append(out, a.cascadeObject)
+	}
+	return out
+}
+
+// cascadeEntries returns the entries that concern the objects.
+func cascadeEntries(live []obx.Change, objs []cascadeObject) []obx.Change {
+	ids := map[string]bool{}
+	for _, o := range objs {
+		ids[o.kind+"/"+o.id] = true
+	}
+	pid := objs[0].id
+	var out []obx.Change
+	for _, ch := range live {
+		if ids[ch.Type+"/"+ch.ID] || (ch.ProductID != nil && *ch.ProductID == pid) {
+			out = append(out, ch)
+		}
+	}
+	return out
+}
+
+// checkCascade compares the entries of one write with the expected order.
+func (t *T) checkCascade(when string, got []obx.Change, objs []cascadeObject, op string) {
+	var g, w []string
+	for _, ch := range got {
+		g = append(g, ch.Op+" "+ch.Type+" "+ch.ExternalIDValue())
+	}
+	for _, o := range objs {
+		w = append(w, op+" "+o.kind+" "+o.ext)
+	}
+	if strings.Join(g, "; ") != strings.Join(w, "; ") {
+		t.Errorf("%s: /changes gave [%s], want exactly [%s] (protocol.md 6.3)", when, strings.Join(g, "; "), strings.Join(w, "; "))
+	}
+	for i := 1; i < len(got); i++ {
+		if got[i].Seq <= got[i-1].Seq {
+			t.Errorf("%s: seq %d of %s %s does not follow %d", when, got[i].Seq, got[i].Type, got[i].ExternalIDValue(), got[i-1].Seq)
+		}
+	}
+}
+
+// sameObject compares two JSON objects with rendition URLs (signed, so they
+// differ per answer) left out. It returns "" or the differing members.
+func sameObject(a, b any) string {
+	na, nb := toAny(a), toAny(b)
+	dropURLs(na)
+	dropURLs(nb)
+	ma, okA := na.(map[string]any)
+	mb, okB := nb.(map[string]any)
+	if !okA || !okB {
+		if reflect.DeepEqual(na, nb) {
+			return ""
+		}
+		return "not both objects"
+	}
+	var diff []string
+	for k, v := range ma {
+		if w, ok := mb[k]; !ok {
+			diff = append(diff, k+" (only in the entry)")
+		} else if !reflect.DeepEqual(v, w) {
+			diff = append(diff, fmt.Sprintf("%s (entry %s, GET %s)", k, short(v), short(w)))
+		}
+	}
+	for k := range mb {
+		if _, ok := ma[k]; !ok {
+			diff = append(diff, k+" (only in GET)")
+		}
+	}
+	sort.Strings(diff)
+	return strings.Join(diff, "; ")
+}
+
+// dropURLs removes rendition URLs and their expiry, which differ per answer.
+func dropURLs(v any) {
+	switch x := v.(type) {
+	case map[string]any:
+		delete(x, "url")
+		delete(x, "url_expires_at")
+		for _, e := range x {
+			dropURLs(e)
+		}
+	case []any:
+		for _, e := range x {
+			dropURLs(e)
+		}
+	}
 }
 
 // ---- media
@@ -996,12 +1331,87 @@ func testRenditionHTTP(t *T) {
 				}
 			} else if anon.status == http.StatusOK {
 				t.Errorf("%s %s: URL without expiry works without Authorization (permanent public URL)", ext, name)
+			} else {
+				t.expectStatus(anon, http.StatusUnauthorized, obx.ErrUnauthorized, fmt.Sprintf("%s %s: a rendition request with neither signature nor token", ext, name))
+			}
+			if name == names[0] {
+				t.checkSignedURLRefusals(ext+" "+name, rd)
 			}
 		}
 	}
 	if checked == 0 {
 		t.Errorf("no renditions checked")
 	}
+}
+
+// checkSignedURLRefusals is the refusal part of P-MEDIA-2: a signed URL
+// with a changed signature or with its expiry moved into the past answers
+// 403 forbidden (not 401); the URL without its signature and without a
+// token answers 401 unauthorized. The signature and expiry are found as
+// query parameters whose names contain "sig" and "exp".
+func (t *T) checkSignedURLRefusals(what string, rd *obx.Rendition) {
+	if rd.URLExpiresAt == nil {
+		return
+	}
+	u, err := url.Parse(rd.URL)
+	t.Check(err, "parse the signed URL")
+	q := u.Query()
+	var sigKey, expKey string
+	for k, vs := range q {
+		lk := strings.ToLower(k)
+		if len(vs) != 1 {
+			continue
+		}
+		if strings.Contains(lk, "sig") && sigKey == "" {
+			sigKey = k
+		} else if strings.Contains(lk, "exp") && expKey == "" {
+			expKey = k
+		}
+	}
+	try := func(label string, mod func(url.Values)) *response {
+		q2 := u.Query()
+		mod(q2)
+		v := *u
+		v.RawQuery = q2.Encode()
+		res, err := t.r.do(t.ctx, http.MethodGet, v.String(), nil, nil)
+		t.Check(err, label)
+		return res
+	}
+	if sigKey == "" {
+		t.Notef("%s: the signed URL has no query parameter with \"sig\" in its name; the refusals of a tampered or stripped signature were not checked", what)
+		return
+	}
+	res := try("tampered signature", func(q url.Values) {
+		v := q.Get(sigKey)
+		sum := sha256.Sum256([]byte(v))
+		alt := hex.EncodeToString(sum[:])
+		for len(alt) < len(v) {
+			alt += alt
+		}
+		q.Set(sigKey, alt[:max(len(v), 1)])
+	})
+	t.expectStatus(res, http.StatusForbidden, obx.ErrForbidden, what+": the signed URL with a changed signature")
+	if expKey != "" {
+		res = try("expired", func(q url.Values) {
+			old := q.Get(expKey)
+			past := time.Now().Add(-time.Hour)
+			if _, err := time.Parse(time.RFC3339, old); err == nil {
+				q.Set(expKey, past.UTC().Format(time.RFC3339))
+			} else {
+				q.Set(expKey, fmt.Sprint(past.Unix()))
+			}
+		})
+		t.expectStatus(res, http.StatusForbidden, obx.ErrForbidden, what+": the signed URL with its expiry moved into the past")
+	} else {
+		t.Notef("%s: the signed URL has no query parameter with \"exp\" in its name; the expired URL was not checked", what)
+	}
+	res = try("without signature", func(q url.Values) {
+		q.Del(sigKey)
+		if expKey != "" {
+			q.Del(expKey)
+		}
+	})
+	t.expectStatus(res, http.StatusUnauthorized, obx.ErrUnauthorized, what+": the rendition URL with neither signature nor token")
 }
 
 func sha(b []byte) string {
@@ -1061,11 +1471,30 @@ func testRenditionRules(t *T) {
 
 func testExport(t *T) {
 	if t.r.discovery == nil || !t.r.discovery.Has(obx.CapExports) {
-		t.Skip("capability exports not offered")
+		t.NotApplicable("capability exports not offered")
 	}
 	kestrel := t.r.brandIDs["kestrel"]
-	e, err := t.r.full.CreateExport(t.ctx, obx.ExportRequest{Filter: &obx.ExportFilter{BrandIDs: []string{kestrel}}, Renditions: []string{obx.RenditionWeb}}, "conformance-"+randomSuffix())
+	idemKey := "conformance-" + randomSuffix()
+	req := obx.ExportRequest{Filter: &obx.ExportFilter{BrandIDs: []string{kestrel}}, Renditions: []string{obx.RenditionWeb}}
+	e, err := t.r.full.CreateExport(t.ctx, req, idemKey)
 	t.Check(err, "POST /exports")
+	// The same Idempotency-Key and body return the same export, also while
+	// it still runs (not 409 conflict); another body → 409
+	// idempotency_key_reused (protocol.md 9).
+	again, err := t.r.full.CreateExport(t.ctx, req, idemKey)
+	switch {
+	case err != nil:
+		t.Errorf("POST /exports again with the same Idempotency-Key and body: want the same export, got %v", err)
+	case again.ID != e.ID:
+		t.Errorf("POST /exports again with the same Idempotency-Key and body gave export %s, want %s", again.ID, e.ID)
+	}
+	other := obx.ExportRequest{Filter: &obx.ExportFilter{BrandIDs: []string{kestrel}}, Renditions: []string{obx.RenditionThumb}}
+	if x, err := t.r.full.CreateExport(t.ctx, other, idemKey); !obx.IsCode(err, obx.ErrIdempotencyKeyReused) {
+		t.Errorf("POST /exports with the same Idempotency-Key and another body: want 409 idempotency_key_reused, got %v", err)
+		if err == nil && x.ID == e.ID {
+			t.Notef("the node returned the first export for another body")
+		}
+	}
 	e, err = t.r.full.WaitExport(t.ctx, e.ID, 500*time.Millisecond)
 	t.Check(err, "export")
 	raw, _ := json.Marshal(e)
@@ -1151,7 +1580,7 @@ func testExport(t *T) {
 
 func testWebhooks(t *T) {
 	if t.r.discovery == nil || !t.r.discovery.Has(obx.CapWebhooks) {
-		t.Skip("capability webhooks not offered")
+		t.NotApplicable("capability webhooks not offered")
 	}
 	type delivery struct {
 		header http.Header
@@ -1238,7 +1667,7 @@ func testWebhooks(t *T) {
 
 func testUsage(t *T) {
 	if t.r.discovery == nil || !t.r.discovery.Has(obx.CapUsage) {
-		t.Skip("capability usage not offered")
+		t.NotApplicable("capability usage not offered")
 	}
 	var before int
 	if t.r.admin != nil {

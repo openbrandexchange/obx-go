@@ -290,3 +290,46 @@ func TestCodesMatchVocabulary(t *testing.T) {
 		}
 	}
 }
+
+// import-format.md 1.2.1 and 1.4 (spec 0.3.0): the default variant id,
+// fibres without a percentage and the decimal comma.
+func TestDefaultVariantIDAndPercentages(t *testing.T) {
+	for _, c := range [][5]string{
+		{"KO-1004", "IND", "30", "32", "KO-1004-IND-30-32"},
+		{"KO-1004", "IND", "32/34", "", "KO-1004-IND-32_34"},
+		{"KO-1005", "COG", "ONE SIZE", "", "KO-1005-COG-ONE SIZE"},
+		{"KO-1005", "COG", "", "", "KO-1005-COG"},
+		{"KO-1005", "COG", "", "32", "KO-1005-COG-32"},
+		{" A ", "B\tC", "S\x7f", "", "A-B_C-S_"},
+	} {
+		if got := canonicalcsv.DefaultVariantID(c[0], c[1], c[2], c[3]); got != c[4] {
+			t.Errorf("DefaultVariantID%q = %q, want %q", c[:4], got, c[4])
+		}
+	}
+	m, _, err := canonicalcsv.ParseMaterials("outer: leather; lining: 60% cotton, polyester (recycled)")
+	if err != nil || m[0].Fibers[0].Percentage != nil || m[1].Fibers[1].Percentage != nil || *m[1].Fibers[0].Percentage != 60 {
+		t.Fatalf("fibres without a percentage: %v %s", err, js(m))
+	}
+	if got := canonicalcsv.FormatMaterials(m); got != "outer: leather; lining: 60% cotton, polyester (recycled)" {
+		t.Errorf("format: %s", got)
+	}
+	if b, _ := json.Marshal(m[0].Fibers[0]); string(b) != `{"material":{"code":"leather","name":null},"percentage":null,"qualifiers":[]}` {
+		t.Errorf("fibre JSON %s", b)
+	}
+	for _, s := range []string{"main: 95,5% polyester, 4,5% elastane", "95,5% cotton"} {
+		if _, _, err := canonicalcsv.ParseMaterials(s); err == nil || !strings.HasPrefix(err.Error(), "materials: decimal comma") {
+			t.Errorf("%q: %v", s, err)
+		}
+	}
+	if m, _, err := canonicalcsv.ParseMaterials("95.5% cotton, 4.5% elastane"); err != nil || *m[0].Fibers[0].Percentage != 95.5 {
+		t.Errorf("decimal point: %v", err)
+	}
+}
+
+func TestNormalizeLanguageTag(t *testing.T) {
+	for in, want := range map[string]string{"NL": "nl", "nl_be": "nl-BE", "ZH_hant": "zh-Hant", "es-419": "es-419", "sr-latn-rs": "sr-Latn-RS", "en-US-x": "", "e": "", "de-1234": "", "zh-Hant-TW": "zh-Hant-TW"} {
+		if got := canonicalcsv.NormalizeLanguageTag(in); got != want {
+			t.Errorf("%q: %q, want %q", in, got, want)
+		}
+	}
+}

@@ -45,6 +45,7 @@ const (
 	ErrWorkbookSheetMissing = "workbook_sheet_missing"
 	ErrWorkbookTooLarge     = "workbook_too_large"
 	ErrUnsafeURL            = "unsafe_url"
+	ErrIdempotencyKeyReused = "idempotency_key_reused"
 	ErrCSRFFailed           = "csrf_failed"
 	ErrInvalidCredentials   = "invalid_credentials"
 	ErrAccountBlocked       = "account_blocked"
@@ -96,6 +97,7 @@ var codes = map[string]codeInfo{
 	ErrWorkbookSheetMissing: {422, "Workbook sheet missing"},
 	ErrWorkbookTooLarge:     {422, "Workbook too large"},
 	ErrUnsafeURL:            {422, "Unsafe URL"},
+	ErrIdempotencyKeyReused: {409, "Idempotency key reused"},
 	ErrCSRFFailed:           {403, "CSRF check failed"},
 	ErrInvalidCredentials:   {401, "Invalid credentials"},
 	ErrAccountBlocked:       {403, "Account blocked"},

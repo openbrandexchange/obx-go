@@ -120,6 +120,7 @@
   "problem.column": "Spalte {column}",
   "problem.fibre_composition_missing": "die Faserzusammensetzung fehlt; die EU schreibt sie auf dem Etikett von Textilerzeugnissen vor",
   "problem.fibre_percentages_not_100": "die Faseranteile eines Teils ergeben zusammen nicht 100",
+  "problem.material_unknown": "dieser Materialcode steht nicht in der Materialliste; er bleibt wie geschrieben, prüfen Sie die Schreibweise oder verwenden Sie den englischen Namen",
   "problem.files_missing": "Dateien fehlen",
   "problem.footwear_materials_missing": "das Material von Obermaterial, Futter und Decksohle oder Laufsohle fehlt; die EU schreibt es auf dem Etikett von Schuhen vor",
   "problem.gtin_conflict": "diese EAN wird bereits von einem anderen Artikel verwendet",

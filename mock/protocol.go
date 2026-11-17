@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -437,14 +438,10 @@ func (n *Node) handleChanges(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s := n.st
-	limit := 100
-	if v := r.URL.Query().Get("limit"); v != "" {
-		l, err := strconv.Atoi(v)
-		if err != nil || l < 1 {
-			writeProblem(w, problem(obx.ErrInvalidRequest, "limit must be 1-500"))
-			return
-		}
-		limit = min(l, 500)
+	limit, lp := pageLimit(r.URL.Query(), 100, 500)
+	if lp != nil {
+		writeProblem(w, lp)
+		return
 	}
 	now := n.now()
 	page := obx.ChangesPage{Changes: []obx.Change{}}
@@ -598,6 +595,28 @@ func (n *Node) handleBrand(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, n.st.brandRepr(b))
 }
 
+// pageLimit reads the limit parameter of a paged endpoint (protocol.md
+// 2.1): absent gives def, a value above max is clamped to max, a value that
+// is not an integer or is below 1 is 400 invalid_request.
+func pageLimit(q url.Values, def, max int) (int, *obx.Problem) {
+	v := q.Get("limit")
+	if v == "" {
+		return def, nil
+	}
+	l, err := strconv.Atoi(v)
+	if err != nil {
+		var ne *strconv.NumError
+		if errors.As(err, &ne) && ne.Err == strconv.ErrRange && !strings.HasPrefix(v, "-") {
+			return max, nil // an integer too large to read: above every maximum
+		}
+		return 0, problemf(obx.ErrInvalidRequest, "limit must be an integer of at least 1 (at most %d is returned)", max)
+	}
+	if l < 1 {
+		return 0, problemf(obx.ErrInvalidRequest, "limit must be an integer of at least 1 (at most %d is returned)", max)
+	}
+	return min(l, max), nil
+}
+
 func (n *Node) handleProducts(w http.ResponseWriter, r *http.Request) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
@@ -607,14 +626,10 @@ func (n *Node) handleProducts(w http.ResponseWriter, r *http.Request) {
 	}
 	s := n.st
 	q := r.URL.Query()
-	limit := 25
-	if v := q.Get("limit"); v != "" {
-		l, err := strconv.Atoi(v)
-		if err != nil || l < 1 {
-			writeProblem(w, problem(obx.ErrInvalidRequest, "limit must be 1-100"))
-			return
-		}
-		limit = min(l, 100)
+	limit, lp := pageLimit(q, 25, 100)
+	if lp != nil {
+		writeProblem(w, lp)
+		return
 	}
 	var ids map[string]bool
 	if v := q.Get("ids"); v != "" {
@@ -826,11 +841,15 @@ func (n *Node) handleRendition(w http.ResponseWriter, r *http.Request) {
 	}
 	var rt *retailer
 	q := r.URL.Query()
-	if sig := q.Get("sig"); sig != "" && bearer(r) == "" {
+	// protocol.md 5.5: a request with a Bearer token is served whatever the
+	// signature says; without one, an expired or changed signed URL is 403
+	// forbidden, and neither signature nor token is 401 unauthorized.
+	if bearer(r) == "" && (q.Has("sig") || q.Has("expires")) {
+		sig := q.Get("sig")
 		exp, err := strconv.ParseInt(q.Get("expires"), 10, 64)
 		p := r.URL.Path
-		if err != nil || !constantEqual(sig, n.sign("GET", p, q.Get("expires"))) || n.now().Unix() > exp {
-			writeProblem(w, problem(obx.ErrUnauthorized, "the signed URL is invalid or expired; read the asset again for a fresh URL"))
+		if err != nil || sig == "" || !constantEqual(sig, n.sign("GET", p, q.Get("expires"))) || n.now().Unix() > exp {
+			writeProblem(w, problem(obx.ErrForbidden, "the signed URL has expired or does not match its signature; read the asset again for a fresh URL"))
 			return
 		}
 		a := s.byID[id]
@@ -955,17 +974,29 @@ func (n *Node) handleCreateExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s := n.st
+	var in obx.ExportRequest
+	raw, p := readJSONBody(r, &in)
+	if p != nil {
+		writeProblem(w, p)
+		return
+	}
+	// protocol.md 8: the same key and body within 24 hours is the same
+	// export (also while it runs); another body is idempotency_key_reused.
+	// Keys belong to the API client, so a retry with a new access token
+	// finds its export too.
 	key := r.Header.Get(obx.HeaderIdempotencyKey)
+	slot := "export:" + c.client.id + ":" + key
 	if key != "" {
-		if e, ok := s.idempotency["export:"+c.client.id+":"+key]; ok {
+		e, p := n.idempotent(slot, key, hashBytes(raw))
+		if p != nil {
+			writeProblem(w, p)
+			return
+		}
+		if e != nil && s.exports[e.ref] != nil {
+			w.Header().Set("Location", n.baseURL(r)+obx.PathAPIBase+"/exports/"+e.ref)
 			writeJSON(w, http.StatusAccepted, s.exports[e.ref].Export)
 			return
 		}
-	}
-	var in obx.ExportRequest
-	if p := readJSON(r, &in); p != nil {
-		writeProblem(w, p)
-		return
 	}
 	if len(in.Renditions) == 0 {
 		in.Renditions = []string{obx.RenditionWeb}
@@ -987,7 +1018,7 @@ func (n *Node) handleCreateExport(w http.ResponseWriter, r *http.Request) {
 	e := n.buildExport(r, c, in)
 	s.exports[e.ID] = e
 	if key != "" {
-		s.idempotency["export:"+c.client.id+":"+key] = idemEntry{ref: e.ID, at: n.now()}
+		s.idempotency[slot] = idemEntry{ref: e.ID, hash: hashBytes(raw), at: n.now()}
 	}
 	w.Header().Set("Location", n.baseURL(r)+obx.PathAPIBase+"/exports/"+e.ID)
 	writeJSON(w, http.StatusAccepted, e.Export)

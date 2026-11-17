@@ -408,9 +408,15 @@ func testSignedURLs(t *T) {
 	}
 	parsed, err := url.Parse(u)
 	t.Check(err, "parse URL")
+	// Every refusal is 403 forbidden (spec conformance S-URL-1); a URL
+	// with neither signature nor token is 401 unauthorized (P-MEDIA-2).
 	check := func(what, target string) {
-		if res := t.rawGet(target, nil); res.status == http.StatusOK {
+		res := t.rawGet(target, nil)
+		switch {
+		case res.status == http.StatusOK:
 			t.Errorf("%s still downloads (%s)", what, target)
+		case res.status != http.StatusForbidden || res.code() != obx.ErrForbidden:
+			t.Errorf("%s: want 403 forbidden, got %d %s", what, res.status, res.code())
 		}
 	}
 	if strings.Contains(u, a.ID) {
@@ -419,7 +425,9 @@ func testSignedURLs(t *T) {
 	check("the signed URL moved to the original", strings.Replace(u, "/web", "/original", 1))
 	stripped := *parsed
 	stripped.RawQuery = ""
-	check("the signed URL without its query", stripped.String())
+	if res := t.rawGet(stripped.String(), nil); res.status != http.StatusUnauthorized || res.code() != obx.ErrUnauthorized {
+		t.Errorf("the signed URL without its query (neither signature nor token): want 401 unauthorized, got %d %s", res.status, res.code())
+	}
 	q := parsed.Query()
 	for k, vs := range q {
 		lk := strings.ToLower(k)
@@ -445,8 +453,11 @@ func testSignedURLs(t *T) {
 		ext := a.ExternalID
 		if _, err := t.r.ing.Unpublish(t.ctx, obx.KindAsset, ext); err == nil {
 			res := t.rawGet(u, nil)
-			if res.status == http.StatusOK {
+			switch {
+			case res.status == http.StatusOK:
 				t.Errorf("a signed URL still downloads the asset after it was unpublished")
+			case !(res.status == http.StatusForbidden && res.code() == obx.ErrForbidden) && !(res.status == http.StatusNotFound && res.code() == obx.ErrNotFound):
+				t.Errorf("the signed URL of an unpublished asset: want 403 forbidden or 404 not_found, got %d %s", res.status, res.code())
 			}
 			t.r.ing.Publish(t.ctx, obx.KindAsset, ext)
 		}

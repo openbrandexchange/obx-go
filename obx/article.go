@@ -47,7 +47,7 @@ func NormalizeFiber(f Fiber) Fiber {
 		if prefix == "" {
 			break
 		}
-		f.Material = Term{Code: strings.TrimPrefix(code, prefix+"_")}
+		f.Material = Term{Code: strings.TrimPrefix(code, prefix+"_"), X: f.Material.X}
 		keyQ = append(keyQ, Term{Code: prefix})
 	}
 	all := append(keyQ, f.Qualifiers...)
@@ -90,6 +90,8 @@ type FootwearMaterials struct {
 	Upper         *string `json:"upper"`
 	LiningAndSock *string `json:"lining_and_sock"`
 	OuterSole     *string `json:"outer_sole"`
+	// X holds the extension members (x-<vendor>-<name>).
+	X Extensions `json:"-"`
 }
 
 // IsEmpty reports whether no part is stated (protocol.md 5.9.2: such an
@@ -147,6 +149,8 @@ type Certification struct {
 	Scheme        string  `json:"scheme"`
 	LicenceNumber *string `json:"licence_number"`
 	Scope         string  `json:"scope"`
+	// X holds the extension members (x-<vendor>-<name>).
+	X Extensions `json:"-"`
 }
 
 // Colour families (schemas/Color.json, docs/protocol.md 5.9.5).
@@ -174,6 +178,8 @@ type Measurements struct {
 	HeelHeightCM    *float64 `json:"heel_height_cm,omitempty"`
 	ShaftHeightCM   *float64 `json:"shaft_height_cm,omitempty"`
 	InseamCM        *float64 `json:"inseam_cm,omitempty"`
+	// X holds the extension members (x-<vendor>-<name>).
+	X Extensions `json:"-"`
 }
 
 // MeasurementKeys lists the measurement keys in the order of the schema
@@ -705,10 +711,42 @@ const (
 	WarnAnimalOriginUnknown      = "animal_origin_unknown"
 	WarnFootwearMaterialsMissing = "footwear_materials_missing"
 	WarnFibrePercentagesNot100   = "fibre_percentages_not_100"
+	// WarnMaterialUnknown: a material code outside vocabularies/materials.json
+	// (import-format.md 1.4); reported for every item type.
+	WarnMaterialUnknown = "material_unknown"
+	// WarnQualifierDeprecated: a fibre written with the draft single
+	// qualifier (ingest.md 3.1); write paths of the Ingest and admin API only.
+	WarnQualifierDeprecated = "qualifier_deprecated"
 )
 
 // WarningCodes lists the label completeness warning codes.
 var WarningCodes = []string{WarnFibreCompositionMissing, WarnAnimalOriginUnknown, WarnFootwearMaterialsMissing, WarnFibrePercentagesNot100}
+
+// StableWarningCodes lists every warning code of schemas/Common.json
+// WarningCode: the label completeness codes, material_unknown and
+// qualifier_deprecated.
+var StableWarningCodes = []string{WarnFibreCompositionMissing, WarnAnimalOriginUnknown, WarnFootwearMaterialsMissing, WarnFibrePercentagesNot100, WarnMaterialUnknown, WarnQualifierDeprecated}
+
+// MaterialUnknownWarnings returns one material_unknown warning per material
+// code that known does not know, in the order the codes first appear, with
+// the pointer of the first fibre that has it and Value the code. Codes are
+// normalised first (NormalizeFiber).
+func MaterialUnknownWarnings(materials Materials, known func(code string) bool) []LabelWarning {
+	var out []LabelWarning
+	seen := map[string]bool{}
+	for i, p := range materials {
+		for j, f := range p.Fibers {
+			code := NormalizeFiber(f).Material.Code
+			if code == "" || seen[code] || known(code) {
+				continue
+			}
+			seen[code] = true
+			out = append(out, LabelWarning{Code: WarnMaterialUnknown, Column: "materials", Pointer: fmt.Sprintf("/materials/%d/fibers/%d/material/code", i, j),
+				Detail: fmt.Sprintf("material %q is not in the vocabulary; it is kept as written (check the spelling, or use the English code)", code), Value: code})
+		}
+	}
+	return out
+}
 
 // TextileItemTypes are the item types that get the textile label warnings:
 // the recommended apparel keys (t_shirt to socks, hat, cap, scarf, gloves,
@@ -736,6 +774,8 @@ type LabelWarning struct {
 	// Pointer is the JSON Pointer into the product write model.
 	Pointer string
 	Detail  string
+	// Value is the value the warning is about (material_unknown: the code).
+	Value string
 }
 
 // WarningDetail returns the warning as an IngestResult warning_details entry.
@@ -757,7 +797,7 @@ func LabelWarnings(itemType *string, materials Materials, containsAnimalOrigin *
 	case Contains(TextileItemTypes, it):
 		if len(materials) == 0 {
 			out = append(out, LabelWarning{WarnFibreCompositionMissing, "materials", "/materials",
-				"the fibre composition is missing; it must be on the label of a textile product and shown before purchase (Regulation (EU) No 1007/2011)"})
+				"the fibre composition is missing; it must be on the label of a textile product and shown before purchase (Regulation (EU) No 1007/2011)", ""})
 		}
 		if containsAnimalOrigin == nil {
 		animal:
@@ -765,20 +805,26 @@ func LabelWarnings(itemType *string, materials Materials, containsAnimalOrigin *
 				for _, f := range p.Fibers {
 					if IsAnimalOriginFibre(NormalizeFiber(f).Material.Code) {
 						out = append(out, LabelWarning{WarnAnimalOriginUnknown, "contains_animal_origin", "/contains_animal_origin",
-							fmt.Sprintf("the materials contain %s; state whether the product contains non-textile parts of animal origin (Regulation (EU) No 1007/2011 Art. 12)", NormalizeFiber(f).Material.Code)})
+							fmt.Sprintf("the materials contain %s; state whether the product contains non-textile parts of animal origin (Regulation (EU) No 1007/2011 Art. 12)", NormalizeFiber(f).Material.Code), ""})
 						break animal
 					}
 				}
 			}
 		}
 		for i, p := range materials {
-			sum := 0.0
+			sum, all := 0.0, true
 			for _, f := range p.Fibers {
-				sum += f.Percentage
+				if f.Percentage == nil {
+					all = false
+					continue
+				}
+				sum += *f.Percentage
 			}
-			if math.Abs(sum-100) > 0.01 {
+			// Only when every fibre states a percentage, or the stated ones
+			// exceed 100 (import-format.md rule 10).
+			if (all && math.Abs(sum-100) > 0.01) || sum > 100.01 {
 				out = append(out, LabelWarning{WarnFibrePercentagesNot100, "materials", fmt.Sprintf("/materials/%d", i),
-					fmt.Sprintf("the percentages of %s add up to %g, not 100", p.Part.Code, sum)})
+					fmt.Sprintf("the percentages of %s add up to %g, not 100", p.Part.Code, sum), ""})
 			}
 		}
 	case Contains(FootwearItemTypes, it):
@@ -790,7 +836,7 @@ func LabelWarnings(itemType *string, materials Materials, containsAnimalOrigin *
 				}
 			}
 			out = append(out, LabelWarning{WarnFootwearMaterialsMissing, "footwear_materials", "/footwear_materials",
-				"the footwear materials of " + strings.Join(missing, ", ") + " are missing; they must be on the label of footwear (Directive 94/11/EC)"})
+				"the footwear materials of " + strings.Join(missing, ", ") + " are missing; they must be on the label of footwear (Directive 94/11/EC)", ""})
 		}
 	}
 	return out

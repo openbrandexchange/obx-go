@@ -56,6 +56,13 @@ const (
 	// ActUnpublishProduct and ActPublishProduct: params external_id.
 	ActUnpublishProduct = "unpublish_product"
 	ActPublishProduct   = "publish_product"
+	// ActRotateClientSecret: give the API key a new client secret, the way
+	// a brand rotates a leaked secret. Params client_id. Result
+	// client_secret (the new secret). Access tokens issued with the old
+	// secret must then answer 401 invalid_token (not access_revoked). An
+	// operator that does not offer it returns ErrActionNotSupported or no
+	// client_secret, and P-AUTH-2 is skipped (the run is INCOMPLETE).
+	ActRotateClientSecret = "rotate_client_secret"
 	// ActSimulateSpecUpgrade: do to the node what an upgrade to a spec version
 	// with incompatible shapes (0.2 → 0.3) does to its cursors: every cursor
 	// issued so far must answer 410 cursor_expired (protocol.md 6.4), for
@@ -66,9 +73,9 @@ const (
 	ActSimulateSpecUpgrade = "simulate_spec_upgrade"
 )
 
-// ErrActionNotSupported is what an Operator returns for an optional action
-// it does not offer (ActSimulateSpecUpgrade); the test that needs it is
-// skipped.
+// ErrActionNotSupported is what an Operator returns for an action it does
+// not offer (ActSimulateSpecUpgrade, ActRotateClientSecret); the test that
+// needs it is skipped.
 var ErrActionNotSupported = errors.New("conformance: the operator does not offer this action")
 
 // Action is one step for the operator.
@@ -218,7 +225,8 @@ func (t *T) needOperator(what string) {
 		t.onlineStop("%s needs a brand-side step", what)
 	}
 	if !t.r.canOperate() {
-		t.Skip("%s needs admin credentials (--admin-user/--admin-password or --setup-code) or an operator (--operator-hook, --operator-prompt)", what)
+		t.SkipNeeds("admin credentials (--admin-user/--admin-password or --setup-code) or an operator (--operator-hook, --operator-prompt)",
+			"%s needs admin credentials (--admin-user/--admin-password or --setup-code) or an operator (--operator-hook, --operator-prompt)", what)
 	}
 }
 

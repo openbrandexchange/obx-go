@@ -120,6 +120,7 @@
   "problem.column": "colún {column}",
   "problem.fibre_composition_missing": "tá comhdhéanamh na snáithíní ar iarraidh; éilíonn an AE é ar lipéad táirgí teicstíle",
   "problem.fibre_percentages_not_100": "ní 100 iad céatadáin snáithíní páirte le chéile",
+  "problem.material_unknown": "níl an cód ábhair seo ar liosta na n-ábhar; coimeádtar é mar a scríobhadh é, seiceáil an litriú nó úsáid an t-ainm Béarla",
   "problem.files_missing": "tá comhaid ar iarraidh",
   "problem.footwear_materials_missing": "tá ábhar an uachtair, na líneála agus an bhonnstoca nó an bhoinn sheachtraigh ar iarraidh; éilíonn an AE é ar lipéad coisbhirt",
   "problem.gtin_conflict": "tá an EAN seo in úsáid cheana ag earra eile",

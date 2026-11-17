@@ -120,6 +120,7 @@
   "problem.column": "stĺpec {column}",
   "problem.fibre_composition_missing": "chýba materiálové zloženie; EÚ ho vyžaduje na etikete textilných výrobkov",
   "problem.fibre_percentages_not_100": "percentá vlákien jednej časti nedávajú spolu 100",
+  "problem.material_unknown": "tento kód materiálu nie je v zozname materiálov; zostáva tak, ako je napísaný, skontrolujte pravopis alebo použite anglický názov",
   "problem.files_missing": "chýbajú súbory",
   "problem.footwear_materials_missing": "chýba materiál zvršku, podšívky a stielky alebo podrážky; EÚ ho vyžaduje na etikete obuvi",
   "problem.gtin_conflict": "tento EAN už používa iný tovar",

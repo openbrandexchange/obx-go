@@ -120,6 +120,7 @@
   "problem.column": "stulpelis {column}",
   "problem.fibre_composition_missing": "trūksta pluoštinės sudėties; ES jos reikalauja tekstilės gaminių etiketėje",
   "problem.fibre_percentages_not_100": "vienos dalies pluoštų procentai kartu nesudaro 100",
+  "problem.material_unknown": "šio medžiagos kodo nėra medžiagų sąraše; jis paliekamas kaip parašytas, patikrinkite rašybą arba naudokite anglišką pavadinimą",
   "problem.files_missing": "trūksta failų",
   "problem.footwear_materials_missing": "trūksta viršaus, pamušalo ir vidpadžio arba padų medžiagos; ES jos reikalauja avalynės etiketėje",
   "problem.gtin_conflict": "šį EAN jau naudoja kita prekė",

@@ -88,23 +88,50 @@ func normalizeHeader(raw string) column {
 	return c
 }
 
-// NormalizeLanguageTag turns "NL", "nl_be" or "nl-be" into "nl" / "nl-BE".
-// It returns "" for anything that is not language or language-REGION.
+// NormalizeLanguageTag returns the canonical form of a language tag of the
+// form language, optional script, optional region (schemas/Common.json
+// LanguageTag; import-format.md 1.3), matched case-insensitively with "_"
+// read as "-": "NL" → "nl", "nl_be" → "nl-BE", "ZH_hant" → "zh-Hant",
+// "es-419" → "es-419", "sr-latn-rs" → "sr-Latn-RS". It returns "" for any
+// other form.
 func NormalizeLanguageTag(s string) string {
-	s = strings.TrimSpace(strings.ReplaceAll(s, "_", "-"))
-	lang, region, hasRegion := strings.Cut(s, "-")
-	lang = strings.ToLower(lang)
+	parts := strings.Split(strings.TrimSpace(strings.ReplaceAll(s, "_", "-")), "-")
+	lang := strings.ToLower(parts[0])
 	if len(lang) < 2 || len(lang) > 3 || !isLetters(lang) {
 		return ""
 	}
-	if !hasRegion {
-		return lang
+	out := lang
+	rest := parts[1:]
+	if len(rest) > 0 && len(rest[0]) == 4 && isLetters(strings.ToLower(rest[0])) {
+		sc := strings.ToLower(rest[0])
+		out += "-" + strings.ToUpper(sc[:1]) + sc[1:]
+		rest = rest[1:]
 	}
-	region = strings.ToUpper(region)
-	if len(region) != 2 || !isLetters(strings.ToLower(region)) {
+	if len(rest) > 0 {
+		r := rest[0]
+		switch {
+		case len(r) == 2 && isLetters(strings.ToLower(r)):
+			out += "-" + strings.ToUpper(r)
+		case len(r) == 3 && isDigits(r):
+			out += "-" + r
+		default:
+			return ""
+		}
+		rest = rest[1:]
+	}
+	if len(rest) > 0 {
 		return ""
 	}
-	return lang + "-" + region
+	return out
+}
+
+func isDigits(s string) bool {
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return s != ""
 }
 
 func isLetters(s string) bool {

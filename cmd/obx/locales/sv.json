@@ -120,6 +120,7 @@
   "problem.column": "kolumn {column}",
   "problem.fibre_composition_missing": "fibersammansättningen saknas; EU kräver den på etiketten för textilprodukter",
   "problem.fibre_percentages_not_100": "fiberprocenten för en del blir inte 100 tillsammans",
+  "problem.material_unknown": "den här materialkoden finns inte i listan över material; den behålls som den skrevs, så kontrollera stavningen eller använd det engelska namnet",
   "problem.files_missing": "filer saknas",
   "problem.footwear_materials_missing": "materialet i ovandel, foder och innersula eller yttersula saknas; EU kräver det på etiketten för skor",
   "problem.gtin_conflict": "den här EAN-koden används redan av en annan artikel",

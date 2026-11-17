@@ -155,6 +155,12 @@ func testArticleShape(t *T) {
 	if got := materialCodes(ko1003["materials"]); got != "main: 100% cotton (organic) (regenerative)" {
 		t.Errorf("KO-1003/materials: %s, want a main fibre with material code cotton, percentage 100 and the qualifier codes organic and regenerative, in that order", got)
 	}
+	// KO-1005: "outer: leather" is a fibre without a percentage (null).
+	if ko1005 := products["KO-1005"]; ko1005 == nil {
+		t.Errorf("KO-1005 is not in the snapshot")
+	} else if !hasFibre(ko1005["materials"], "outer", "leather", true) {
+		t.Errorf("KO-1005/materials: %s, want the part outer with the fibre leather and percentage null", materialCodes(ko1005["materials"]))
+	}
 	wantCerts := []any{
 		map[string]any{"scheme": "gots", "licence_number": "CU 200301", "scope": "product"},
 		map[string]any{"scheme": "oeko_tex_standard_100", "licence_number": "26.KST.20003", "scope": "product"},
@@ -162,6 +168,30 @@ func testArticleShape(t *T) {
 	for _, p := range matchExpected(ko1003["certifications"], wantCerts, "KO-1003/certifications", nil) {
 		t.Errorf("%s", p)
 	}
+}
+
+// hasFibre reports whether materials have, in the part, a fibre of the
+// material; nullPct requires its percentage to be present and null.
+func hasFibre(materials any, part, material string, nullPct bool) bool {
+	parts, _ := materials.([]any)
+	for _, p := range parts {
+		pm, _ := p.(map[string]any)
+		if termCode(pm["part"]) != part {
+			continue
+		}
+		fibers, _ := pm["fibers"].([]any)
+		for _, f := range fibers {
+			fm, _ := f.(map[string]any)
+			if termCode(fm["material"]) != material {
+				continue
+			}
+			pct, present := fm["percentage"]
+			if !nullPct || (present && pct == nil) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // termCode returns the code of a term object ("" when it is not one).
@@ -182,7 +212,10 @@ func materialCodes(materials any) string {
 		var fs []string
 		for _, f := range fibers {
 			fm, _ := f.(map[string]any)
-			s := fmt.Sprintf("%v%% %s", fm["percentage"], termCode(fm["material"]))
+			s := termCode(fm["material"])
+			if pct, ok := fm["percentage"]; ok && pct != nil {
+				s = fmt.Sprintf("%v%% %s", pct, s)
+			}
 			qs, _ := fm["qualifiers"].([]any)
 			for _, q := range qs {
 				s += " (" + termCode(q) + ")"
@@ -259,6 +292,15 @@ func checkMaterials(t *T, ext string, materials any) {
 				}
 			}
 			checkTerm(t, where, "material", fm["material"], v.MaterialName)
+			switch pct, ok := fm["percentage"]; {
+			case !ok:
+				t.Errorf("%s: fibre %s has no property percentage (null when not stated)", where, code)
+			case pct == nil:
+			default:
+				if n, isNum := pct.(float64); !isNum || n <= 0 || n > 100 {
+					t.Errorf("%s: fibre %s has percentage %s, want a number in (0, 100] or null", where, code, short(pct))
+				}
+			}
 			if _, ok := fm["qualifier"]; ok {
 				t.Errorf("%s: fibre %s has the property qualifier; since 0.3 a fibre has the list qualifiers", where, code)
 			}
@@ -316,10 +358,37 @@ type importCase struct {
 	Counts struct {
 		Rows, Created, Updated, Unchanged, Errors int
 	} `json:"counts"`
-	Errors   []obx.ImportRowError      `json:"errors"`
+	Errors   []expectedRowError        `json:"errors"`
 	Changes  []expectedChange          `json:"changes"`
 	Products map[string]map[string]any `json:"products"`
 	Variants map[string]map[string]any `json:"variants"`
+}
+
+// expectedRowError is an ImportRowError of a fixture, with detail_prefix:
+// when set, the detail must start with it (it is not a member of the
+// ImportRowError itself).
+type expectedRowError struct {
+	obx.ImportRowError
+	DetailPrefix string `json:"detail_prefix,omitempty"`
+}
+
+// matchRowErrors compares the error rows of an import with the expected
+// ones, in order: file, row, column, severity, code, value when expected,
+// and the start of the detail when detail_prefix is given.
+func (t *T) matchRowErrors(name string, errs []obx.ImportRowError, want []expectedRowError) {
+	if len(errs) != len(want) {
+		t.Errorf("%s: %d error rows, want %d: %s", name, len(errs), len(want), short(errs))
+		return
+	}
+	for i, w := range want {
+		g := errs[i]
+		if g.File != w.File || !sameRow(g.Row, w.Row) || obx.Str(g.Column) != obx.Str(w.Column) || g.Severity != w.Severity || g.ObxError != w.ObxError || (w.Value != nil && obx.Str(g.Value) != *w.Value) {
+			t.Errorf("%s: error %d is %s, want %s", name, i+1, short(g), short(w.ImportRowError))
+		}
+		if w.DetailPrefix != "" && !strings.HasPrefix(g.Detail, w.DetailPrefix) {
+			t.Errorf("%s: error %d has the detail %q, want it to start with %q", name, i+1, g.Detail, w.DetailPrefix)
+		}
+	}
 }
 
 // productsCSVImport is an import of one products.csv (mode upsert, no images).
@@ -363,17 +432,7 @@ func testImportArticleColumns(t *T) {
 				got.Rows, got.Created, got.Updated, got.Unchanged, got.Errors,
 				c.Counts.Rows, c.Counts.Created, c.Counts.Updated, c.Counts.Unchanged, c.Counts.Errors, short(errorsOf(probs)))
 		}
-		errs := errorsOf(probs)
-		if len(errs) != len(c.Errors) {
-			t.Errorf("%s: %d error rows, want %d: %s", name, len(errs), len(c.Errors), short(errs))
-		} else {
-			for i, w := range c.Errors {
-				g := errs[i]
-				if g.File != w.File || !sameRow(g.Row, w.Row) || obx.Str(g.Column) != obx.Str(w.Column) || g.Severity != w.Severity || g.ObxError != w.ObxError || (w.Value != nil && obx.Str(g.Value) != *w.Value) {
-					t.Errorf("%s: error %d is %s, want %s", name, i+1, short(g), short(w))
-				}
-			}
-		}
+		t.matchRowErrors(name, errorsOf(probs), c.Errors)
 		if t.r.full != nil {
 			live, _ := t.newEntries(t.r.full, cursor)
 			var gotKeys, wantKeys []string
@@ -462,9 +521,13 @@ func testLabelWarnings(t *T) {
 	raw, err := t.r.fixture("imports/label-warnings.expected.json")
 	t.Check(err, "read fixtures/imports/label-warnings.expected.json")
 	var exp struct {
+		Codes    []string             `json:"codes"`
 		Warnings []obx.ImportRowError `json:"warnings"`
 	}
 	t.Check(json.Unmarshal(raw, &exp), "parse label-warnings.expected.json")
+	if len(exp.Codes) == 0 {
+		exp.Codes = obx.WarningCodes // fixtures before 0.3.0 have no codes list
+	}
 	var cursor string
 	if t.r.full != nil {
 		cursor = t.liveCursor(t.r.full)
@@ -476,18 +539,18 @@ func testLabelWarnings(t *T) {
 	if errs := errorsOf(probs); len(errs) > 0 {
 		t.Errorf("label-warnings.csv has errors: %s", short(errs))
 	}
-	got := labelCoded(probs)
+	got := labelCoded(probs, exp.Codes)
 	if len(got) != len(exp.Warnings) {
 		t.Errorf("label warnings: got %d, want %d: %s", len(got), len(exp.Warnings), short(got))
 	} else {
 		for i, w := range exp.Warnings {
 			g := got[i]
-			if g.File != w.File || !sameRow(g.Row, w.Row) || obx.Str(g.Column) != obx.Str(w.Column) || g.Severity != w.Severity || g.ObxError != w.ObxError {
+			if g.File != w.File || !sameRow(g.Row, w.Row) || obx.Str(g.Column) != obx.Str(w.Column) || g.Severity != w.Severity || g.ObxError != w.ObxError || (w.Value != nil && obx.Str(g.Value) != *w.Value) {
 				t.Errorf("label warning %d is %s, want %s", i+1, short(g), short(w))
 			}
 		}
 	}
-	for i := 1; i <= 6; i++ {
+	for i := 1; i <= 9; i++ {
 		ext := fmt.Sprintf("KL-800%d", i)
 		if _, err := t.r.ing.Get(t.ctx, obx.KindProduct, ext); err == nil {
 			t.Errorf("the dry run wrote product %s", ext)
@@ -502,22 +565,23 @@ func testLabelWarnings(t *T) {
 	req, err := t.r.fixtureImport(t.ctx, "files", nil)
 	t.Check(err, "build the import of fixtures/kestrel")
 	_, probs = t.runImport(req)
-	if coded := labelCoded(probs); len(coded) > 0 {
+	if coded := labelCoded(probs, exp.Codes); len(coded) > 0 {
 		t.Errorf("the import of fixtures/kestrel has label warnings: %s", short(coded))
 	}
 }
 
-func labelCoded(probs []obx.ImportRowError) []obx.ImportRowError {
+// labelCoded returns the problems whose code is one of codes.
+func labelCoded(probs []obx.ImportRowError, codes []string) []obx.ImportRowError {
 	var out []obx.ImportRowError
 	for _, p := range probs {
-		if obx.Contains(obx.WarningCodes, p.ObxError) {
+		if obx.Contains(codes, p.ObxError) {
 			out = append(out, p)
 		}
 	}
 	return out
 }
 
-// testImportQualifiers is I-IMP-11 (obx-go; import-format.md 1.4 since the
+// testImportQualifiers is I-IMP-11 (import-format.md 1.4 since the
 // 0.3 release): a fibre's qualifiers in the import are one code per
 // bracket, kept in order, a repeated code counts once and the qualifier of a
 // 0.1 key comes first; brackets with a list ("(organic, recycled)") are a

@@ -34,7 +34,33 @@ type idemEntry struct {
 	ref    string
 	status int
 	body   []byte
+	hash   string // sha256 of the request body (imports: of every part)
 	at     time.Time
+}
+
+// idemTTL is how long an Idempotency-Key is kept (ingest.md 5, protocol.md 8).
+const idemTTL = 24 * time.Hour
+
+// idempotent looks up an Idempotency-Key (slot = endpoint, token and key):
+// the earlier request's entry when the body is the same, nil when the key is
+// new or older than 24 hours, and 409 idempotency_key_reused when it came
+// with another body. It holds n.mu.
+func (n *Node) idempotent(slot, key, hash string) (*idemEntry, *obx.Problem) {
+	if len(key) > 200 {
+		return nil, problem(obx.ErrInvalidRequest, "an Idempotency-Key has 1 to 200 characters")
+	}
+	e, ok := n.st.idempotency[slot]
+	if !ok {
+		return nil, nil
+	}
+	if n.now().Sub(e.at) > idemTTL {
+		delete(n.st.idempotency, slot)
+		return nil, nil
+	}
+	if e.hash != hash {
+		return nil, problem(obx.ErrIdempotencyKeyReused, "this Idempotency-Key was used for a request with another body; use a new key for a new request")
+	}
+	return &e, nil
 }
 
 type upload struct {
@@ -540,12 +566,7 @@ func (n *Node) handleCompleteUpload(w http.ResponseWriter, r *http.Request) {
 
 // ---- batch
 
-func parseOperations(r *http.Request) ([]obx.IngestOperation, *obx.Problem) {
-	body, p := readBody(r, 50<<20)
-	if p != nil {
-		return nil, p
-	}
-	ct := r.Header.Get("Content-Type")
+func parseOperations(body []byte, ct string) ([]obx.IngestOperation, *obx.Problem) {
 	var ops []obx.IngestOperation
 	if strings.HasPrefix(ct, obx.MediaTypeNDJSON) || strings.HasPrefix(ct, "application/ndjson") {
 		sc := bufio.NewScanner(bytes.NewReader(body))
@@ -580,16 +601,27 @@ func (n *Node) handleBatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s := n.st
+	raw, p := readBody(r, 50<<20)
+	if p != nil {
+		writeProblem(w, p)
+		return
+	}
 	key := r.Header.Get(obx.HeaderIdempotencyKey)
+	slot := "batch:" + t.id + ":" + key
 	if key != "" {
-		if e, ok := s.idempotency["batch:"+t.id+":"+key]; ok {
+		e, p := n.idempotent(slot, key, hashBytes(raw))
+		if p != nil {
+			writeProblem(w, p)
+			return
+		}
+		if e != nil {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(e.status)
 			w.Write(e.body)
 			return
 		}
 	}
-	ops, p := parseOperations(r)
+	ops, p := parseOperations(raw, r.Header.Get("Content-Type"))
 	if p != nil {
 		writeProblem(w, p)
 		return
@@ -609,7 +641,7 @@ func (n *Node) handleBatch(w http.ResponseWriter, r *http.Request) {
 		status, body = http.StatusOK, canonicalJSON(obx.BatchResponse{Results: results, Summary: summary})
 	}
 	if key != "" {
-		s.idempotency["batch:"+t.id+":"+key] = idemEntry{status: status, body: body, at: n.now()}
+		s.idempotency[slot] = idemEntry{status: status, body: body, hash: hashBytes(raw), at: n.now()}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

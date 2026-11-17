@@ -111,6 +111,12 @@ func mockOperator(t *testing.T, n *mock.Node, base string) conformance.Operator 
 		case conformance.ActPublishProduct:
 			_, err := ing.Publish(ctx, obx.KindProduct, p["external_id"])
 			return nil, err
+		case conformance.ActRotateClientSecret:
+			secret, err := n.RotateClientSecret(p["client_id"])
+			if err != nil {
+				return nil, err
+			}
+			return map[string]string{"client_secret": secret}, nil
 		case conformance.ActSimulateSpecUpgrade:
 			n.SimulateSpecUpgrade()
 			return map[string]string{"simulated": "true"}, nil
@@ -121,7 +127,8 @@ func mockOperator(t *testing.T, n *mock.Node, base string) conformance.Operator 
 
 // A node with the fixtures loaded by its own import, no admin credentials and
 // no upload key passes the protocol profile with an operator. Only P-FEED-5
-// (the ingest replay) is skipped.
+// (the ingest replay) is skipped: the mock offers the Ingest API, but the
+// ingest profile is not part of this run.
 func TestProtocolWithOperatorOnly(t *testing.T) {
 	n := mock.New(mock.Options{Fixtures: true, AllowPrivateURLs: true})
 	srv := httptest.NewServer(n)
@@ -149,7 +156,10 @@ func TestProtocolWithOperatorOnly(t *testing.T) {
 			t.Errorf("%s %s: %s\n    %s", r.ID, r.Status, r.Title, strings.Join(r.Messages, "\n    "))
 		}
 	}
-	for _, want := range []string{conformance.ActCreateAPIKey, conformance.ActRevokeAPIKey, conformance.ActApproveAccessRequest, conformance.ActSetGrant, conformance.ActUpdateProduct, conformance.ActUnpublishProduct, conformance.ActPublishProduct, conformance.ActSimulateSpecUpgrade} {
+	if rep.Verdict != conformance.VerdictIncomplete {
+		t.Errorf("verdict %s, want INCOMPLETE (P-FEED-5 needs the ingest profile)", rep.Verdict)
+	}
+	for _, want := range []string{conformance.ActCreateAPIKey, conformance.ActRevokeAPIKey, conformance.ActRotateClientSecret, conformance.ActApproveAccessRequest, conformance.ActSetGrant, conformance.ActUpdateProduct, conformance.ActUnpublishProduct, conformance.ActPublishProduct, conformance.ActSimulateSpecUpgrade} {
 		found := false
 		for _, a := range actions {
 			found = found || a == want
@@ -185,10 +195,47 @@ func TestProtocolWithoutOperatorSkips(t *testing.T) {
 			skipped[r.ID] = true
 		}
 	}
-	for _, id := range []string{"P-AUTH-2", "P-ACC-1", "P-FEED-6", "P-FEED-7"} {
+	for _, id := range []string{"P-AUTH-2", "P-ACC-1", "P-FEED-6", "P-FEED-7", "P-CAT-4"} {
 		if !skipped[id] {
 			t.Errorf("%s should be skipped without an operator", id)
 		}
+	}
+	if rep.Verdict != conformance.VerdictIncomplete {
+		t.Errorf("verdict %s, want INCOMPLETE: required tests were skipped", rep.Verdict)
+	}
+}
+
+// An operator without rotate_client_secret: P-AUTH-2 checks revocation and
+// is then skipped (INCOMPLETE) with what it needs; one that rotates passes.
+func TestRotateClientSecretOperator(t *testing.T) {
+	for _, offer := range []bool{false, true} {
+		t.Run(fmt.Sprintf("offered=%v", offer), func(t *testing.T) {
+			n := mock.New(mock.Options{Fixtures: true, AllowPrivateURLs: true})
+			srv := httptest.NewServer(n)
+			defer srv.Close()
+			op := mockOperator(t, n, srv.URL)
+			limited := conformance.OperatorFunc(func(ctx context.Context, a conformance.Action) (map[string]string, error) {
+				if a.Name == conformance.ActRotateClientSecret && !offer {
+					return nil, conformance.ErrActionNotSupported
+				}
+				return op.Do(ctx, a)
+			})
+			rep, err := conformance.Run(context.Background(), []string{conformance.ProfileProtocol}, conformance.Config{BaseURL: srv.URL, Operator: limited, Only: []string{"P-AUTH-2"}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(rep.Results) != 1 {
+				t.Fatalf("results: %+v", rep.Results)
+			}
+			r := rep.Results[0]
+			want := conformance.StatusPass
+			if !offer {
+				want = conformance.StatusSkip
+			}
+			if r.Status != want || (!offer && (!r.Required || !strings.Contains(r.Needs, conformance.ActRotateClientSecret))) {
+				t.Errorf("P-AUTH-2 %s (needs %q), want %s: %s", r.Status, r.Needs, want, strings.Join(r.Messages, "; "))
+			}
+		})
 	}
 }
 

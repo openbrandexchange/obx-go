@@ -325,6 +325,7 @@ func (s *state) effectiveRights(r *record) obx.Rights {
 		return out
 	}
 	in := r.asset.Rights
+	out.X = in.X.Clone()
 	if in.License != nil {
 		out.License = *in.License
 	}
@@ -374,11 +375,12 @@ func effectiveProvenance(in *obx.ProvenanceInput) obx.Provenance {
 	}
 	p.C2PAManifestURL = in.C2PAManifestURL
 	p.Generator = in.Generator
+	p.X = in.X.Clone()
 	return p
 }
 
 func (s *state) brandRepr(r *record) obx.Brand {
-	return obx.Brand{ID: r.id, ExternalID: r.extID, Name: r.brand.Name, LogoURL: r.brand.LogoURL, Website: r.brand.Website, Description: r.brand.Description, UpdatedAt: r.protoAt}
+	return obx.Brand{ID: r.id, ExternalID: r.extID, Name: r.brand.Name, LogoURL: r.brand.LogoURL, Website: r.brand.Website, Description: r.brand.Description, UpdatedAt: r.protoAt, X: r.brand.X.Clone()}
 }
 
 func (s *state) productRepr(r *record) obx.Product {
@@ -395,7 +397,7 @@ func (s *state) productRepr(r *record) obx.Product {
 		Description: nilIfEmpty(in.Description), ItemType: in.ItemType, ItemSubtype: in.ItemSubtype, GPCBrick: in.GPCBrick, TargetGroup: in.TargetGroup,
 		Season: in.Season, Collection: in.Collection, Materials: in.Materials, ContainsAnimalOrigin: in.ContainsAnimalOrigin,
 		FootwearMaterials: in.FootwearMaterials, Care: in.Care, CountryOfOrigin: in.CountryOfOrigin, Certifications: in.Certifications,
-		DPPURL: in.DPPURL, Features: in.Features, Attributes: attrs, CreatedAt: r.createdAt, UpdatedAt: r.protoAt}
+		DPPURL: in.DPPURL, Features: in.Features, Attributes: attrs, CreatedAt: r.createdAt, UpdatedAt: r.protoAt, X: in.X.Clone()}
 }
 
 func nilIfEmpty(t obx.LocalizedText) obx.LocalizedText {
@@ -409,7 +411,7 @@ func (s *state) variantRepr(r *record) obx.Variant {
 	in := r.variant
 	p := s.products[r.parentExt]
 	v := obx.Variant{ID: r.id, ExternalID: r.extID, SKU: in.SKU, Color: in.Color, Size: in.Size, SizeLength: in.SizeLength,
-		SizeSystem: in.SizeSystem, Measurements: in.Measurements, UpdatedAt: r.protoAt}
+		SizeSystem: in.SizeSystem, Measurements: in.Measurements, UpdatedAt: r.protoAt, X: in.X.Clone()}
 	v.Color.Name = nilIfEmpty(v.Color.Name)
 	if p != nil {
 		v.ProductID = p.id
@@ -451,7 +453,7 @@ func (s *state) assetRepr(r *record, signer *urlSigner) obx.Asset {
 	ob := s.blobs[orig.SHA256]
 	a := obx.Asset{ID: r.id, ExternalID: r.extID, MediaType: "image", ColorCode: in.ColorCode, Role: in.Role, View: in.View,
 		Position: in.Position, AltText: nilIfEmpty(in.AltText), Rights: s.effectiveRights(r), Provenance: effectiveProvenance(in.Provenance),
-		SHA256: orig.SHA256, Width: orig.Width, Height: orig.Height, UpdatedAt: r.protoAt}
+		SHA256: orig.SHA256, Width: orig.Width, Height: orig.Height, UpdatedAt: r.protoAt, X: in.X.Clone()}
 	if a.Rights.Channels == nil {
 		a.Rights.Channels = []string{}
 	}

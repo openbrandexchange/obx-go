@@ -159,6 +159,8 @@ func problemText(e *env, p obx.ImportRowError) string {
 		reason = e.t("problem.footwear_materials_missing")
 	case obx.WarnFibrePercentagesNot100:
 		reason = e.t("problem.fibre_percentages_not_100")
+	case obx.WarnMaterialUnknown:
+		reason = e.t("problem.material_unknown")
 	}
 	// The portal's own detail is English and often more precise: English
 	// readers get it instead of obx's reason, others get it after it.
@@ -206,6 +208,7 @@ var _ = register(map[string]string{
 	"problem.animal_origin_unknown":      "state whether the product contains non-textile parts of animal origin (yes or no)",
 	"problem.footwear_materials_missing": "the material of the upper, the lining and sock or the outer sole is missing; EU law requires it on footwear labels",
 	"problem.fibre_percentages_not_100":  "the fibre percentages of a part do not add up to 100",
+	"problem.material_unknown":           "this material code is not in the list of materials; it is kept as written, so check the spelling or use the English name",
 	"problem.column":                     "column {column}",
 	"problem.invalid_gtin":               "this EAN is not valid",
 	"problem.gtin_conflict":              "this EAN is already used by another article",

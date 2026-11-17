@@ -42,9 +42,10 @@ func TestSchemasCompile(t *testing.T) {
 	if err := v.Validate("Materials", []byte(`[{"part": {"code": "main"}, "fibers": [{"material": {"code": "cotton"}, "percentage": 100, "qualifiers": [{"code": "organic"}, {"code": "regenerative"}]}, {"material": {"code": "wool"}, "percentage": 1}]}]`)); err != nil {
 		t.Error(err)
 	}
-	// Since the 0.3 release a fibre has a list of qualifiers, not one.
-	if err := v.Validate("Materials", []byte(`[{"part": {"code": "main"}, "fibers": [{"material": {"code": "cotton"}, "percentage": 100, "qualifier": {"code": "organic"}}]}]`)); err == nil {
-		t.Error("Materials accepts the property qualifier")
+	// The draft single qualifier is accepted on write (deprecated; a node
+	// reads it as a list of one), and a percentage may be null.
+	if err := v.Validate("Materials", []byte(`[{"part": {"code": "main"}, "fibers": [{"material": {"code": "cotton"}, "percentage": null, "qualifier": {"code": "organic"}}, {"material": {"code": "leather"}}]}]`)); err != nil {
+		t.Error(err)
 	}
 }
 

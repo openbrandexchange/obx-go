@@ -41,7 +41,7 @@ func TestNormalizeFiber(t *testing.T) {
 	if got := obx.NormalizeFiber(obx.Fiber{Material: obx.Term{Code: "cotton"}, Qualifiers: []obx.Term{}}); got.Qualifiers != nil {
 		t.Errorf("an empty list is not nil: %#v", got.Qualifiers)
 	}
-	m := obx.Materials{{Part: obx.Term{Code: "outer"}, Fibers: []obx.Fiber{{Material: obx.Term{Code: "recycled_polyester"}, Percentage: 100}, {Material: obx.Term{Code: "elastane"}, Percentage: 0.5}}}}
+	m := obx.Materials{{Part: obx.Term{Code: "outer"}, Fibers: []obx.Fiber{{Material: obx.Term{Code: "recycled_polyester"}, Percentage: obx.Ptr(100.0)}, {Material: obx.Term{Code: "elastane"}, Percentage: obx.Ptr(0.5)}}}}
 	n := m.Normalized()
 	if m[0].Fibers[0].Material.Code != "recycled_polyester" {
 		t.Fatal("Normalized changed its receiver")
@@ -199,7 +199,11 @@ func TestLabelWarnings(t *testing.T) {
 	mat := func(s ...any) obx.Materials {
 		p := obx.MaterialPart{Part: obx.Term{Code: "main"}}
 		for i := 0; i < len(s); i += 2 {
-			p.Fibers = append(p.Fibers, obx.Fiber{Material: obx.Term{Code: s[i].(string)}, Percentage: float64(s[i+1].(int))})
+			f := obx.Fiber{Material: obx.Term{Code: s[i].(string)}}
+			if n, ok := s[i+1].(int); ok {
+				f.Percentage = obx.Ptr(float64(n))
+			}
+			p.Fibers = append(p.Fibers, f)
 		}
 		return obx.Materials{p}
 	}
@@ -227,6 +231,8 @@ func TestLabelWarnings(t *testing.T) {
 		{"unknown item type", "wallet", nil, nil, nil, ""},
 		{"no item type", "", nil, nil, nil, ""},
 		{"luggage of plastic", "luggage", mat("polypropylene", 100), nil, nil, ""},
+		{"a fibre without a percentage", "bag", mat("cotton", 60, "polyester", nil), no, nil, ""},
+		{"stated ones above 100", "shirt", mat("cotton", 70, "polyester", 40, "elastane", nil), no, nil, "fibre_percentages_not_100@materials/materials/0"},
 	}
 	for _, c := range cases {
 		var it *string
@@ -236,5 +242,47 @@ func TestLabelWarnings(t *testing.T) {
 		if got := codes(obx.LabelWarnings(it, c.m, c.animal, c.fw)); got != c.want {
 			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
 		}
+	}
+}
+
+func TestMaterialUnknownWarnings(t *testing.T) {
+	v := specdata.Vocabulary()
+	m := obx.Materials{{Part: obx.Term{Code: "main"}, Fibers: []obx.Fiber{{Material: obx.Term{Code: "cotton"}}, {Material: obx.Term{Code: "katoen"}}}},
+		{Part: obx.Term{Code: "lining"}, Fibers: []obx.Fiber{{Material: obx.Term{Code: "katoen"}}, {Material: obx.Term{Code: "recycled_co"}}}}}
+	ws := obx.MaterialUnknownWarnings(m, func(c string) bool { _, ok := v.MaterialName(c); return ok })
+	var got []string
+	for _, w := range ws {
+		got = append(got, w.Value+"@"+w.Pointer)
+	}
+	if strings.Join(got, ",") != "katoen@/materials/0/fibers/1/material/code,co@/materials/1/fibers/1/material/code" {
+		t.Fatalf("material_unknown: %v", got)
+	}
+}
+
+// Extension members survive a decode and encode at every level that allows
+// them; a percentage that is not stated is null.
+func TestExtensionsRoundTrip(t *testing.T) {
+	in := `{"style_number":"KO-1007","name":{"en":"Linen Shirt"},"materials":[{"part":{"code":"main"},"fibers":[{"material":{"code":"linen","x-kestrel-mill":"Mill 7"},"percentage":null,"qualifiers":[],"x-kestrel-a":[1,2]}]}],"x-kestrel-care-note":{"en":"Wrinkles"},"x-kestrel-fabric-weight-gsm":180}`
+	var p obx.ProductInput
+	if err := json.Unmarshal([]byte(in), &p); err != nil {
+		t.Fatal(err)
+	}
+	if string(p.X["x-kestrel-fabric-weight-gsm"]) != "180" || string(p.Materials[0].Fibers[0].Material.X["x-kestrel-mill"]) != `"Mill 7"` || p.Materials[0].Fibers[0].Percentage != nil {
+		t.Fatalf("decoded %+v", p)
+	}
+	b, _ := json.Marshal(p)
+	if string(b) != `{"style_number":"KO-1007","name":{"en":"Linen Shirt"},"materials":[{"part":{"code":"main","name":null},"fibers":[{"material":{"code":"linen","name":null,"x-kestrel-mill":"Mill 7"},"percentage":null,"qualifiers":[],"x-kestrel-a":[1,2]}]}],"x-kestrel-care-note":{"en":"Wrinkles"},"x-kestrel-fabric-weight-gsm":180}` {
+		t.Fatalf("encoded %s", b)
+	}
+	var d obx.ProductDetail
+	if err := json.Unmarshal([]byte(`{"id":"p1","style_number":"S","x-acme-b":true,"variants":[{"id":"v1","color":{"code":"BLK","x-acme-pantone":"19-4007"},"x-acme-bin":"A1"}],"assets":[]}`), &d); err != nil {
+		t.Fatal(err)
+	}
+	if d.ID != "p1" || len(d.Variants) != 1 || string(d.Variants[0].X["x-acme-bin"]) != `"A1"` || string(d.Variants[0].Color.X["x-acme-pantone"]) != `"19-4007"` || string(d.X["x-acme-b"]) != "true" {
+		t.Fatalf("detail %+v", d)
+	}
+	b, _ = json.Marshal(d)
+	if !strings.Contains(string(b), `"x-acme-b":true,"variants":[{`) || !strings.Contains(string(b), `"x-acme-bin":"A1"`) {
+		t.Fatalf("detail encoded %s", b)
 	}
 }

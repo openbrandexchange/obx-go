@@ -40,6 +40,8 @@ type Brand struct {
 	Website     *string       `json:"website"`
 	Description LocalizedText `json:"description"`
 	UpdatedAt   time.Time     `json:"updated_at"`
+	// X holds the extension members (x-<vendor>-<name>).
+	X Extensions `json:"-"`
 }
 
 // Term is a stable code with its name per language (schemas/Materials.json
@@ -51,6 +53,8 @@ type Brand struct {
 type Term struct {
 	Code string        `json:"code"`
 	Name LocalizedText `json:"name"`
+	// X holds the extension members (x-<vendor>-<name>).
+	X Extensions `json:"-"`
 }
 
 // Fiber is one material of a part with its percentage. Qualifiers say what
@@ -62,18 +66,47 @@ type Term struct {
 // as none. See NormalizeFiber for the 0.1 keys recycled_<fibre> and
 // organic_<fibre>.
 type Fiber struct {
-	Material   Term    `json:"material"`
-	Percentage float64 `json:"percentage"`
-	Qualifiers []Term  `json:"qualifiers"`
+	Material Term `json:"material"`
+	// Percentage is the fibre's share of the part, above 0 and at most 100,
+	// or nil when the brand does not state one (JSON null; a write may
+	// leave it out).
+	Percentage *float64 `json:"percentage"`
+	Qualifiers []Term   `json:"qualifiers"`
+	// X holds the extension members (x-<vendor>-<name>).
+	X Extensions `json:"-"`
 }
 
-// MarshalJSON writes Qualifiers as [] when it is nil.
+// MarshalJSON writes Qualifiers as [] when it is nil, Percentage as null
+// when not stated, and the extension members.
 func (f Fiber) MarshalJSON() ([]byte, error) {
 	type plain Fiber
 	if f.Qualifiers == nil {
 		f.Qualifiers = []Term{}
 	}
-	return json.Marshal(plain(f))
+	return marshalExt(plain(f), f.X)
+}
+
+// UnmarshalJSON reads a fibre and keeps its extension members in X. The
+// draft member qualifier is not read here: write paths of a node handle it
+// (docs/ingest.md 3.1).
+func (f *Fiber) UnmarshalJSON(data []byte) error {
+	type plain Fiber
+	var p plain
+	x, err := unmarshalExt(data, &p)
+	if err != nil {
+		return err
+	}
+	*f = Fiber(p)
+	f.X = x
+	return nil
+}
+
+// Pct returns the percentage, 0 when not stated.
+func (f Fiber) Pct() float64 {
+	if f.Percentage == nil {
+		return 0
+	}
+	return *f.Percentage
 }
 
 // HasQualifier reports whether the fibre has the qualifier code.
@@ -90,6 +123,8 @@ func (f Fiber) HasQualifier(code string) bool {
 type MaterialPart struct {
 	Part   Term    `json:"part"`
 	Fibers []Fiber `json:"fibers"`
+	// X holds the extension members (x-<vendor>-<name>).
+	X Extensions `json:"-"`
 }
 
 // Materials is the fibre composition per part.
@@ -114,6 +149,8 @@ type CareInstruction struct {
 	Symbol   *string       `json:"symbol"`
 	Name     LocalizedText `json:"name"`
 	Text     LocalizedText `json:"text"`
+	// X holds the extension members (x-<vendor>-<name>).
+	X Extensions `json:"-"`
 }
 
 // Care is an ordered list of care instructions.
@@ -148,6 +185,8 @@ type Product struct {
 	Attributes           map[string]any     `json:"attributes"`
 	CreatedAt            time.Time          `json:"created_at"`
 	UpdatedAt            time.Time          `json:"updated_at"`
+	// X holds the extension members (x-<vendor>-<name>).
+	X Extensions `json:"-"`
 }
 
 // ProductDetail is a product with its published variants and visible assets
@@ -158,17 +197,45 @@ type ProductDetail struct {
 	Assets   []Asset   `json:"assets"`
 }
 
-// MarshalJSON keeps Variants and Assets as arrays (never null).
+// MarshalJSON keeps Variants and Assets as arrays (never null) and writes
+// the product's extension members.
 func (p ProductDetail) MarshalJSON() ([]byte, error) {
-	type plain ProductDetail
-	q := plain(p)
-	if q.Variants == nil {
-		q.Variants = []Variant{}
+	b, err := p.Product.MarshalJSON()
+	if err != nil {
+		return nil, err
 	}
-	if q.Assets == nil {
-		q.Assets = []Asset{}
+	rest := struct {
+		Variants []Variant `json:"variants"`
+		Assets   []Asset   `json:"assets"`
+	}{p.Variants, p.Assets}
+	if rest.Variants == nil {
+		rest.Variants = []Variant{}
 	}
-	return json.Marshal(q)
+	if rest.Assets == nil {
+		rest.Assets = []Asset{}
+	}
+	r, err := json.Marshal(rest)
+	if err != nil {
+		return nil, err
+	}
+	return append(append(b[:len(b)-1], ','), r[1:]...), nil
+}
+
+// UnmarshalJSON reads the product (with its extension members), the
+// variants and the assets.
+func (p *ProductDetail) UnmarshalJSON(data []byte) error {
+	var rest struct {
+		Variants []Variant `json:"variants"`
+		Assets   []Asset   `json:"assets"`
+	}
+	if err := json.Unmarshal(data, &rest); err != nil {
+		return err
+	}
+	if err := p.Product.UnmarshalJSON(data); err != nil {
+		return err
+	}
+	p.Variants, p.Assets = rest.Variants, rest.Assets
+	return nil
 }
 
 // Color of a variant (schemas/Color.json). Family (0.2) is one of
@@ -178,6 +245,8 @@ type Color struct {
 	Name          LocalizedText `json:"name"`
 	SupplierColor *string       `json:"supplier_color"`
 	Family        *string       `json:"family"`
+	// X holds the extension members (x-<vendor>-<name>).
+	X Extensions `json:"-"`
 }
 
 // Variant is a sellable colour/size (schemas/Variant.json). SizeLength and
@@ -196,6 +265,8 @@ type Variant struct {
 	SizeSystem   *string       `json:"size_system"`
 	Measurements *Measurements `json:"measurements"`
 	UpdatedAt    time.Time     `json:"updated_at"`
+	// X holds the extension members (x-<vendor>-<name>).
+	X Extensions `json:"-"`
 }
 
 // Rights are the usage rights of an asset (schemas/Rights.json).
@@ -208,6 +279,8 @@ type Rights struct {
 	ExpiresAt    *time.Time `json:"expires_at"`
 	Credit       *string    `json:"credit"`
 	ModelRelease *bool      `json:"model_release"`
+	// X holds the extension members (x-<vendor>-<name>).
+	X Extensions `json:"-"`
 }
 
 // DefaultRights returns the rights of a node that configured none
@@ -224,6 +297,8 @@ type Provenance struct {
 	C2PA            string  `json:"c2pa"`
 	C2PAManifestURL *string `json:"c2pa_manifest_url"`
 	Generator       *string `json:"generator"`
+	// X holds the extension members (x-<vendor>-<name>).
+	X Extensions `json:"-"`
 }
 
 // DefaultProvenance returns the provenance a node assumes when the brand sent none.
@@ -290,6 +365,8 @@ type Asset struct {
 	Provenance  Provenance    `json:"provenance"`
 	Renditions  Renditions    `json:"renditions"`
 	UpdatedAt   time.Time     `json:"updated_at"`
+	// X holds the extension members (x-<vendor>-<name>).
+	X Extensions `json:"-"`
 }
 
 // GrantRetailer names the retailer a grant belongs to.

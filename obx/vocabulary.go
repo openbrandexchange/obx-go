@@ -148,9 +148,9 @@ func cloneText(t LocalizedText) LocalizedText {
 // otherwise the name it was given (without empty strings).
 func term(t Term, lookup func(string) (LocalizedText, bool)) Term {
 	if n, ok := lookup(t.Code); ok {
-		return Term{Code: t.Code, Name: cloneText(n)}
+		return Term{Code: t.Code, Name: cloneText(n), X: t.X.Clone()}
 	}
-	return Term{Code: t.Code, Name: cleanText(t.Name)}
+	return Term{Code: t.Code, Name: cleanText(t.Name), X: t.X.Clone()}
 }
 
 // WithNames returns a copy of m as a node stores and returns it: every fibre
@@ -164,12 +164,12 @@ func (m Materials) WithNames(v *Vocabulary) Materials {
 	}
 	out := make(Materials, len(m))
 	for i, p := range m {
-		q := MaterialPart{Part: term(p.Part, v.PartName)}
+		q := MaterialPart{Part: term(p.Part, v.PartName), X: p.X.Clone()}
 		if p.Fibers != nil {
 			q.Fibers = make([]Fiber, len(p.Fibers))
 			for j, f := range p.Fibers {
 				f = NormalizeFiber(f)
-				g := Fiber{Material: term(f.Material, v.MaterialName), Percentage: f.Percentage}
+				g := Fiber{Material: term(f.Material, v.MaterialName), Percentage: f.Percentage, X: f.X.Clone()}
 				for _, qu := range f.Qualifiers {
 					g.Qualifiers = append(g.Qualifiers, term(qu, v.QualifierName))
 				}
@@ -190,7 +190,7 @@ func (c Care) WithNames(v *Vocabulary) Care {
 	}
 	out := make(Care, len(c))
 	for i, e := range c {
-		n := CareInstruction{Code: e.Code, Category: e.Category, Symbol: e.Symbol, Name: cleanText(e.Name), Text: cleanText(e.Text)}
+		n := CareInstruction{Code: e.Code, Category: e.Category, Symbol: e.Symbol, Name: cleanText(e.Name), Text: cleanText(e.Text), X: e.X.Clone()}
 		if k, ok := v.CareCode(e.Code); ok {
 			n.Category, n.Symbol, n.Name = k.Category, k.Symbol, cloneText(k.Name)
 		}

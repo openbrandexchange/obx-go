@@ -27,7 +27,7 @@ func profileName(p string) string {
 	return p
 }
 
-type profileCount struct{ pass, fail, optFail, skip int }
+type profileCount struct{ pass, fail, optFail, skip, na int }
 
 func countProfiles(rep *conformance.Report) (map[string]*profileCount, []string) {
 	counts := map[string]*profileCount{}
@@ -46,6 +46,8 @@ func countProfiles(rep *conformance.Report) (map[string]*profileCount, []string)
 			c.fail++
 		case r.Status == conformance.StatusFail:
 			c.optFail++
+		case r.Status == conformance.StatusNA:
+			c.na++
 		default:
 			c.skip++
 		}
@@ -64,33 +66,62 @@ func (c *profileCount) text() string {
 	if c.skip > 0 {
 		parts = append(parts, fmt.Sprintf("%d skipped", c.skip))
 	}
+	if c.na > 0 {
+		parts = append(parts, fmt.Sprintf("%d not applicable", c.na))
+	}
 	return strings.Join(parts, " · ")
+}
+
+// reportVerdict is the report's verdict (computed for reports saved before
+// the field existed).
+func reportVerdict(rep *conformance.Report) string {
+	if rep.Verdict != "" {
+		return rep.Verdict
+	}
+	return rep.ComputeVerdict()
 }
 
 func verdict(rep *conformance.Report) string {
 	names := append([]string(nil), rep.Profiles...)
-	if rep.ReadOnly && rep.SetupError == "" && rep.OK() {
-		return fmt.Sprintf("every online check passed (%d of %d checks ran). The other checks need writes or brand-side steps; run obx-conformance locally for the full result.", rep.Passed, len(rep.Results))
+	v := reportVerdict(rep)
+	skipped := len(rep.RequiredSkipped())
+	switch {
+	case v == conformance.VerdictNotConformant:
+		failed := 0
+		for _, r := range rep.Results {
+			if r.Required && r.Status == conformance.StatusFail {
+				failed++
+			}
+		}
+		return fmt.Sprintf("NOT CONFORMANT: %d required check(s) failed. Retailers' software or automatic uploads may not work correctly with this portal until they are fixed.", failed)
+	case rep.ReadOnly:
+		return fmt.Sprintf("INCOMPLETE: every online check passed (%d of %d checks ran). The other checks need writes or brand-side steps; run obx-conformance locally for the full result.", rep.Passed, len(rep.Results))
+	case rep.Partial && skipped == 0:
+		return "INCOMPLETE: every selected check passed. Only some checks ran (--only), so this is not a conformance claim."
+	case v == conformance.VerdictIncomplete:
+		return fmt.Sprintf("INCOMPLETE: no required check failed, but %d required check(s) were skipped (see \"Skipped required checks\" for what each needs). A skipped check is no pass: this is not a conformance claim.", skipped)
 	}
-	if rep.OK() && rep.Partial {
-		return "every selected check passed. Only some checks ran (--only), so this is not a conformance claim."
+	return "CONFORMANT: this portal follows the Open Brand Exchange specification for " + strings.Join(names, ", ") + "."
+}
+
+// extraNeeds is what a skipped test needs, when its messages do not say
+// it already.
+func extraNeeds(r conformance.Result) string {
+	if r.Status != conformance.StatusSkip || r.Needs == "" {
+		return ""
 	}
-	if rep.OK() {
-		return "CONFORMANT: this portal follows the Open Brand Exchange specification for " + strings.Join(names, ", ") + "."
-	}
-	failed := 0
-	for _, r := range rep.Results {
-		if r.Required && r.Status == conformance.StatusFail {
-			failed++
+	for _, m := range r.Messages {
+		if strings.Contains(m, r.Needs) {
+			return ""
 		}
 	}
-	return fmt.Sprintf("NOT CONFORMANT: %d required check(s) failed. Retailers' software or automatic uploads may not work correctly with this portal until they are fixed.", failed)
+	return r.Needs
 }
 
 // nextStep is shown under a full conformant result: how to get it confirmed and
 // where to read about the official partner listing.
 func nextStep(rep *conformance.Report) string {
-	if !rep.OK() || rep.Partial {
+	if reportVerdict(rep) != conformance.VerdictConformant {
 		return ""
 	}
 	return "All required checks passed. To have this confirmed as \"Compatible with Open Brand Exchange\" (free), send the JSON report (--json) and the address of this portal to hello@openbrandexchange.com. About partner listings: https://openbrandexchange.com/en/partners/"
@@ -121,15 +152,19 @@ func printReport(w io.Writer, rep *conformance.Report) {
 	for _, p := range order {
 		fmt.Fprintf(w, "  %-*s  %s\n", width, profileName(p), counts[p].text())
 	}
-	var failed, optional, skipped []conformance.Result
+	var failed, optional, reqSkipped, skipped, na []conformance.Result
 	for _, r := range rep.Results {
 		switch {
 		case r.Status == conformance.StatusFail && r.Required:
 			failed = append(failed, r)
 		case r.Status == conformance.StatusFail:
 			optional = append(optional, r)
+		case r.Status == conformance.StatusSkip && r.Required && !rep.ReadOnly:
+			reqSkipped = append(reqSkipped, r)
 		case r.Status == conformance.StatusSkip:
 			skipped = append(skipped, r)
+		case r.Status == conformance.StatusNA:
+			na = append(na, r)
 		}
 	}
 	section := func(title, intro string, list []conformance.Result, why bool) {
@@ -145,6 +180,9 @@ func printReport(w io.Writer, rep *conformance.Report) {
 			if why {
 				fmt.Fprintf(w, "      Why it matters: %s\n", profileInfo[r.Profile].why)
 			}
+			if n := extraNeeds(r); n != "" {
+				fmt.Fprintf(w, "      Needs: %s\n", n)
+			}
 			for _, m := range r.Messages {
 				fmt.Fprintf(w, "      - %s\n", m)
 			}
@@ -152,7 +190,9 @@ func printReport(w io.Writer, rep *conformance.Report) {
 	}
 	section("What failed (required)", "Fix these to be conformant. The test id refers to docs/conformance.md of the specification.", failed, true)
 	section("Optional checks not met", "Optional features this portal offers but that do not fully work.", optional, false)
+	section("Skipped required checks", "Not checked, so the result is INCOMPLETE. Give what each needs and run again.", reqSkipped, false)
 	section("Skipped", "Not checked; usually because a credential or a switch was not given.", skipped, false)
+	section("Not applicable", "The portal does not offer the optional interface these checks test.", na, false)
 	for _, s := range rep.Setup {
 		if strings.HasPrefix(s, "warning") {
 			fmt.Fprintf(w, "\n%s\n", s)
@@ -165,7 +205,7 @@ func printReport(w io.Writer, rep *conformance.Report) {
 			profile = r.Profile
 			fmt.Fprintf(w, "  %s\n", profileName(profile))
 		}
-		label := map[string]string{conformance.StatusPass: "PASS", conformance.StatusFail: "FAIL", conformance.StatusSkip: "SKIP"}[r.Status]
+		label := map[string]string{conformance.StatusPass: "PASS", conformance.StatusFail: "FAIL", conformance.StatusSkip: "SKIP", conformance.StatusNA: "N/A "}[r.Status]
 		opt := ""
 		if !r.Required {
 			opt = " (optional)"
@@ -178,7 +218,7 @@ func printReport(w io.Writer, rep *conformance.Report) {
 			fmt.Fprintf(w, "  - %s\n", s)
 		}
 	}
-	fmt.Fprintf(w, "\n%d passed, %d failed, %d skipped. Machine-readable: add --json; for an issue or pull request: --format markdown.\n", rep.Passed, rep.Failed, rep.Skipped)
+	fmt.Fprintf(w, "\n%s: %d passed, %d failed, %d skipped, %d not applicable. Machine-readable: add --json; for an issue or pull request: --format markdown.\n", reportVerdict(rep), rep.Passed, rep.Failed, rep.Skipped, rep.NotApplicable)
 }
 
 // printMarkdown writes the report as Markdown (GitHub step summary, issues).
@@ -187,8 +227,8 @@ func printMarkdown(w io.Writer, rep *conformance.Report) {
 	if sw == "" {
 		sw = "unknown software"
 	}
-	head := map[bool]string{true: "conformant", false: "NOT conformant"}[rep.OK()]
-	if rep.OK() && rep.Partial {
+	head := map[string]string{conformance.VerdictConformant: "CONFORMANT", conformance.VerdictIncomplete: "INCOMPLETE", conformance.VerdictNotConformant: "NOT CONFORMANT"}[reportVerdict(rep)]
+	if rep.Partial && !rep.ReadOnly && rep.OK() && len(rep.RequiredSkipped()) == 0 {
 		head = "selected checks passed"
 	}
 	fmt.Fprintf(w, "## Open Brand Exchange conformance: %s\n\n", head)
@@ -206,11 +246,17 @@ func printMarkdown(w io.Writer, rep *conformance.Report) {
 	fmt.Fprintln(w, "| | Test | What it checks |")
 	fmt.Fprintln(w, "|---|---|---|")
 	for _, r := range rep.Results {
-		icon := map[string]string{conformance.StatusPass: "pass", conformance.StatusFail: "**FAIL**", conformance.StatusSkip: "skip"}[r.Status]
-		if r.Status == conformance.StatusFail && !r.Required {
+		icon := map[string]string{conformance.StatusPass: "pass", conformance.StatusFail: "**FAIL**", conformance.StatusSkip: "skip", conformance.StatusNA: "n/a"}[r.Status]
+		switch {
+		case r.Status == conformance.StatusFail && !r.Required:
 			icon = "optional, not met"
+		case r.Status == conformance.StatusSkip && r.Required && !rep.ReadOnly:
+			icon = "**skipped (required)**"
 		}
 		title := strings.ReplaceAll(r.Title, "|", "\\|")
+		if n := extraNeeds(r); n != "" {
+			title += "<br>Needs: " + strings.ReplaceAll(n, "|", "\\|")
+		}
 		if len(r.Messages) > 0 && r.Status != conformance.StatusPass {
 			var ms []string
 			for _, m := range r.Messages {

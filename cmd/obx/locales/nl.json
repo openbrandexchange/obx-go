@@ -120,6 +120,7 @@
   "problem.column": "kolom {column}",
   "problem.fibre_composition_missing": "de materiaalsamenstelling ontbreekt; de EU verplicht die op het etiket van textielproducten",
   "problem.fibre_percentages_not_100": "de percentages van een onderdeel tellen niet op tot 100",
+  "problem.material_unknown": "deze materiaalcode staat niet in de lijst met materialen; hij blijft zoals geschreven, controleer de spelling of gebruik de Engelse naam",
   "problem.files_missing": "er ontbreken bestanden",
   "problem.footwear_materials_missing": "het materiaal van bovenwerk, voering en binnenzool of loopzool ontbreekt; de EU verplicht het op het etiket van schoeisel",
   "problem.gtin_conflict": "deze EAN wordt al gebruikt door een ander artikel",

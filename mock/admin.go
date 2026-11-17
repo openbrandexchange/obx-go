@@ -2,6 +2,7 @@ package mock
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/url"
 	"sort"
@@ -1187,6 +1188,15 @@ func (n *Node) clientAction(w http.ResponseWriter, r *http.Request, c *apiClient
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
+	secret := n.rotateSecret(c)
+	writeJSON(w, http.StatusOK, n.withSecret(r, c, secret))
+}
+
+// rotateSecret gives an API client a new secret. Access tokens issued
+// before stop working (401 invalid_token, not access_revoked: protocol.md
+// 4.3) and the old secret gets invalid_client; cursors stay valid, they
+// belong to the retailer. It holds n.mu.
+func (n *Node) rotateSecret(c *apiClient) string {
 	secret := randomToken(obx.PrefixClientSecret, 32)
 	c.secretHash = hashSecret(secret)
 	for k, t := range n.st.accessTokens {
@@ -1194,7 +1204,22 @@ func (n *Node) clientAction(w http.ResponseWriter, r *http.Request, c *apiClient
 			delete(n.st.accessTokens, k)
 		}
 	}
-	writeJSON(w, http.StatusOK, n.withSecret(r, c, secret))
+	return secret
+}
+
+// RotateClientSecret rotates the secret of the API key with OAuth client id
+// clientID (the operator action rotate_client_secret of the conformance
+// suite) and returns the new secret, as POST .../api-clients/{id}/rotate
+// does.
+func (n *Node) RotateClientSecret(clientID string) (string, error) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	for _, c := range n.st.clients {
+		if c.clientID == clientID || c.id == clientID {
+			return n.rotateSecret(c), nil
+		}
+	}
+	return "", errors.New("mock: no API client " + clientID)
 }
 
 // ---- ingest tokens

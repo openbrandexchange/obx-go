@@ -120,6 +120,7 @@
   "problem.column": "coluna {column}",
   "problem.fibre_composition_missing": "falta a composição em fibras; a UE exige-a na etiqueta dos produtos têxteis",
   "problem.fibre_percentages_not_100": "as percentagens de fibras de uma parte não somam 100",
+  "problem.material_unknown": "este código de material não está na lista de materiais; é mantido como escrito, verifique a ortografia ou use o nome em inglês",
   "problem.files_missing": "faltam ficheiros",
   "problem.footwear_materials_missing": "falta o material da gáspea, do forro e palmilha ou da sola exterior; a UE exige-o na etiqueta do calçado",
   "problem.gtin_conflict": "este EAN já é usado por outro artigo",

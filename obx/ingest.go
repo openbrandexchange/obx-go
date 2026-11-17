@@ -12,6 +12,8 @@ type BrandInput struct {
 	Website     *string       `json:"website,omitempty"`
 	Description LocalizedText `json:"description,omitempty"`
 	Status      *string       `json:"status,omitempty"`
+	// X holds the extension members (x-<vendor>-<name>).
+	X Extensions `json:"-"`
 }
 
 // ProductInput is the ingest body for a product (schemas/ProductInput.json).
@@ -38,6 +40,8 @@ type ProductInput struct {
 	Features             *Features          `json:"features,omitempty"`
 	Attributes           map[string]any     `json:"attributes,omitempty"`
 	Status               *string            `json:"status,omitempty"`
+	// X holds the extension members (x-<vendor>-<name>).
+	X Extensions `json:"-"`
 }
 
 // LabelWarnings returns the label completeness warnings of the product
@@ -57,6 +61,8 @@ type VariantInput struct {
 	SizeSystem        *string       `json:"size_system,omitempty"`
 	Measurements      *Measurements `json:"measurements,omitempty"`
 	Status            *string       `json:"status,omitempty"`
+	// X holds the extension members (x-<vendor>-<name>).
+	X Extensions `json:"-"`
 }
 
 // RightsInput are asset rights on ingest; nil fields take the node's default rights.
@@ -69,6 +75,8 @@ type RightsInput struct {
 	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
 	Credit       *string    `json:"credit,omitempty"`
 	ModelRelease *bool      `json:"model_release,omitempty"`
+	// X holds the extension members (x-<vendor>-<name>).
+	X Extensions `json:"-"`
 }
 
 // ProvenanceInput is asset provenance on ingest; nil fields take the defaults
@@ -81,6 +89,8 @@ type ProvenanceInput struct {
 	C2PA            *string `json:"c2pa,omitempty"`
 	C2PAManifestURL *string `json:"c2pa_manifest_url,omitempty"`
 	Generator       *string `json:"generator,omitempty"`
+	// X holds the extension members (x-<vendor>-<name>).
+	X Extensions `json:"-"`
 }
 
 // FileRef references uploaded bytes by sha256.
@@ -146,6 +156,8 @@ type AssetInput struct {
 	Provenance         *ProvenanceInput `json:"provenance,omitempty"`
 	Files              *AssetFiles      `json:"files,omitempty"`
 	Status             *string          `json:"status,omitempty"`
+	// X holds the extension members (x-<vendor>-<name>).
+	X Extensions `json:"-"`
 }
 
 // Blob is stored bytes (schemas/Blob.json).

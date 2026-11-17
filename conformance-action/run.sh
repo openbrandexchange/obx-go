@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Runs obx-conformance once for the conformance action: the JSON report is the
 # result, the Markdown report goes to the job summary and the text report to
-# the log. Exit code: 0 conformant, 1 a required check failed, 2 could not run.
+# the log. Exit code: 0 CONFORMANT, 1 NOT CONFORMANT (a required check failed), 2 INCOMPLETE (a
+# required check was skipped) or the run could not start.
 set -uo pipefail
 bin="$RUNNER_TEMP/obx-conformance"
 report="$RUNNER_TEMP/obx-conformance.json"

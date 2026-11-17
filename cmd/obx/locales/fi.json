@@ -120,6 +120,7 @@
   "problem.column": "sarake {column}",
   "problem.fibre_composition_missing": "kuitukoostumus puuttuu; EU vaatii sen tekstiilituotteiden merkinnässä",
   "problem.fibre_percentages_not_100": "osan kuituprosentit eivät ole yhteensä 100",
+  "problem.material_unknown": "tätä materiaalikoodia ei ole materiaaliluettelossa; se säilytetään kirjoitetussa muodossa, tarkista kirjoitusasu tai käytä englanninkielistä nimeä",
   "problem.files_missing": "tiedostoja puuttuu",
   "problem.footwear_materials_missing": "päällisen, vuorin ja pohjallisen tai ulkopohjan materiaali puuttuu; EU vaatii sen jalkineiden merkinnässä",
   "problem.gtin_conflict": "tämä EAN on jo toisen tuotteen käytössä",

@@ -133,7 +133,7 @@ func TestLoginPushRerunStatus(t *testing.T) {
 	if pin.Features == nil || pin.Features.Wheels == nil || *pin.Features.Wheels != 4 || obx.Str(pin.ItemSubtype) != "cabin" {
 		t.Fatalf("pushed KO-1008 lacks its article data: %s", rec.Data)
 	}
-	rec, err = ic.Get(context.Background(), obx.KindVariant, "2000100901014")
+	rec, err = ic.Get(context.Background(), obx.KindVariant, "KO-1009-CHR-ONE SIZE")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -455,12 +455,12 @@ func TestPull(t *testing.T) {
 	for _, e := range variants {
 		b, _ := os.ReadFile(filepath.Join(out, "variants", e.Name()))
 		var v obx.Variant
-		if json.Unmarshal(b, &v) == nil && v.ExternalID == "2000100801017" {
+		if json.Unmarshal(b, &v) == nil && v.ExternalID == "KO-1008-BLK-CABIN" {
 			found = v.Measurements != nil && v.Measurements.VolumeExpandedL != nil && *v.Measurements.VolumeExpandedL == 42 && obx.Str(v.Color.Family) == "black"
 		}
 	}
 	if !found {
-		t.Fatal("pulled variant 2000100801017 lacks its measurements or colour family")
+		t.Fatal("pulled variant KO-1008-BLK-CABIN lacks its measurements or colour family")
 	}
 	code, stdout, _ = h.run("pull", srv.URL, "--out", out, "--renditions", "web,original")
 	if code != 0 || !strings.Contains(stdout, "nothing changed") {
@@ -715,6 +715,6 @@ func TestPushShowsLabelWarnings(t *testing.T) {
 // recycledPolyester: the KO-1008 lining fibre as a 0.3 node returns it, with
 // the vocabulary's names.
 func recycledPolyester(f obx.Fiber) bool {
-	return f.Material.Code == "polyester" && f.Material.Name["nl"] == "Polyester" && f.Percentage == 100 &&
+	return f.Material.Code == "polyester" && f.Material.Name["nl"] == "Polyester" && f.Percentage != nil && *f.Percentage == 100 &&
 		len(f.Qualifiers) == 1 && f.Qualifiers[0].Code == "recycled" && f.Qualifiers[0].Name["nl"] == "Gerecycled"
 }

@@ -87,15 +87,35 @@ const (
 	StatusPass = "pass"
 	StatusFail = "fail"
 	StatusSkip = "skip"
+	// StatusNA marks a test of an optional interface the node does not
+	// offer (P-FEED-5 and the ingest profile without the ingest capability,
+	// an optional capability that is not advertised). It is not a skip:
+	// it never makes a run INCOMPLETE.
+	StatusNA = "n/a"
+)
+
+// Verdicts of a run (spec docs/conformance.md, "Three verdicts").
+const (
+	// VerdictConformant: every REQUIRED test of the profiles ran and passed.
+	VerdictConformant = "CONFORMANT"
+	// VerdictIncomplete: no REQUIRED test failed, but at least one was
+	// skipped, or the run did not run every test (--only, the read-only
+	// online check). Never a conformance claim.
+	VerdictIncomplete = "INCOMPLETE"
+	// VerdictNotConformant: at least one REQUIRED test failed.
+	VerdictNotConformant = "NOT CONFORMANT"
 )
 
 // Result is the outcome of one test.
 type Result struct {
-	ID       string   `json:"id"`
-	Profile  string   `json:"profile"`
-	Title    string   `json:"title"`
-	Required bool     `json:"required"`
-	Status   string   `json:"status"`
+	ID       string `json:"id"`
+	Profile  string `json:"profile"`
+	Title    string `json:"title"`
+	Required bool   `json:"required"`
+	Status   string `json:"status"`
+	// Needs says, for a skipped test, what the run lacked to execute it
+	// (a credential, an operator action, a second profile).
+	Needs    string   `json:"needs,omitempty"`
 	Messages []string `json:"messages,omitempty"`
 	Millis   int64    `json:"duration_ms"`
 	// Online is "partial" when a read-only run checked only part of the
@@ -109,6 +129,9 @@ type Result struct {
 
 // Report is the outcome of a run.
 type Report struct {
+	// Verdict is VerdictConformant, VerdictIncomplete or
+	// VerdictNotConformant (see Report.ComputeVerdict).
+	Verdict    string    `json:"verdict"`
 	BaseURL    string    `json:"base_url"`
 	Profiles   []string  `json:"profiles"`
 	Software   string    `json:"software,omitempty"`
@@ -118,8 +141,10 @@ type Report struct {
 	Passed     int       `json:"passed"`
 	Failed     int       `json:"failed"`
 	Skipped    int       `json:"skipped"`
-	Results    []Result  `json:"results"`
-	Setup      []string  `json:"setup,omitempty"`
+	// NotApplicable counts the n/a results.
+	NotApplicable int      `json:"not_applicable"`
+	Results       []Result `json:"results"`
+	Setup         []string `json:"setup,omitempty"`
 	// Partial is true when only some tests ran (Config.Only); a partial run
 	// is not a conformance claim.
 	Partial bool `json:"partial,omitempty"`
@@ -133,7 +158,8 @@ type Report struct {
 	Bytes    int64 `json:"bytes,omitempty"`
 }
 
-// OK reports whether every required test passed.
+// OK reports whether no required test failed (skipped required tests do
+// not count here; see ComputeVerdict).
 func (r *Report) OK() bool {
 	for _, res := range r.Results {
 		if res.Required && res.Status == StatusFail {
@@ -141,6 +167,48 @@ func (r *Report) OK() bool {
 		}
 	}
 	return true
+}
+
+// RequiredSkipped returns the required tests that were skipped.
+func (r *Report) RequiredSkipped() []Result {
+	var out []Result
+	for _, res := range r.Results {
+		if res.Required && res.Status == StatusSkip {
+			out = append(out, res)
+		}
+	}
+	return out
+}
+
+// ComputeVerdict derives the verdict from the results: NOT CONFORMANT when
+// a required test failed (or the run could not be prepared), INCOMPLETE
+// when a required test was skipped or the run did not run every test
+// (Partial: --only or the read-only online check), else CONFORMANT.
+func (r *Report) ComputeVerdict() string {
+	switch {
+	case !r.OK() || r.SetupError != "":
+		return VerdictNotConformant
+	case len(r.RequiredSkipped()) > 0 || r.Partial || r.ReadOnly:
+		return VerdictIncomplete
+	}
+	return VerdictConformant
+}
+
+// ExitCode is the exit code of obx-conformance for this report: 1 when a
+// required test failed, 2 when a required test was skipped (INCOMPLETE),
+// else 0. A run that by design ran only some tests (--only) exits 0 when
+// every selected required test ran and passed, although its verdict is
+// INCOMPLETE. The read-only online check uses its own codes.
+func (r *Report) ExitCode() int {
+	switch {
+	case r.SetupError != "":
+		return 2
+	case !r.OK():
+		return 1
+	case len(r.RequiredSkipped()) > 0:
+		return 2
+	}
+	return 0
 }
 
 // testCase is one registered test.
@@ -163,7 +231,16 @@ type T struct {
 
 type abort struct{}
 
-type skipTest struct{ msg string }
+// skipTest stops a test as skipped. needs is what the run lacked (shown in
+// the report); optional makes a required test count as optional for this
+// run (a test that is REQUIRED only "when the operator offers the action").
+type skipTest struct {
+	msg, needs string
+	optional   bool
+}
+
+// naTest stops a test as not applicable (StatusNA).
+type naTest struct{ msg string }
 
 // Errorf records a failure and continues.
 func (t *T) Errorf(format string, args ...any) {
@@ -182,8 +259,29 @@ func (t *T) Fatalf(format string, args ...any) {
 	panic(abort{})
 }
 
-// Skip stops the test and marks it skipped.
-func (t *T) Skip(format string, args ...any) { panic(skipTest{fmt.Sprintf(format, args...)}) }
+// Skip stops the test and marks it skipped; the message is also what the
+// report lists as needed. A test that already failed stays failed.
+func (t *T) Skip(format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	panic(skipTest{msg: msg, needs: msg})
+}
+
+// SkipNeeds skips with a separate "needs" text for the report.
+func (t *T) SkipNeeds(needs, format string, args ...any) {
+	panic(skipTest{msg: fmt.Sprintf(format, args...), needs: needs})
+}
+
+// skipOptional skips a test that is REQUIRED only when the operator offers
+// an action (P-FEED-7): the result counts as optional for this run.
+func (t *T) skipOptional(needs, format string, args ...any) {
+	panic(skipTest{msg: fmt.Sprintf(format, args...), needs: needs, optional: true})
+}
+
+// NotApplicable stops the test as n/a: the node does not offer the optional
+// interface it tests.
+func (t *T) NotApplicable(format string, args ...any) {
+	panic(naTest{fmt.Sprintf(format, args...)})
+}
 
 // Notef adds an informational message.
 func (t *T) Notef(format string, args ...any) {
@@ -361,23 +459,29 @@ func Run(ctx context.Context, profiles []string, cfg Config) (*Report, error) {
 		res := Result{ID: tc.id, Profile: tc.profile, Title: tc.title, Required: tc.required}
 		if r.online() {
 			if why := r.onlineGate(tc.id); why != "" {
-				res.Status, res.Messages = StatusSkip, []string{why}
+				res.Status, res.Messages, res.Needs = StatusSkip, []string{why}, onlineNeeds(why)
 				r.add(res)
 				continue
 			}
+		}
+		if tc.profile == ProfileIngest && !r.offersIngest() {
+			res.Status, res.Messages = StatusNA, []string{"the node does not offer the Ingest API (no capability ingest in /.well-known/obx)"}
+			r.add(res)
+			continue
 		}
 		if setupErr != nil {
 			res.Status = StatusFail
 			res.Messages = []string{"setup failed: " + setupErr.Error()}
 			if !tc.required {
 				res.Status = StatusSkip
+				res.Needs = "a run that can be prepared (see setup_error)"
 			}
 			r.add(res)
 			continue
 		}
 		if r.online() {
 			if why := r.budget.stopped(); why != "" {
-				res.Status, res.Messages = StatusSkip, []string{"not checked online: " + why}
+				res.Status, res.Messages, res.Needs = StatusSkip, []string{"not checked online: " + why}, "an online check that is not stopped: "+why
 				r.add(res)
 				continue
 			}
@@ -403,15 +507,37 @@ func Run(ctx context.Context, profiles []string, cfg Config) (*Report, error) {
 			r.report.Passed++
 		case StatusFail:
 			r.report.Failed++
+		case StatusNA:
+			r.report.NotApplicable++
 		default:
 			r.report.Skipped++
 		}
 	}
+	r.report.Verdict = r.report.ComputeVerdict()
 	r.report.Millis = time.Since(start).Milliseconds()
 	if r.discovery != nil {
 		r.report.Software = r.discovery.Node.Software + " " + r.discovery.Node.Version
 	}
 	return r.report, nil
+}
+
+// offersIngest reports whether the node offers the Ingest API: the
+// discovery document lists the capability ingest (or, when discovery could
+// not be read, an upload key was given).
+func (r *runner) offersIngest() bool {
+	if r.discovery != nil {
+		return r.discovery.Has(obx.CapIngest)
+	}
+	return r.cfg.IngestToken != ""
+}
+
+// onlineNeeds turns the reason of an online gate into a "needs" text.
+func onlineNeeds(why string) string {
+	why = strings.TrimPrefix(why, "not checked online: ")
+	if strings.HasPrefix(why, "needs ") {
+		return strings.TrimPrefix(why, "needs ")
+	}
+	return "obx-conformance run locally (" + why + ")"
 }
 
 // add records a result and reports it to Config.Progress.
@@ -453,8 +579,20 @@ func (r *runner) runTest(ctx context.Context, tc testCase, res *Result) {
 				switch x := v.(type) {
 				case abort:
 				case skipTest:
-					res.Status = StatusSkip
 					res.Messages = append(res.Messages, x.msg)
+					if t.failed {
+						break // what failed before the skip still fails
+					}
+					res.Status = StatusSkip
+					res.Needs = x.needs
+					if x.optional {
+						res.Required = false
+					}
+				case naTest:
+					res.Messages = append(res.Messages, x.msg)
+					if !t.failed {
+						res.Status = StatusNA
+					}
 				case stopOnline:
 					res.Online = "partial"
 					res.Messages = append(res.Messages, "not checked online: "+x.msg)
@@ -467,10 +605,7 @@ func (r *runner) runTest(ctx context.Context, tc testCase, res *Result) {
 		tc.run(t)
 	}()
 	res.Millis = time.Since(start).Milliseconds()
-	if res.Status == StatusSkip {
-		if !tc.required && len(res.Messages) > 0 {
-			return
-		}
+	if res.Status == StatusSkip || res.Status == StatusNA {
 		return
 	}
 	if t.failed {

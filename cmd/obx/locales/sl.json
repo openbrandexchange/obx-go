@@ -120,6 +120,7 @@
   "problem.column": "stolpec {column}",
   "problem.fibre_composition_missing": "manjka surovinska sestava; EU jo zahteva na etiketi tekstilnih izdelkov",
   "problem.fibre_percentages_not_100": "odstotki vlaken enega dela skupaj ne dajo 100",
+  "problem.material_unknown": "ta oznaka materiala ni na seznamu materialov; ostane, kot je zapisana, preverite črkovanje ali uporabite angleško ime",
   "problem.files_missing": "manjkajo datoteke",
   "problem.footwear_materials_missing": "manjka material zgornjega dela, podloge in vložka ali podplata; EU ga zahteva na etiketi obutve",
   "problem.gtin_conflict": "ta EAN že uporablja drug artikel",

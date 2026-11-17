@@ -26,22 +26,72 @@ func TestProtocolWithAPIKeysOnly(t *testing.T) {
 	code := run(context.Background(), []string{"protocol", "--url", srv.URL, "--client-id", c.Full.ClientID, "--client-secret", c.Full.ClientSecret,
 		"--second-client-id", c.Restricted.ClientID, "--second-client-secret", c.Restricted.ClientSecret,
 		"--no-original-client-id", c.NoOriginals.ClientID, "--no-original-client-secret", c.NoOriginals.ClientSecret, "--token", c.IngestToken, "--json"}, &out, &errb, noEnv)
-	if code != 0 {
-		t.Fatalf("exit %d\n%s\n%s", code, out.String(), errb.String())
+	// Without admin credentials or an operator the brand-side tests are
+	// skipped: no required test fails, but the run is INCOMPLETE (exit 2).
+	if code != 2 {
+		t.Fatalf("exit %d, want 2 (INCOMPLETE)\n%s\n%s", code, out.String(), errb.String())
 	}
 	var rep conformance.Report
 	if err := json.Unmarshal(out.Bytes(), &rep); err != nil {
 		t.Fatal(err)
 	}
-	if rep.Failed != 0 || rep.Passed < 20 {
-		t.Fatalf("passed %d failed %d", rep.Passed, rep.Failed)
+	if rep.Failed != 0 || rep.Passed < 20 || rep.Verdict != conformance.VerdictIncomplete {
+		t.Fatalf("passed %d failed %d verdict %q", rep.Passed, rep.Failed, rep.Verdict)
 	}
 	// P-FEED-5 needs the ingest replay, P-FEED-7 an operator that offers
-	// simulate_spec_upgrade.
+	// simulate_spec_upgrade (and then counts as optional).
 	for _, r := range rep.Results {
-		if r.Status == conformance.StatusSkip && !strings.Contains(strings.Join(r.Messages, " "), "admin") && r.ID != "P-FEED-5" && r.ID != "P-FEED-7" {
+		if r.Status != conformance.StatusSkip {
+			continue
+		}
+		if !strings.Contains(strings.Join(r.Messages, " "), "admin") && r.ID != "P-FEED-5" && r.ID != "P-FEED-7" {
 			t.Errorf("%s skipped for another reason than missing admin credentials: %v", r.ID, r.Messages)
 		}
+		if r.Needs == "" {
+			t.Errorf("%s skipped without needs", r.ID)
+		}
+		if r.ID == "P-FEED-7" && r.Required {
+			t.Errorf("P-FEED-7 without an operator that offers simulate_spec_upgrade must count as optional")
+		}
+	}
+}
+
+// The three verdicts and their exit codes (spec docs/conformance.md).
+func TestVerdicts(t *testing.T) {
+	res := func(status string, required bool) conformance.Result {
+		return conformance.Result{ID: "X-1", Profile: conformance.ProfileProtocol, Status: status, Required: required, Needs: "an operator"}
+	}
+	cases := []struct {
+		name    string
+		rep     conformance.Report
+		verdict string
+		code    int
+	}{
+		{"all pass", conformance.Report{Results: []conformance.Result{res(conformance.StatusPass, true), res(conformance.StatusNA, true), res(conformance.StatusSkip, false)}}, conformance.VerdictConformant, 0},
+		{"required skipped", conformance.Report{Results: []conformance.Result{res(conformance.StatusPass, true), res(conformance.StatusSkip, true)}}, conformance.VerdictIncomplete, 2},
+		{"required failed", conformance.Report{Results: []conformance.Result{res(conformance.StatusFail, true), res(conformance.StatusSkip, true)}}, conformance.VerdictNotConformant, 1},
+		{"optional failed", conformance.Report{Results: []conformance.Result{res(conformance.StatusPass, true), res(conformance.StatusFail, false)}}, conformance.VerdictConformant, 0},
+		{"only", conformance.Report{Partial: true, Results: []conformance.Result{res(conformance.StatusPass, true)}}, conformance.VerdictIncomplete, 0},
+		{"online", conformance.Report{Partial: true, ReadOnly: true, Results: []conformance.Result{res(conformance.StatusPass, true)}}, conformance.VerdictIncomplete, 0},
+	}
+	for _, c := range cases {
+		if v := c.rep.ComputeVerdict(); v != c.verdict {
+			t.Errorf("%s: verdict %s, want %s", c.name, v, c.verdict)
+		}
+		if code := c.rep.ExitCode(); code != c.code {
+			t.Errorf("%s: exit %d, want %d", c.name, code, c.code)
+		}
+	}
+	var buf bytes.Buffer
+	inc := cases[1].rep
+	printReport(&buf, &inc)
+	if out := buf.String(); !strings.Contains(out, "INCOMPLETE") || !strings.Contains(out, "Skipped required checks") || !strings.Contains(out, "Needs: an operator") || strings.Contains(out, "partners") {
+		t.Errorf("text report of an INCOMPLETE run:\n%s", out)
+	}
+	buf.Reset()
+	printMarkdown(&buf, &inc)
+	if out := buf.String(); !strings.Contains(out, "conformance: INCOMPLETE") || !strings.Contains(out, "skipped (required)") {
+		t.Errorf("markdown report of an INCOMPLETE run:\n%s", out)
 	}
 }
 

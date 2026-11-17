@@ -120,6 +120,7 @@
   "problem.column": "kolonna {column}",
   "problem.fibre_composition_missing": "trūkst šķiedru sastāva; ES to pieprasa tekstilizstrādājumu etiķetē",
   "problem.fibre_percentages_not_100": "vienas daļas šķiedru procenti kopā nav 100",
+  "problem.material_unknown": "šī materiāla koda nav materiālu sarakstā; tas tiek saglabāts, kā uzrakstīts, pārbaudiet pareizrakstību vai izmantojiet angļu nosaukumu",
   "problem.files_missing": "trūkst failu",
   "problem.footwear_materials_missing": "trūkst virsas, oderes un ieliktņa vai zoles materiāla; ES to pieprasa apavu etiķetē",
   "problem.gtin_conflict": "šo EAN jau izmanto cita prece",

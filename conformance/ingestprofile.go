@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openbrandexchange/obx-go/canonicalcsv"
 	"github.com/openbrandexchange/obx-go/ingest"
 	"github.com/openbrandexchange/obx-go/nodeadmin"
 	"github.com/openbrandexchange/obx-go/obx"
@@ -27,10 +28,12 @@ func init() {
 	register(p, "I-AUTH-1", "missing scope → insufficient_scope; brand-restricted key cannot write another brand", true, testIngestAuth)
 	register(p, "I-REPLAY-1", "replaying fixtures/ingest one operation at a time gives the expected results and change entries", true, testReplay)
 	register(p, "I-REPLAY-2", "the same script as one JSON batch and as NDJSON gives the same results and entries", true, testReplayBatch)
-	register(p, "I-IDEM-1", "repeated upsert is unchanged with no entry; Idempotency-Key replays the answer", true, testIdempotency)
+	register(p, "I-IDEM-1", "repeated upsert is unchanged with no entry; Idempotency-Key replays the answer of /batch and /imports; another body → idempotency_key_reused, nothing written", true, testIdempotency)
 	register(p, "I-FILE-1", "blob HEAD/PUT dedupe, checksum_mismatch, blob_missing", true, testBlobs)
 	register(p, "I-FILE-2", "resumable multipart upload of a 12 MiB file with a skipped part", true, testMultipart)
 	register(p, "I-VAL-1", "invalid GTIN, duplicate GTIN, position conflict, unknown parent", true, testValidation)
+	register(p, "I-EXT-1", "x-<vendor>-<name> extensions are stored and returned everywhere, PATCH null removes them; other unknown members are ignored with a warning, never 422", true, testExtensions)
+	register(p, "I-MAT-1", "the draft single qualifier is read as a list of one (qualifiers wins, null is none) with one qualifier_deprecated warning; only qualifiers is stored and returned", true, testDraftQualifier)
 	register(p, "I-IMP-1", "re-importing fixtures/kestrel as package and as files is unchanged with no entries", true, testReimport)
 	register(p, "I-IMP-2", "import with an images_manifest gives the same result", true, testManifestImport)
 	register(p, "I-IMP-3", "mirror import unpublishes exactly what is missing; one of the nine Kestrel products → mass_unpublish_refused; zip slip refused", true, testMirror)
@@ -38,8 +41,9 @@ func init() {
 	register(p, "I-IMP-5", "an import without assets.csv keeps the images' embargo, credit, alt text and AI label", true, testImportKeepsImageFacts)
 	register(p, "I-IMP-6", "a column the file does not have keeps the field; an empty cell removes it", true, testImportKeepsAbsentColumns)
 	register(p, "I-IMP-7", "the article data columns: fixtures/imports 1 to 6 give the expected counts, errors, change entries and fields (rule 9 per key)", true, testImportArticleColumns)
-	register(p, "I-IMP-8", "label completeness warnings: label-warnings.csv as a dry run gives exactly the expected codes; fixtures/kestrel none", true, testLabelWarnings)
+	register(p, "I-IMP-8", "label completeness and material_unknown warnings: label-warnings.csv as a dry run gives exactly the expected codes; fixtures/kestrel none", true, testLabelWarnings)
 	register(p, "I-IMP-11", "materials qualifiers in the import: each code in its own brackets, order kept, repeats once, 0.1 key first; \"(organic, recycled)\" is a validation_failed row", true, testImportQualifiers)
+	register(p, "I-IMP-12", "variant identity in imports: default id <style>-<color>-<size>[-<size_length>], a later GTIN finds the variant and keeps its ids, a GTIN of another product → gtin_conflict", true, testVariantIdentity)
 }
 
 func testIngestInfo(t *T) {
@@ -322,11 +326,14 @@ func testReplay(t *T) {
 }
 
 func testReplayFeed(t *T) {
+	if !t.r.offersIngest() {
+		t.NotApplicable("the node does not offer the Ingest API, so there is no ingest replay to read")
+	}
 	if !obx.Contains(t.r.report.Profiles, ProfileIngest) {
-		t.Skip("needs the ingest profile too (the replay runs there)")
+		t.SkipNeeds("the ingest profile in the same run (obx-conformance all, or protocol,ingest)", "the replay runs in the ingest profile, which is not part of this run")
 	}
 	if !t.r.replayRan {
-		t.Skip("I-REPLAY-1 did not run")
+		t.SkipNeeds("I-REPLAY-1 to run (it needs an API key to read /changes)", "I-REPLAY-1 did not run")
 	}
 	for _, p := range t.r.replayChanges {
 		t.Errorf("%s", p)
@@ -451,6 +458,52 @@ func testIdempotency(t *T) {
 		t.Errorf("Prefer: respond-async must answer 202 with a job")
 	} else if a.Job.ID != b.Job.ID {
 		t.Errorf("the same Idempotency-Key must return the same job (%s vs %s)", a.Job.ID, b.Job.ID)
+	}
+
+	// The same key with another body: 409 idempotency_key_reused, and
+	// nothing of that body is written (ingest.md 6).
+	const probe = "OBX-CONF-IDEM"
+	_, _ = t.r.ing.Delete(t.ctx, obx.KindProduct, probe)
+	defer func() { _, _ = t.r.ing.Delete(t.ctx, obx.KindProduct, probe) }()
+	probeData, _ := json.Marshal(obx.ProductInput{BrandExternalID: obx.Ptr("kestrel"), StyleNumber: probe, Name: obx.LocalizedText{"en": "Conformance Idempotency Probe"}})
+	otherOps := []obx.IngestOperation{{Op: obx.IngestOpUpsert, Kind: obx.KindProduct, ExternalID: probe, Data: probeData}}
+	_, err = t.r.ing.Batch(t.ctx, otherOps, ingest.BatchOptions{IdempotencyKey: key, NoWait: true})
+	if !obx.IsCode(err, obx.ErrIdempotencyKeyReused) {
+		t.Errorf("POST /batch with a used Idempotency-Key and another body: want 409 idempotency_key_reused, got %v", err)
+	}
+	if _, err := t.r.ing.Get(t.ctx, obx.KindProduct, probe); err == nil {
+		t.Errorf("POST /batch with a used Idempotency-Key and another body wrote product %s", probe)
+	}
+
+	// Imports: the same key and the same parts → the same job; another
+	// part → 409 idempotency_key_reused and nothing written.
+	csvOf := func(name string) []byte {
+		return []byte("brand,style_number,name:en\nKestrel," + probe + "," + name + "\n")
+	}
+	ikey := "conformance-import-" + randomSuffix()
+	dry := ingest.ImportRequest{CSV: &ingest.File{Name: "products.csv", Data: csvOf("Conformance Idempotency Probe")}, Options: obx.ImportOptions{Mode: obx.ImportModeUpsert, DryRun: true}, IdempotencyKey: ikey}
+	j1, err := t.r.ing.Import(t.ctx, dry)
+	t.Check(err, "POST /imports")
+	j2, err := t.r.ing.Import(t.ctx, dry)
+	switch {
+	case err != nil:
+		t.Errorf("POST /imports again with the same Idempotency-Key and parts: want the same job, got %v", err)
+	case j2.ID != j1.ID:
+		t.Errorf("POST /imports again with the same Idempotency-Key and parts gave job %s, want %s", j2.ID, j1.ID)
+	}
+	if _, err := t.r.ing.WaitJob(t.ctx, j1.ID, 200*time.Millisecond); err != nil {
+		t.Errorf("the dry-run import job: %v", err)
+	}
+	changed := ingest.ImportRequest{CSV: &ingest.File{Name: "products.csv", Data: csvOf("Conformance Idempotency Other Body")}, Options: obx.ImportOptions{Mode: obx.ImportModeUpsert}, IdempotencyKey: ikey}
+	j3, err := t.r.ing.Import(t.ctx, changed)
+	if !obx.IsCode(err, obx.ErrIdempotencyKeyReused) {
+		t.Errorf("POST /imports with a used Idempotency-Key and another products.csv: want 409 idempotency_key_reused, got %v", err)
+		if err == nil && j3 != nil && j3.ID != "" && j3.ID != j1.ID {
+			_, _ = t.r.ing.WaitJob(t.ctx, j3.ID, 200*time.Millisecond)
+		}
+	}
+	if _, err := t.r.ing.Get(t.ctx, obx.KindProduct, probe); err == nil {
+		t.Errorf("POST /imports with a used Idempotency-Key and another body wrote product %s", probe)
 	}
 }
 
@@ -811,7 +864,14 @@ func testManifestImport(t *T) {
 
 func testMirror(t *T) {
 	var cursor string
+	var cascade []cascadeObject
 	if t.r.full != nil {
+		res := t.get(t.r.full, "/products/"+t.productID("KO-1006"))
+		var detail map[string]any
+		if res.status != http.StatusOK || res.decode(&detail) != nil {
+			t.Fatalf("GET KO-1006: %d %s", res.status, truncate(res.body))
+		}
+		cascade = cascadeOrder(t.productID("KO-1006"), detail)
 		cursor = t.liveCursor(t.r.full)
 	}
 	// (a) a mirror without KO-1006 unpublishes exactly KO-1006.
@@ -834,9 +894,12 @@ func testMirror(t *T) {
 	if t.r.full != nil {
 		live, c2 := t.newEntries(t.r.full, cursor)
 		cursor = c2
-		want := "product delete KO-1006; variant delete 2000100601013; variant delete 2000100602010; asset delete KO-1006_NVY_1; asset delete KO-1006_RST_1"
-		if got := strings.Join(changeKeys(live), "; "); got != want {
-			t.Errorf("mirror entries: got [%s], want [%s]", got, want)
+		var want []string
+		for _, o := range cascade {
+			want = append(want, o.kind+" "+obx.OpDelete+" "+o.ext)
+		}
+		if got := strings.Join(changeKeys(live), "; "); got != strings.Join(want, "; ") {
+			t.Errorf("mirror entries: got [%s], want [%s]", got, strings.Join(want, "; "))
 		}
 	}
 	_, err = t.r.ing.Publish(t.ctx, obx.KindProduct, "KO-1006")
@@ -937,8 +1000,8 @@ func testRowErrors(t *T) {
 			t.Errorf("errors_only returned a %s", p.Severity)
 		}
 	}
-	if _, err := t.r.ing.Get(t.ctx, obx.KindVariant, "2000199901025"); err != nil {
-		t.Errorf("the good row M was not imported: %v", err)
+	if _, err := t.r.ing.Get(t.ctx, obx.KindVariant, canonicalcsv.DefaultVariantID("OBX-CONF-IMP4", "GRY", "M", "")); err != nil {
+		t.Errorf("the good row M was not imported as variant %s (import-format.md 1.2.1): %v", canonicalcsv.DefaultVariantID("OBX-CONF-IMP4", "GRY", "M", ""), err)
 	}
 }
 

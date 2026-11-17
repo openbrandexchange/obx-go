@@ -45,7 +45,7 @@ func TestIngestArticleData(t *testing.T) {
 	for _, w := range res.WarningDetails {
 		codes = append(codes, w.Code+" "+obx.Str(w.Pointer))
 	}
-	if strings.Join(codes, ", ") != "animal_origin_unknown /contains_animal_origin, fibre_percentages_not_100 /materials/0" || len(res.Warnings) < 2 || res.Result != obx.ResultCreated {
+	if strings.Join(codes, ", ") != "animal_origin_unknown /contains_animal_origin, fibre_percentages_not_100 /materials/0, material_unknown /materials/0/fibers/2/material/code" || len(res.Warnings) < 3 || res.Result != obx.ResultCreated {
 		t.Fatalf("warnings %s / %v (%s)", codes, res.Warnings, res.Result)
 	}
 	rec, _ := ing.Get(ctx, obx.KindProduct, "KX-1")

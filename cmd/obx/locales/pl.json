@@ -120,6 +120,7 @@
   "problem.column": "kolumna {column}",
   "problem.fibre_composition_missing": "brakuje składu surowcowego; UE wymaga go na etykiecie wyrobów włókienniczych",
   "problem.fibre_percentages_not_100": "procenty włókien jednej części nie sumują się do 100",
+  "problem.material_unknown": "tego kodu materiału nie ma na liście materiałów; zostaje zapisany tak, jak go wpisano, sprawdź pisownię lub użyj nazwy angielskiej",
   "problem.files_missing": "brakuje plików",
   "problem.footwear_materials_missing": "brakuje materiału cholewki, podszewki i wkładki lub podeszwy; UE wymaga go na etykiecie obuwia",
   "problem.gtin_conflict": "ten EAN jest już używany przez inny artykuł",

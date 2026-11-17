@@ -45,8 +45,62 @@ and only 0.3 is supported.
   `FormatMaterials` writes every qualifier in its own brackets. `(recycled)`,
   `(organic)` and the 0.1 keys keep working.
 
+- **Spec 0.3.0 before release** (spec e74ccb2): `obx.Fiber.Percentage` is
+  `*float64` (`nil` = not stated, written as `null`; `Fiber.Pct()`), and
+  `fibre_percentages_not_100` applies only when every fibre of a part states
+  a percentage or the stated ones exceed 100. `canonicalcsv` materials
+  grammar: `[<pct>%] <material> (<qualifier>)*` (`outer: leather`), decimal
+  point only (`95,5% cotton` is an error whose detail starts with
+  `materials: decimal comma`).
+- **Default variant id** `<style>-<color>-<size>[-<size_length>]`
+  (`canonicalcsv.DefaultVariantID`; `/` and control characters become `_`),
+  never the GTIN; `canonicalcsv.Variant.IDGiven` says whether the row had a
+  `variant_id`. The parser no longer reports duplicate variants itself: which
+  variant a row is (variant_id, then GTIN within the product, then the
+  default id) is the node's decision (spec import-format.md §1.2.1). The
+  Kestrel fixture variants have the new ids (`KO-1001-NVY-M`).
+- `canonicalcsv.NormalizeLanguageTag` accepts a script and a numeric region
+  (`zh-Hant`, `sr-Latn-RS`, `es-419`).
+
 ### Added
 
+- **Extension members** (`x-<vendor>-<name>`) survive a decode and encode on
+  every SDK type whose schema allows them: field `X obx.Extensions` on
+  `Brand`, `Product`, `Variant`, `Color`, `Asset`, `Rights`, `Provenance`,
+  the materials terms, parts and fibres, care entries, certifications,
+  `Measurements`, `FootwearMaterials` and the ingest inputs;
+  `obx.IsExtensionKey`. `Materials.WithNames` and `Care.WithNames` keep them.
+- Warning codes `obx.WarnMaterialUnknown` (`material_unknown`) and
+  `obx.WarnQualifierDeprecated` (`qualifier_deprecated`),
+  `obx.StableWarningCodes`, `obx.MaterialUnknownWarnings`,
+  `LabelWarning.Value`; error code `obx.ErrIdempotencyKeyReused` (409). `obx`
+  explains `material_unknown` in its 25 languages.
+- **Mock node, spec 0.3.0 rules**: variant identity in imports (variant_id,
+  then GTIN within the product, then the default id; `gtin_conflict` for a
+  GTIN of another product; a second row of the same variant is an error);
+  Ingest `gtin_conflict` with pointer `/gtin` naming the holding variant;
+  `material_unknown` warnings; extension members stored and returned
+  everywhere (Ingest, protocol, `/changes`, exports), other unknown members
+  ignored with a warning naming their pointer, never `422`; the draft single
+  `qualifier` read as a list of one with `qualifier_deprecated`; `limit`
+  clamped (`400 invalid_request` below 1 or not an integer); expired or
+  tampered signed URLs `403 forbidden`, none at all `401`; after a secret
+  rotation `invalid_token` (`mock.Node.RotateClientSecret`);
+  `Idempotency-Key` on batch, imports and exports with
+  `409 idempotency_key_reused`; language tags with script and numeric region.
+- **Conformance verdicts**: CONFORMANT (exit 0), NOT CONFORMANT (1),
+  INCOMPLETE (2, a required test skipped); test status `n/a` for interfaces
+  the node does not offer; JSON report `verdict`, and per test `status`,
+  `required` and `needs`. Profiles can be combined (`protocol,ingest`). The
+  online check is never CONFORMANT.
+- **Conformance tests** for spec e74ccb2: P-CAT-2 (limit clamp), P-CAT-4
+  (delete cascade and re-upserts in `/changes`), P-MEDIA-2 and S-URL-1 (`403`
+  / `401`), P-AUTH-2 and A-KEY-1 (`invalid_token` after rotation; operator
+  action `rotate_client_secret`), I-IDEM-1 and P-EXP-1
+  (`idempotency_key_reused`), P-CAT-6 (`percentage` number or null, KO-1005),
+  I-IMP-7 (`detail_prefix`), I-IMP-8 (`codes`, `material_unknown`), and new
+  I-EXT-1 (extensions and unknown members), I-MAT-1 (draft `qualifier`) and
+  I-IMP-12 (variant identity).
 - **Vocabularies**: `specdata.Vocabulary()` returns the spec's
   `vocabularies/*.json` (parts, materials, qualifiers, care codes with names in
   en/nl/de/fr, and for care category and symbol) as an `obx.Vocabulary`;
@@ -73,8 +127,7 @@ and only 0.3 is supported.
   have exactly its category and symbol and a name, and no name has an empty
   string. P-CAT-1 and P-CAT-5 match the 0.3 expected fixtures; P-CAT-5
   also checks that KO-1009 keeps `recycled` then `post_consumer`.
-- **Conformance I-IMP-11** (ingest profile, obx-go's own until the spec lists
-  it): an import with several qualifiers per fibre (after a 0.1 key, with a
+- **Conformance I-IMP-11** (ingest profile): an import with several qualifiers per fibre (after a 0.1 key, with a
   repeat) comes back in order through the Ingest API and the protocol, and
   `100% cotton (organic, recycled)` is one `validation_failed` row error at
   `materials` that writes nothing.
@@ -88,7 +141,7 @@ and only 0.3 is supported.
   an operator and in the online check. `mock.Node.SimulateSpecUpgrade` bumps
   the mock's cursor epoch; `TestMockPassesAll` covers it.
 - `scripts/sync-spec.sh` copies `vocabularies/` too. `specdata` holds spec
-  commit 5737aa2 (several qualifiers per fibre, the codes `in_conversion`,
+  commit e74ccb2 (several qualifiers per fibre, the codes `in_conversion`,
   `pre_consumer` and `post_consumer`, KO-1003 `(organic) (regenerative)` and
   KO-1009 `(recycled) (post_consumer)` in the Kestrel fixtures).
 

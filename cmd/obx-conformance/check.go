@@ -105,6 +105,11 @@ func runCheck(ctx context.Context, args []string, stdout, stderr io.Writer, gete
 	return checkExit(rep)
 }
 
+// checkExit keeps the online check's own codes: 0 when no required online
+// test failed, 1 when one did, 2 when the check could not run. Its verdict
+// is never CONFORMANT (INCOMPLETE or NOT CONFORMANT): the tests that need
+// writes or brand-side steps are skipped by design, so a skipped required
+// test does not change the exit code here.
 func checkExit(rep *conformance.Report) int {
 	if rep.SetupError != "" {
 		return 2

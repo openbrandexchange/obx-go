@@ -25,7 +25,7 @@ func init() {
 	register(p, "A-INV-1", "an invite link works once, then invite_invalid", false, testInvites)
 	register(p, "A-RET-1", "approve with API → credentials once; reject with reason → reason shown", false, testApproveReject)
 	register(p, "A-RET-2", "blocking a retailer ends sessions and API access", false, testBlockRetailer)
-	register(p, "A-KEY-1", "API keys and upload keys: secret once, rotate, revoke", false, testKeys)
+	register(p, "A-KEY-1", "API keys and upload keys: secret once; after a rotation old tokens → invalid_token, old secret → invalid_client, the cursor keeps working; after a revoke → access_revoked", false, testKeys)
 	register(p, "A-CAT-1", "admin catalog writes behave like ingest", false, testAdminCatalog)
 	register(p, "A-SRC-1", "scheduled import URLs are SSRF-checked; credentials are never returned", false, testImportSources)
 	register(p, "A-PORT-1", "retailer portal: list, facets, detail, EAN paste, selection, zips, CSV, download job", false, testPortal)
@@ -389,6 +389,7 @@ func testKeys(t *T) {
 	t.Check(err, "retailer")
 	c, err := t.r.admin.CreateAPIClient(t.ctx, nodeadmin.APIClientInput{RetailerID: rt.ID, Name: "keys", Scopes: []string{obx.ScopeCatalogRead}})
 	t.Check(err, "API key")
+	api := t.r.cfg.BaseURL + obx.PathAPIBase
 	if !strings.HasPrefix(c.Client.ClientID, obx.PrefixClientID) || !strings.HasPrefix(c.ClientSecret, obx.PrefixClientSecret) {
 		t.Errorf("client id/secret prefixes: %s / %.5s…", c.Client.ClientID, c.ClientSecret)
 	}
@@ -397,27 +398,47 @@ func testKeys(t *T) {
 	if strings.Contains(string(mustJSON(list)), c.ClientSecret) {
 		t.Errorf("listing API keys shows a secret")
 	}
-	if r, _ := t.r.tokenRequest(t.ctx, c.Client.ClientID, c.ClientSecret, ""); r == nil || r.status != http.StatusOK {
-		t.Errorf("the new secret does not work")
+	var oldTok obx.TokenResponse
+	if r, _ := t.r.tokenRequest(t.ctx, c.Client.ClientID, c.ClientSecret, ""); r == nil || r.status != http.StatusOK || r.decode(&oldTok) != nil {
+		t.Fatalf("the new secret does not work")
+	}
+	// A cursor taken with the old secret's token, to be used after the rotation.
+	res, err := t.r.do(t.ctx, http.MethodGet, api+"/changes?limit=1", nil, bearerHeader(oldTok.AccessToken))
+	t.Check(err, "changes")
+	var page obx.ChangesPage
+	if res.status != http.StatusOK || res.decode(&page) != nil || page.NextCursor == "" {
+		t.Fatalf("GET /changes with the new key: %d %s", res.status, truncate(res.body))
 	}
 	rot, err := t.r.admin.RotateAPIClient(t.ctx, c.Client.ID)
 	t.Check(err, "rotate")
-	if r, _ := t.r.tokenRequest(t.ctx, c.Client.ClientID, c.ClientSecret, ""); r == nil || r.status != http.StatusUnauthorized {
-		t.Errorf("the old secret still works after rotation")
+	if r, _ := t.r.tokenRequest(t.ctx, c.Client.ClientID, c.ClientSecret, ""); r == nil {
+		t.Errorf("token request with the old secret failed")
+	} else {
+		t.expectStatus(r, http.StatusUnauthorized, "invalid_client", "token request with the secret from before the rotation")
 	}
+	res, err = t.r.do(t.ctx, http.MethodGet, api+"/grant", nil, bearerHeader(oldTok.AccessToken))
+	t.Check(err, "grant")
+	t.expectStatus(res, http.StatusUnauthorized, obx.ErrInvalidToken, "access token issued with the secret from before the rotation (a rotation is no revocation)")
 	r, _ := t.r.tokenRequest(t.ctx, c.Client.ClientID, rot.ClientSecret, "")
 	if r == nil || r.status != http.StatusOK {
 		t.Fatalf("the rotated secret does not work")
 	}
 	var tr obx.TokenResponse
 	r.decode(&tr)
+	res, err = t.r.do(t.ctx, http.MethodGet, api+"/changes?cursor="+url.QueryEscape(page.NextCursor), nil, bearerHeader(tr.AccessToken))
+	t.Check(err, "changes")
+	if res.status != http.StatusOK {
+		t.Errorf("the cursor from before the rotation with a token of the new secret: %d %s", res.status, truncate(res.body))
+	}
 	t.Check(t.r.admin.RevokeAPIClient(t.ctx, c.Client.ID), "revoke")
 	if r, _ := t.r.tokenRequest(t.ctx, c.Client.ClientID, rot.ClientSecret, ""); r == nil || r.status != http.StatusUnauthorized {
 		t.Errorf("a revoked API key still gets tokens")
 	}
-	res, err := t.r.do(t.ctx, http.MethodGet, t.r.cfg.BaseURL+obx.PathAPIBase+"/grant", nil, bearerHeader(tr.AccessToken))
-	t.Check(err, "grant")
-	t.expectStatus(res, http.StatusUnauthorized, obx.ErrAccessRevoked, "token of a revoked API key")
+	for _, path := range []string{"/grant", "/changes", "/products"} {
+		res, err := t.r.do(t.ctx, http.MethodGet, api+path, nil, bearerHeader(tr.AccessToken))
+		t.Check(err, path)
+		t.expectStatus(res, http.StatusUnauthorized, obx.ErrAccessRevoked, "token of a revoked API key, GET "+path)
+	}
 
 	it, err := t.r.admin.CreateIngestToken(t.ctx, nodeadmin.IngestTokenInput{Name: "OBX conformance: keys", Scopes: []string{obx.IngestScopeRead}})
 	t.Check(err, "upload key")

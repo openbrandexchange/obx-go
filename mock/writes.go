@@ -7,13 +7,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
+	jskind "github.com/santhosh-tekuri/jsonschema/v6/kind"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
 
@@ -34,83 +35,172 @@ func (w writer) allows(brandExt string) bool {
 
 var inputSchema = map[string]string{obx.KindBrand: "BrandInput", obx.KindProduct: "ProductInput", obx.KindVariant: "VariantInput", obx.KindAsset: "AssetInput"}
 
-var (
-	knownFieldsOnce sync.Once
-	knownFields     map[string]map[string]bool
-)
-
-// fieldsOf returns the top-level properties of an input schema.
-func fieldsOf(kind string) map[string]bool {
-	knownFieldsOnce.Do(func() {
-		knownFields = map[string]map[string]bool{}
-		for k, name := range inputSchema {
-			raw, err := fs.ReadFile(specdata.FS(), "schemas/"+name+".json")
-			if err != nil {
-				panic(err)
-			}
-			var s struct {
-				Properties map[string]json.RawMessage `json:"properties"`
-			}
-			json.Unmarshal(raw, &s)
-			m := map[string]bool{}
-			for p := range s.Properties {
-				m[p] = true
-			}
-			knownFields[k] = m
-		}
-	})
-	return knownFields[kind]
-}
-
-// validateInput strips unknown top-level fields (as warnings) and validates
-// the rest against the input schema.
-func validateInput(kind string, raw json.RawMessage) (json.RawMessage, []string, *obx.Problem) {
+// validateInput validates a write body against the input schema of its kind
+// (ingest.md 3.1). A member the schema does not know, at any depth, is never
+// a reason to refuse the write: extension members (x-<vendor>-<name>) are
+// kept where the schema allows them, every other unknown member is removed
+// with one warning naming its JSON Pointer. The draft single qualifier of a
+// fibre is read as a list of one (warning qualifier_deprecated, once per
+// write). The result is the cleaned body.
+func validateInput(kind string, raw json.RawMessage) (json.RawMessage, []string, []obx.WarningDetail, *obx.Problem) {
 	var doc map[string]any
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.UseNumber()
 	if err := dec.Decode(&doc); err != nil || doc == nil {
-		return nil, nil, problem(obx.ErrValidationFailed, "the body must be a JSON object")
+		return nil, nil, nil, problem(obx.ErrValidationFailed, "the body must be a JSON object")
 	}
 	var warnings []string
-	known := fieldsOf(kind)
-	keys := make([]string, 0, len(doc))
-	for k := range doc {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		if !known[k] {
-			if !strings.HasPrefix(k, "x-") {
-				warnings = append(warnings, fmt.Sprintf("unknown field %q ignored", k))
-			}
-			delete(doc, k)
-		}
-	}
+	var details []obx.WarningDetail
 	// ingest.md 3.4: an empty measurements or features object is stored as
 	// null (the schemas ask for at least one member).
 	switch kind {
 	case obx.KindProduct:
 		emptyToNull(doc, "features")
+		if ptr := draftQualifiers(doc); ptr != "" {
+			d := fmt.Sprintf("the single qualifier of a fibre (draft of 0.3) is read as qualifiers, a list; write qualifiers (first at %s)", ptr)
+			warnings = append(warnings, obx.WarnQualifierDeprecated+": "+d)
+			details = append(details, obx.WarningDetail{Code: obx.WarnQualifierDeprecated, Pointer: &ptr, Detail: d})
+		}
 	case obx.KindVariant:
 		emptyToNull(doc, "measurements")
 	}
-	clean, _ := json.Marshal(doc)
 	v, err := specdata.DefaultValidator()
 	if err != nil {
-		return nil, nil, problem(obx.ErrInternal, err.Error())
+		return nil, nil, nil, problem(obx.ErrInternal, err.Error())
 	}
-	if err := v.Validate(inputSchema[kind], clean); err != nil {
-		p := problem(obx.ErrValidationFailed, "the body does not match "+inputSchema[kind])
+	var removed []string
+	for range 50 {
+		clean, _ := json.Marshal(doc)
+		err := v.Validate(inputSchema[kind], clean)
+		if err == nil {
+			sort.Strings(removed)
+			for _, ptr := range removed {
+				warnings = append(warnings, fmt.Sprintf("unknown member %s ignored", ptr))
+			}
+			return clean, warnings, details, nil
+		}
 		var ve *jsonschema.ValidationError
-		if errors.As(err, &ve) {
+		if !errors.As(err, &ve) {
+			return nil, warnings, details, problem(obx.ErrValidationFailed, "the body does not match "+inputSchema[kind])
+		}
+		unknown := unknownMembers(ve)
+		if len(unknown) == 0 {
+			p := problem(obx.ErrValidationFailed, "the body does not match "+inputSchema[kind])
 			for _, leaf := range leaves(ve) {
 				ptr := "/" + strings.Join(leaf.InstanceLocation, "/")
 				_ = p.WithField(ptr, obx.ErrValidationFailed, leaf.ErrorKind.LocalizedString(englishPrinter))
 			}
+			return nil, warnings, details, p
 		}
-		return nil, warnings, p
+		for _, u := range unknown {
+			if removeMember(doc, u.at, u.name) {
+				removed = append(removed, pointerOf(append(append([]string(nil), u.at...), u.name)))
+			}
+		}
 	}
-	return clean, warnings, nil
+	return nil, warnings, details, problem(obx.ErrValidationFailed, "the body does not match "+inputSchema[kind])
+}
+
+// draftQualifiers reads the draft single qualifier of every fibre of a
+// product body as qualifiers (ingest.md 3.1): without qualifiers it becomes
+// [it] (null: []), with qualifiers it is dropped. It returns the pointer of
+// the first fibre that had one, or "".
+func draftQualifiers(doc map[string]any) string {
+	first := ""
+	parts, _ := doc["materials"].([]any)
+	for i, p := range parts {
+		pm, _ := p.(map[string]any)
+		fibers, _ := pm["fibers"].([]any)
+		for j, f := range fibers {
+			fm, _ := f.(map[string]any)
+			q, ok := fm["qualifier"]
+			if !ok {
+				continue
+			}
+			if first == "" {
+				first = fmt.Sprintf("/materials/%d/fibers/%d/qualifier", i, j)
+			}
+			delete(fm, "qualifier")
+			if _, has := fm["qualifiers"]; has {
+				continue
+			}
+			switch q := q.(type) {
+			case nil:
+				fm["qualifiers"] = []any{}
+			case string:
+				fm["qualifiers"] = []any{map[string]any{"code": q}}
+			default:
+				fm["qualifiers"] = []any{q}
+			}
+		}
+	}
+	return first
+}
+
+// unknownMember is a member an additionalProperties: false refused.
+type unknownMember struct {
+	at   []string
+	name string
+}
+
+// unknownMembers lists the members that schema errors refuse as unknown.
+func unknownMembers(ve *jsonschema.ValidationError) []unknownMember {
+	var out []unknownMember
+	var walk func(e *jsonschema.ValidationError)
+	walk = func(e *jsonschema.ValidationError) {
+		if ap, ok := e.ErrorKind.(*jskind.AdditionalProperties); ok {
+			for _, name := range ap.Properties {
+				out = append(out, unknownMember{at: e.InstanceLocation, name: name})
+			}
+		}
+		for _, c := range e.Causes {
+			walk(c)
+		}
+	}
+	walk(ve)
+	return out
+}
+
+// removeMember deletes member name of the object at the location; it
+// reports whether there was one.
+func removeMember(doc any, at []string, name string) bool {
+	cur := doc
+	for _, tok := range at {
+		switch c := cur.(type) {
+		case map[string]any:
+			cur = c[tok]
+		case []any:
+			i, err := strconv.Atoi(tok)
+			if err != nil || i < 0 || i >= len(c) {
+				return false
+			}
+			cur = c[i]
+		default:
+			return false
+		}
+	}
+	m, ok := cur.(map[string]any)
+	if !ok {
+		return false
+	}
+	if _, ok := m[name]; !ok {
+		return false
+	}
+	delete(m, name)
+	return true
+}
+
+// pointerOf is the JSON Pointer of an instance location.
+func pointerOf(tokens []string) string {
+	if len(tokens) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for _, t := range tokens {
+		b.WriteByte('/')
+		b.WriteString(strings.NewReplacer("~", "~0", "/", "~1").Replace(t))
+	}
+	return b.String()
 }
 
 // emptyToNull replaces an empty object member with null.
@@ -148,15 +238,26 @@ func normalizeVariant(in *obx.VariantInput) {
 }
 
 // labelWarnings are the label completeness warnings of a product write
-// (ingest.md 3.4, import-format.md rule 10) as warning texts and details.
+// (ingest.md 3.4, import-format.md rule 10), then material_unknown, as
+// warning texts and details.
 func labelWarnings(in *obx.ProductInput) ([]string, []obx.WarningDetail) {
 	var texts []string
 	var details []obx.WarningDetail
-	for _, w := range in.LabelWarnings() {
+	for _, w := range append(in.LabelWarnings(), materialUnknown(in.Materials)...) {
 		texts = append(texts, w.Code+": "+w.Detail)
 		details = append(details, w.WarningDetail())
 	}
 	return texts, details
+}
+
+// materialUnknown are the material_unknown warnings of a product's
+// materials (import-format.md 1.4): one per code outside the vocabulary.
+func materialUnknown(m obx.Materials) []obx.LabelWarning {
+	v := specdata.Vocabulary()
+	return obx.MaterialUnknownWarnings(m, func(code string) bool {
+		_, ok := v.MaterialName(code)
+		return ok
+	})
 }
 
 // englishPrinter renders schema errors (LocalizedString panics on a nil printer).
@@ -220,7 +321,7 @@ func (s *state) apply(w writer, op, kind, ext string, data json.RawMessage, ifMa
 }
 
 func (s *state) put(w writer, kind, ext string, data json.RawMessage, ifMatch, op string) (writeResult, *obx.Problem) {
-	clean, warnings, p := validateInput(kind, data)
+	clean, warnings, details, p := validateInput(kind, data)
 	if p != nil {
 		return writeResult{}, p
 	}
@@ -235,7 +336,6 @@ func (s *state) put(w writer, kind, ext string, data json.RawMessage, ifMatch, o
 		nr = &cp
 	}
 	var statusIn *string
-	var details []obx.WarningDetail
 	switch kind {
 	case obx.KindBrand:
 		var in obx.BrandInput
@@ -271,7 +371,7 @@ func (s *state) put(w writer, kind, ext string, data json.RawMessage, ifMatch, o
 		statusIn, in.Status = in.Status, nil
 		nr.product, nr.parentExt = &in, b.extID
 		texts, d := labelWarnings(&in)
-		warnings, details = append(warnings, texts...), d
+		warnings, details = append(warnings, texts...), append(details, d...)
 	case obx.KindVariant:
 		var in obx.VariantInput
 		json.Unmarshal(clean, &in)
@@ -294,7 +394,12 @@ func (s *state) put(w writer, kind, ext string, data json.RawMessage, ifMatch, o
 				return writeResult{}, problemf(obx.ErrInvalidGTIN, "EAN %s: %v", *in.GTIN, err).WithField("/gtin", obx.ErrInvalidGTIN, err.Error())
 			}
 			if other, ok := s.gtins[g]; ok && other != ext {
-				return writeResult{}, problemf(obx.ErrGTINConflict, "EAN %s already belongs to variant %s", *in.GTIN, other)
+				// ingest.md 3.4: name the variant that has the GTIN and its product.
+				detail := fmt.Sprintf("EAN %s already belongs to variant %s", *in.GTIN, other)
+				if hv := s.variants[other]; hv != nil {
+					detail += " of product " + hv.parentExt
+				}
+				return writeResult{}, problem(obx.ErrGTINConflict, detail).WithField("/gtin", obx.ErrGTINConflict, detail)
 			}
 			nr.gtin14 = g
 		}
