@@ -53,14 +53,37 @@ type Term struct {
 	Name LocalizedText `json:"name"`
 }
 
-// Fiber is one material of a part with its percentage. Qualifier is what
-// the fibre is apart from which fibre (organic, recycled, regenerative or
-// another code), nil when it has none; one qualifier per fibre. See
-// NormalizeFiber for the 0.1 keys recycled_<fibre> and organic_<fibre>.
+// Fiber is one material of a part with its percentage. Qualifiers say what
+// the fibre is apart from which fibre (organic, in_conversion, recycled,
+// pre_consumer, post_consumer, regenerative or another code), in the order
+// the brand states them; a code appears at most once (see
+// Materials.WithNames). JSON always carries the list, [] when the fibre has
+// none (a nil slice is written as []); a document without the property reads
+// as none. See NormalizeFiber for the 0.1 keys recycled_<fibre> and
+// organic_<fibre>.
 type Fiber struct {
 	Material   Term    `json:"material"`
 	Percentage float64 `json:"percentage"`
-	Qualifier  *Term   `json:"qualifier"`
+	Qualifiers []Term  `json:"qualifiers"`
+}
+
+// MarshalJSON writes Qualifiers as [] when it is nil.
+func (f Fiber) MarshalJSON() ([]byte, error) {
+	type plain Fiber
+	if f.Qualifiers == nil {
+		f.Qualifiers = []Term{}
+	}
+	return json.Marshal(plain(f))
+}
+
+// HasQualifier reports whether the fibre has the qualifier code.
+func (f Fiber) HasQualifier(code string) bool {
+	for _, q := range f.Qualifiers {
+		if q.Code == code {
+			return true
+		}
+	}
+	return false
 }
 
 // MaterialPart is the composition of one part of the article (schemas/Materials.json).

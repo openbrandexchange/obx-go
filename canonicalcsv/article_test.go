@@ -51,7 +51,7 @@ func TestKestrelArticleData(t *testing.T) {
 	if got := js(in.Features); got != `{"shell":"hard","wheels":4,"lock":"tsa_combination","expandable":true,"closure":"zip"}` {
 		t.Errorf("KO-1008 features %s", got)
 	}
-	if got := js(in.Materials); got != `[{"part":{"code":"shell","name":null},"fibers":[{"material":{"code":"polypropylene","name":null},"percentage":100,"qualifier":null}]},{"part":{"code":"lining","name":null},"fibers":[{"material":{"code":"polyester","name":null},"percentage":100,"qualifier":{"code":"recycled","name":null}}]}]` {
+	if got := js(in.Materials); got != `[{"part":{"code":"shell","name":null},"fibers":[{"material":{"code":"polypropylene","name":null},"percentage":100,"qualifiers":[]}]},{"part":{"code":"lining","name":null},"fibers":[{"material":{"code":"polyester","name":null},"percentage":100,"qualifiers":[{"code":"recycled","name":null}]}]}]` {
 		t.Errorf("KO-1008 materials %s", got)
 	}
 	if got := js(ko1008.Variants[1].Input.Measurements); got != `{"height_cm":55,"width_cm":40,"depth_cm":23,"weight_kg":2.8,"volume_l":42,"volume_expanded_l":48}` {
@@ -81,7 +81,7 @@ func TestKestrelArticleData(t *testing.T) {
 	if got := js(ko1003.Input.Certifications); got != `[{"scheme":"gots","licence_number":"CU 200301","scope":"product"},{"scheme":"oeko_tex_standard_100","licence_number":"26.KST.20003","scope":"product"}]` {
 		t.Errorf("KO-1003 certifications %s", got)
 	}
-	if got := js(ko1003.Input.Materials); got != `[{"part":{"code":"main","name":null},"fibers":[{"material":{"code":"cotton","name":null},"percentage":100,"qualifier":{"code":"organic","name":null}}]}]` {
+	if got := js(ko1003.Input.Materials); got != `[{"part":{"code":"main","name":null},"fibers":[{"material":{"code":"cotton","name":null},"percentage":100,"qualifiers":[{"code":"organic","name":null},{"code":"regenerative","name":null}]}]}]` {
 		t.Errorf("KO-1003 materials %s", got)
 	}
 	ko1004 := product(t, pf, "KO-1004").Variants[0].Input
@@ -89,7 +89,7 @@ func TestKestrelArticleData(t *testing.T) {
 		t.Errorf("KO-1004 %s", js(ko1004))
 	}
 	kt2001 := product(t, pf, "KT-2001")
-	if got := js(kt2001.Input.Materials[0]); got != `{"part":{"code":"outer","name":null},"fibers":[{"material":{"code":"polyester","name":null},"percentage":100,"qualifier":{"code":"recycled","name":null}}]}` {
+	if got := js(kt2001.Input.Materials[0]); got != `{"part":{"code":"outer","name":null},"fibers":[{"material":{"code":"polyester","name":null},"percentage":100,"qualifiers":[{"code":"recycled","name":null}]}]}` {
 		t.Errorf("KT-2001 0.1 key not normalised: %s", got)
 	}
 	ko1001 := product(t, pf, "KO-1001")
@@ -242,7 +242,8 @@ func TestArticleValueFormatsRoundTrip(t *testing.T) {
 			t.Errorf("footwear %q → %q", s, got)
 		}
 	}
-	for _, s := range []string{"outer: 100% polyester (recycled); lining: 88% polyamide, 12% elastane", "100% cotton (organic)", "70% wool (regenerative), 30% seacell (in_conversion)"} {
+	for _, s := range []string{"outer: 100% polyester (recycled); lining: 88% polyamide, 12% elastane", "100% cotton (organic)", "70% wool (regenerative), 30% seacell (in_conversion)",
+		"100% cotton (organic) (regenerative)", "outer: 100% polyester (recycled) (post_consumer); lining: 100% polyamide", "100% cotton (regenerative) (organic)"} {
 		m, _, err := canonicalcsv.ParseMaterials(s)
 		if err != nil {
 			t.Fatal(err)
@@ -256,11 +257,24 @@ func TestArticleValueFormatsRoundTrip(t *testing.T) {
 	if js(a) != js(b) {
 		t.Errorf("0.1 key and qualifier differ: %s %s", js(a), js(b))
 	}
-	// The 0.1 key wins over a qualifier in brackets.
-	if c, _, _ := canonicalcsv.ParseMaterials("100% recycled_polyester (organic)"); canonicalcsv.FormatMaterials(c) != "main: 100% polyester (recycled)" {
-		t.Errorf("0.1 key with qualifier: %s", js(c))
+	// The qualifier of a 0.1 key comes first; a repeated code counts once;
+	// brackets without space between them work too.
+	for in, want := range map[string]string{
+		"100% recycled_polyester (post_consumer)":              "main: 100% polyester (recycled) (post_consumer)",
+		"100% recycled_polyester (organic)":                    "main: 100% polyester (recycled) (organic)",
+		"100% polyester (recycled) (Post Consumer) (recycled)": "main: 100% polyester (recycled) (post_consumer)",
+		"100% cotton (organic)(regenerative)":                  "main: 100% cotton (organic) (regenerative)",
+	} {
+		c, _, err := canonicalcsv.ParseMaterials(in)
+		if err != nil || canonicalcsv.FormatMaterials(c) != want {
+			t.Errorf("%q: %v %s, want %s", in, err, canonicalcsv.FormatMaterials(c), want)
+		}
 	}
-	for _, bad := range []string{"100% cotton (organic) (recycled)", "100% cotton (organic)(recycled)", "100% cotton (Ä)", "100% (organic)"} {
+	// Brackets hold one code each: the comma separates fibres.
+	if _, _, err := canonicalcsv.ParseMaterials("100% cotton (organic, recycled)"); err == nil || !strings.Contains(err.Error(), "(organic) (recycled)") {
+		t.Errorf("(organic, recycled): %v", err)
+	}
+	for _, bad := range []string{"100% cotton (organic, recycled)", "outer: 60% cotton (organic,regenerative), 40% wool", "100% cotton (Ä)", "100% (organic)", "100% cotton ()", "100% cotton (organic) (Ä)"} {
 		if _, _, err := canonicalcsv.ParseMaterials(bad); err == nil {
 			t.Errorf("%q: no error", bad)
 		}

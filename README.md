@@ -183,7 +183,7 @@ In a portal's CI, use the [conformance action](conformance-action/action.yml) or
 
 `scripts/interop.sh` runs the same automation against node-go, node-php and node-ts (sibling checkouts; needs Go, Docker and Bun): first-run setup, `obx push` of the Kestrel fixtures, `obx pull`, then `obx-interop trace`, which records the change feed, every product and the sha256 of every file and replays the spec's ingest script step by step, and finally an incremental and a fresh `obx pull`. Node ids, timestamps, cursors and signed URLs are replaced by stable labels such as `product:KO-1001` before `obx-interop compare` lists every difference. `NODES=go,ts` runs a subset.
 
-The spec's schemas (0.3), vocabularies (`specdata.Vocabulary()`: the names of part, material, qualifier and care codes) and fixtures are embedded (`specdata/`, refreshed with `scripts/sync-spec.sh ../spec`); `--fixtures` points at another copy. The main branch implements specification 0.3.0 (unreleased); release v0.2.0 implements 0.2.0.
+The spec's schemas (0.3), vocabularies (`specdata.Vocabulary()`: the names of part, material, qualifier and care codes) and fixtures are embedded (`specdata/`, refreshed with `scripts/sync-spec.sh ../spec`); `--fixtures` points at another copy. Release v0.3.0 implements specification 0.3.0; v0.2.x implements 0.2.0.
 
 ## Building and releasing
 

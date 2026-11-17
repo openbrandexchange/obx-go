@@ -29,9 +29,9 @@ func TestIngestArticleData(t *testing.T) {
 	body := map[string]any{
 		"brand_external_id": "kestrel", "style_number": "KX-1", "name": map[string]string{"en": "Test scarf"}, "item_type": "scarf",
 		"materials": []any{map[string]any{"part": map[string]any{"code": "main"}, "fibers": []any{
-			map[string]any{"material": map[string]any{"code": "organic_cotton"}, "percentage": 60},
-			map[string]any{"material": map[string]any{"code": "wool", "name": map[string]any{"en": "Mine"}}, "percentage": 30, "qualifier": nil},
-			map[string]any{"material": map[string]any{"code": "seacell", "name": map[string]any{"en": "SeaCell"}}, "percentage": 5, "qualifier": map[string]any{"code": "in_conversion"}},
+			map[string]any{"material": map[string]any{"code": "organic_cotton"}, "percentage": 60, "qualifiers": []any{map[string]any{"code": "regenerative"}, map[string]any{"code": "organic"}}},
+			map[string]any{"material": map[string]any{"code": "wool", "name": map[string]any{"en": "Mine"}}, "percentage": 30, "qualifiers": []any{}},
+			map[string]any{"material": map[string]any{"code": "seacell", "name": map[string]any{"en": "SeaCell"}}, "percentage": 5, "qualifiers": []any{map[string]any{"code": "upcycled"}}},
 		}}},
 		"care":           []any{map[string]any{"code": "wash_30", "text": map[string]any{"en": "Wash inside out"}}, map[string]any{"code": "steam_only", "category": "ironing"}},
 		"features":       map[string]any{"fit": "regular", "fringe_cm": 5},
@@ -51,9 +51,9 @@ func TestIngestArticleData(t *testing.T) {
 	rec, _ := ing.Get(ctx, obx.KindProduct, "KX-1")
 	var data map[string]any
 	_ = json.Unmarshal(rec.Data, &data)
-	if b, _ := json.Marshal(data["materials"]); string(b) != `[{"fibers":[{"material":{"code":"cotton","name":{"de":"Baumwolle","en":"Cotton","fr":"Coton","nl":"Katoen"}},"percentage":60,"qualifier":{"code":"organic","name":{"de":"Bio","en":"Organic","fr":"Biologique","nl":"Biologisch"}}},`+
-		`{"material":{"code":"wool","name":{"de":"Wolle","en":"Wool","fr":"Laine","nl":"Wol"}},"percentage":30,"qualifier":null},`+
-		`{"material":{"code":"seacell","name":{"en":"SeaCell"}},"percentage":5,"qualifier":{"code":"in_conversion","name":null}}],"part":{"code":"main","name":null}}]` {
+	if b, _ := json.Marshal(data["materials"]); string(b) != `[{"fibers":[{"material":{"code":"cotton","name":{"de":"Baumwolle","en":"Cotton","fr":"Coton","nl":"Katoen"}},"percentage":60,"qualifiers":[{"code":"organic","name":{"de":"Bio","en":"Organic","fr":"Biologique","nl":"Biologisch"}},{"code":"regenerative","name":{"de":"Regenerativ","en":"Regenerative","fr":"Régénératif","nl":"Regeneratief"}}]},`+
+		`{"material":{"code":"wool","name":{"de":"Wolle","en":"Wool","fr":"Laine","nl":"Wol"}},"percentage":30,"qualifiers":[]},`+
+		`{"material":{"code":"seacell","name":{"en":"SeaCell"}},"percentage":5,"qualifiers":[{"code":"upcycled","name":null}]}],"part":{"code":"main","name":null}}]` {
 		t.Fatalf("stored materials %s", b)
 	}
 	if b, _ := json.Marshal(data["care"]); string(b) != `[{"category":"washing","code":"wash_30","name":{"de":"Waschen bei 30 °C","en":"Wash at 30 °C","fr":"Lavage à 30 °C","nl":"Wassen op 30 °C"},"symbol":"1_D_30","text":{"en":"Wash inside out"}},`+
@@ -71,11 +71,11 @@ func TestIngestArticleData(t *testing.T) {
 	if err != nil || again.Result != obx.ResultUnchanged {
 		t.Fatalf("round trip: %v %+v", err, again)
 	}
-	// A 0.1 key and the qualifier are the same product, with or without names.
+	// A 0.1 key and the qualifiers are the same product, with or without names.
 	body["materials"] = []any{map[string]any{"part": map[string]any{"code": "main"}, "fibers": []any{
-		map[string]any{"material": map[string]any{"code": "cotton"}, "percentage": 60, "qualifier": map[string]any{"code": "organic"}},
+		map[string]any{"material": map[string]any{"code": "cotton"}, "percentage": 60, "qualifiers": []any{map[string]any{"code": "organic"}, map[string]any{"code": "regenerative"}}},
 		map[string]any{"material": map[string]any{"code": "wool"}, "percentage": 30},
-		map[string]any{"material": map[string]any{"code": "seacell", "name": map[string]any{"en": "SeaCell"}}, "percentage": 5, "qualifier": map[string]any{"code": "in_conversion"}},
+		map[string]any{"material": map[string]any{"code": "seacell", "name": map[string]any{"en": "SeaCell"}}, "percentage": 5, "qualifiers": []any{map[string]any{"code": "upcycled"}}},
 	}}}
 	if r, err := ing.Put(ctx, obx.KindProduct, "KX-1", body, nil); err != nil || r.Result != obx.ResultUnchanged {
 		t.Fatalf("qualifier form after 0.1 key: %v %+v", err, r)
@@ -85,7 +85,7 @@ func TestIngestArticleData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if f := prod.Materials[0].Fibers[0]; f.Material.Name["nl"] != "Katoen" || f.Qualifier == nil || f.Qualifier.Name["fr"] != "Biologique" || obx.Str(prod.Care[0].Symbol) != "1_D_30" || prod.Materials[0].Part.Name != nil {
+	if f := prod.Materials[0].Fibers[0]; f.Material.Name["nl"] != "Katoen" || len(f.Qualifiers) != 2 || f.Qualifiers[0].Name["fr"] != "Biologique" || f.Qualifiers[1].Code != "regenerative" || obx.Str(prod.Care[0].Symbol) != "1_D_30" || prod.Materials[0].Part.Name != nil {
 		t.Fatalf("protocol product: %+v", prod.Materials)
 	}
 

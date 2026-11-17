@@ -18,18 +18,23 @@ import (
 // allowed.
 const (
 	QualifierOrganic      = "organic"
+	QualifierInConversion = "in_conversion"
 	QualifierRecycled     = "recycled"
+	QualifierPreConsumer  = "pre_consumer"
+	QualifierPostConsumer = "post_consumer"
 	QualifierRegenerative = "regenerative"
 )
 
 // NormalizeFiber turns a 0.1 material key recycled_<fibre> or
-// organic_<fibre> into the material with that qualifier (docs/ingest.md 3.4):
-// recycled_polyester becomes polyester with the qualifier recycled. The key
-// wins over a qualifier the fibre already has; when prefixes are combined
-// (organic_recycled_cotton) the first one is the qualifier. The name of a
-// rewritten material or qualifier is dropped, since it named the old code.
+// organic_<fibre> into the material with that qualifier (docs/protocol.md
+// 5.9.1, docs/ingest.md 3.4): recycled_polyester becomes polyester with the
+// qualifiers [recycled]. The qualifier of the key comes first in the list,
+// before the ones the fibre already has; combined prefixes
+// (organic_recycled_cotton) give one qualifier each, in their order. Repeated
+// codes are dropped, keeping the first; an empty list becomes nil. The name
+// of a rewritten material is dropped, since it named the old code.
 func NormalizeFiber(f Fiber) Fiber {
-	var q string
+	var keyQ []Term
 	for {
 		code := f.Material.Code
 		var prefix string
@@ -43,13 +48,19 @@ func NormalizeFiber(f Fiber) Fiber {
 			break
 		}
 		f.Material = Term{Code: strings.TrimPrefix(code, prefix+"_")}
-		if q == "" {
-			q = prefix
+		keyQ = append(keyQ, Term{Code: prefix})
+	}
+	all := append(keyQ, f.Qualifiers...)
+	var qs []Term
+	seen := map[string]bool{}
+	for _, q := range all {
+		if seen[q.Code] {
+			continue
 		}
+		seen[q.Code] = true
+		qs = append(qs, q)
 	}
-	if q != "" && (f.Qualifier == nil || f.Qualifier.Code != q) {
-		f.Qualifier = &Term{Code: q}
-	}
+	f.Qualifiers = qs
 	return f
 }
 

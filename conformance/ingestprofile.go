@@ -39,6 +39,7 @@ func init() {
 	register(p, "I-IMP-6", "a column the file does not have keeps the field; an empty cell removes it", true, testImportKeepsAbsentColumns)
 	register(p, "I-IMP-7", "the article data columns: fixtures/imports 1 to 6 give the expected counts, errors, change entries and fields (rule 9 per key)", true, testImportArticleColumns)
 	register(p, "I-IMP-8", "label completeness warnings: label-warnings.csv as a dry run gives exactly the expected codes; fixtures/kestrel none", true, testLabelWarnings)
+	register(p, "I-IMP-11", "materials qualifiers in the import: each code in its own brackets, order kept, repeats once, 0.1 key first; \"(organic, recycled)\" is a validation_failed row", true, testImportQualifiers)
 }
 
 func testIngestInfo(t *T) {

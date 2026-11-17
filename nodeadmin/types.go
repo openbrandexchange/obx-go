@@ -497,17 +497,25 @@ type Facets struct {
 	Seasons      []FacetValue `json:"seasons"`
 	Collections  []FacetValue `json:"collections"`
 	TargetGroups []FacetValue `json:"target_groups"`
+	// Qualifiers are the material qualifiers (organic, recycled, ...) of the
+	// products: value the code, label the name per language, count the
+	// products with that qualifier on any fibre. Optional: nil when a node
+	// does not send it.
+	Qualifiers []FacetValue `json:"qualifiers,omitempty"`
 }
 
 // PortalFilter are the portal product filters.
 type PortalFilter struct {
-	Q            string     `json:"q,omitempty"`
-	BrandID      []string   `json:"brand_id,omitempty"`
-	ItemType     []string   `json:"item_type,omitempty"`
-	Color        []string   `json:"color,omitempty"`
-	Season       []string   `json:"season,omitempty"`
-	Collection   []string   `json:"collection,omitempty"`
-	TargetGroup  []string   `json:"target_group,omitempty"`
+	Q           string   `json:"q,omitempty"`
+	BrandID     []string `json:"brand_id,omitempty"`
+	ItemType    []string `json:"item_type,omitempty"`
+	Color       []string `json:"color,omitempty"`
+	Season      []string `json:"season,omitempty"`
+	Collection  []string `json:"collection,omitempty"`
+	TargetGroup []string `json:"target_group,omitempty"`
+	// Qualifier matches a product when any fibre of any part of its
+	// materials has any of the codes.
+	Qualifier    []string   `json:"qualifier,omitempty"`
 	UpdatedSince *time.Time `json:"updated_since,omitempty"`
 }
 

@@ -11,37 +11,49 @@ import (
 )
 
 func TestNormalizeFiber(t *testing.T) {
+	codes := func(f obx.Fiber) string {
+		var out []string
+		for _, q := range f.Qualifiers {
+			out = append(out, q.Code)
+		}
+		return strings.Join(out, ",")
+	}
 	cases := map[string][2]string{
 		"recycled_polyester":      {"polyester", "recycled"},
 		"organic_cotton":          {"cotton", "organic"},
 		"recycled_polyamide":      {"polyamide", "recycled"},
-		"organic_recycled_cotton": {"cotton", "organic"},
+		"organic_recycled_cotton": {"cotton", "organic,recycled"},
 		"recycled_":               {"recycled_", ""},
 		"merino_wool":             {"merino_wool", ""},
 	}
 	for in, want := range cases {
 		got := obx.NormalizeFiber(obx.Fiber{Material: obx.Term{Code: in}})
-		q := ""
-		if got.Qualifier != nil {
-			q = got.Qualifier.Code
-		}
-		if got.Material.Code != want[0] || q != want[1] {
-			t.Errorf("%s: got %s (%s), want %v", in, got.Material.Code, q, want)
+		if got.Material.Code != want[0] || codes(got) != want[1] {
+			t.Errorf("%s: got %s (%s), want %v", in, got.Material.Code, codes(got), want)
 		}
 	}
-	// The 0.1 key wins over a qualifier the fibre already has.
-	got := obx.NormalizeFiber(obx.Fiber{Material: obx.Term{Code: "recycled_polyester"}, Qualifier: &obx.Term{Code: "organic"}})
-	if got.Material.Code != "polyester" || got.Qualifier.Code != "recycled" {
-		t.Errorf("key does not win: %+v", got)
+	// The qualifier of a 0.1 key comes first; repeats are dropped, keeping
+	// the first; the order is kept.
+	got := obx.NormalizeFiber(obx.Fiber{Material: obx.Term{Code: "recycled_polyester"}, Qualifiers: []obx.Term{{Code: "post_consumer"}, {Code: "recycled"}, {Code: "post_consumer"}}})
+	if got.Material.Code != "polyester" || codes(got) != "recycled,post_consumer" {
+		t.Errorf("0.1 key with qualifiers: %+v", got)
 	}
-	m := obx.Materials{{Part: obx.Term{Code: "outer"}, Fibers: []obx.Fiber{{Material: obx.Term{Code: "recycled_polyester"}, Percentage: 100}}}}
+	if got := obx.NormalizeFiber(obx.Fiber{Material: obx.Term{Code: "cotton"}, Qualifiers: []obx.Term{}}); got.Qualifiers != nil {
+		t.Errorf("an empty list is not nil: %#v", got.Qualifiers)
+	}
+	m := obx.Materials{{Part: obx.Term{Code: "outer"}, Fibers: []obx.Fiber{{Material: obx.Term{Code: "recycled_polyester"}, Percentage: 100}, {Material: obx.Term{Code: "elastane"}, Percentage: 0.5}}}}
 	n := m.Normalized()
 	if m[0].Fibers[0].Material.Code != "recycled_polyester" {
 		t.Fatal("Normalized changed its receiver")
 	}
 	b, _ := json.Marshal(n)
-	if string(b) != `[{"part":{"code":"outer","name":null},"fibers":[{"material":{"code":"polyester","name":null},"percentage":100,"qualifier":{"code":"recycled","name":null}}]}]` {
+	if string(b) != `[{"part":{"code":"outer","name":null},"fibers":[{"material":{"code":"polyester","name":null},"percentage":100,"qualifiers":[{"code":"recycled","name":null}]},{"material":{"code":"elastane","name":null},"percentage":0.5,"qualifiers":[]}]}]` {
 		t.Fatalf("normalised materials: %s", b)
+	}
+	// A document without qualifiers reads as none.
+	var f obx.Fiber
+	if err := json.Unmarshal([]byte(`{"material":{"code":"cotton"},"percentage":100}`), &f); err != nil || f.Qualifiers != nil {
+		t.Fatalf("fibre without qualifiers: %v %+v", err, f)
 	}
 }
 
@@ -50,16 +62,16 @@ func TestNormalizeFiber(t *testing.T) {
 func TestMaterialsWithNames(t *testing.T) {
 	v := specdata.Vocabulary()
 	var m obx.Materials
-	in := `[{"part":{"code":"main"},"fibers":[{"material":{"code":"cotton","name":{"en":"Mine"}},"percentage":95,"qualifier":{"code":"organic"}},{"material":{"code":"seacell","name":{"en":"SeaCell","nl":""}},"percentage":5,"qualifier":{"code":"in_conversion","name":{"en":"In conversion"}}}]},` +
-		`{"part":{"code":"lining"},"fibers":[{"material":{"code":"recycled_polyester"},"percentage":100}]},{"part":{"code":"collar","name":{"nl":""}},"fibers":[{"material":{"code":"wool"},"percentage":100,"qualifier":null}]}]`
+	in := `[{"part":{"code":"main"},"fibers":[{"material":{"code":"cotton","name":{"en":"Mine"}},"percentage":95,"qualifiers":[{"code":"organic"},{"code":"in_conversion","name":{"en":"Mine"}}]},{"material":{"code":"seacell","name":{"en":"SeaCell","nl":""}},"percentage":5,"qualifiers":[{"code":"upcycled","name":{"en":"Upcycled","nl":""}}]}]},` +
+		`{"part":{"code":"lining"},"fibers":[{"material":{"code":"recycled_polyester"},"percentage":100,"qualifiers":[{"code":"post_consumer"},{"code":"recycled"}]}]},{"part":{"code":"collar","name":{"nl":""}},"fibers":[{"material":{"code":"wool"},"percentage":100,"qualifiers":[]}]}]`
 	if err := json.Unmarshal([]byte(in), &m); err != nil {
 		t.Fatal(err)
 	}
 	b, _ := json.Marshal(m.WithNames(v))
-	want := `[{"part":{"code":"main","name":null},"fibers":[{"material":{"code":"cotton","name":{"de":"Baumwolle","en":"Cotton","fr":"Coton","nl":"Katoen"}},"percentage":95,"qualifier":{"code":"organic","name":{"de":"Bio","en":"Organic","fr":"Biologique","nl":"Biologisch"}}},` +
-		`{"material":{"code":"seacell","name":{"en":"SeaCell"}},"percentage":5,"qualifier":{"code":"in_conversion","name":{"en":"In conversion"}}}]},` +
-		`{"part":{"code":"lining","name":{"de":"Futter","en":"Lining","fr":"Doublure","nl":"Voering"}},"fibers":[{"material":{"code":"polyester","name":{"de":"Polyester","en":"Polyester","fr":"Polyester","nl":"Polyester"}},"percentage":100,"qualifier":{"code":"recycled","name":{"de":"Recycelt","en":"Recycled","fr":"Recyclé","nl":"Gerecycled"}}}]},` +
-		`{"part":{"code":"collar","name":null},"fibers":[{"material":{"code":"wool","name":{"de":"Wolle","en":"Wool","fr":"Laine","nl":"Wol"}},"percentage":100,"qualifier":null}]}]`
+	want := `[{"part":{"code":"main","name":null},"fibers":[{"material":{"code":"cotton","name":{"de":"Baumwolle","en":"Cotton","fr":"Coton","nl":"Katoen"}},"percentage":95,"qualifiers":[{"code":"organic","name":{"de":"Bio","en":"Organic","fr":"Biologique","nl":"Biologisch"}},{"code":"in_conversion","name":{"de":"In Umstellung","en":"In conversion","fr":"En conversion","nl":"In omschakeling"}}]},` +
+		`{"material":{"code":"seacell","name":{"en":"SeaCell"}},"percentage":5,"qualifiers":[{"code":"upcycled","name":{"en":"Upcycled"}}]}]},` +
+		`{"part":{"code":"lining","name":{"de":"Futter","en":"Lining","fr":"Doublure","nl":"Voering"}},"fibers":[{"material":{"code":"polyester","name":{"de":"Polyester","en":"Polyester","fr":"Polyester","nl":"Polyester"}},"percentage":100,"qualifiers":[{"code":"recycled","name":{"de":"Recycelt","en":"Recycled","fr":"Recyclé","nl":"Gerecycled"}},{"code":"post_consumer","name":{"de":"Post-Consumer","en":"Post-consumer","fr":"Post-consommation","nl":"Post-consumer"}}]}]},` +
+		`{"part":{"code":"collar","name":null},"fibers":[{"material":{"code":"wool","name":{"de":"Wolle","en":"Wool","fr":"Laine","nl":"Wol"}},"percentage":100,"qualifiers":[]}]}]`
 	if string(b) != want {
 		t.Fatalf("got\n%s\nwant\n%s", b, want)
 	}

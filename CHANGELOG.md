@@ -8,32 +8,42 @@ it reads stay compatible within a minor version.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-17
+
 For Open Brand Exchange specification 0.3.0: materials and care as terms with
-names (spec proposal 0004, [spec PR #3](https://github.com/openbrandexchange/spec/pull/3)).
+names, several qualifiers per fibre (spec proposal 0004,
+[spec PR #3](https://github.com/openbrandexchange/spec/pull/3)).
 **Breaking** (allowed before 1.0): the JSON of `materials` and `care` changes,
 and only 0.3 is supported.
 
 ### Changed (breaking)
 
-- **`obx.MaterialPart.Part`, `obx.Fiber.Material` and `obx.Fiber.Qualifier`
-  are terms** (`obx.Term{Code, Name}`, `Name` a `LocalizedText` or `nil`).
-  `Fiber.Fiber`, `Fiber.Recycled` and `Fiber.Organic` are gone: a fibre has
-  one qualifier (`organic`, `recycled`, `regenerative` or another code),
-  `nil` when it has none. JSON: `{"part": {"code", "name"}, "fibers":
-  [{"material": {"code", "name"}, "percentage", "qualifier": {...} | null}]}`.
+- **`obx.MaterialPart.Part`, `obx.Fiber.Material` and each of
+  `obx.Fiber.Qualifiers` are terms** (`obx.Term{Code, Name}`, `Name` a
+  `LocalizedText` or `nil`). `Fiber.Fiber`, `Fiber.Recycled` and
+  `Fiber.Organic` are gone: a fibre has a list of qualifiers (`organic`,
+  `in_conversion`, `recycled`, `pre_consumer`, `post_consumer`,
+  `regenerative` or another code) in the brand's order, repeats dropped.
+  JSON: `{"part": {"code", "name"}, "fibers": [{"material": {"code", "name"},
+  "percentage", "qualifiers": [{...}, ...]}]}`; `Fiber` always writes the
+  list (`[]` when none) and reads a missing one as none. `Fiber.HasQualifier`.
 - **`obx.CareInstruction`** has `Category` (ISO 3758 group: `washing`,
   `bleaching`, `drying`, `ironing`, `professional_care`), `Symbol` (GINETEX
   notation such as `1_C_40`) and `Name`; `Text` is the brand's own extra text.
 - `obx.NormalizeFiber` turns the 0.1 keys `recycled_<fibre>` /
-  `organic_<fibre>` into the material with that qualifier (the key wins over a
-  qualifier already set).
+  `organic_<fibre>` into the material with that qualifier, first in the list
+  (combined prefixes give one each), and drops repeated qualifiers.
 - `obx.Version` is `0.3` and `obx.SpecVersion` `0.3.0`; the embedded schemas
   are the 0.3 schemas at `/schemas/v0.3/`. The spec withdrew 0.1 and 0.2, so
   the frozen 0.1 schemas are no longer embedded: `specdata.SchemaBaseV01` and
   `Validator.Schema("v0.1/...")` are removed.
-- `canonicalcsv` materials grammar: `<pct>% <material> [(<qualifier>)]`,
-  any qualifier code (`(regenerative)`), one per fibre (two are an error);
-  `(recycled)`, `(organic)` and the 0.1 keys keep working.
+- `canonicalcsv` materials grammar: `<pct>% <material> (<qualifier>)*`, one
+  code per bracket, any code: `100% polyester (recycled) (post_consumer)`,
+  `100% cotton (organic) (regenerative)`; order kept, a repeated code counts
+  once. Brackets with a list (`(organic, recycled)`) are an error
+  (`validation_failed` in an import) whose detail shows `(organic) (recycled)`.
+  `FormatMaterials` writes every qualifier in its own brackets. `(recycled)`,
+  `(organic)` and the 0.1 keys keep working.
 
 ### Added
 
@@ -43,15 +53,31 @@ and only 0.3 is supported.
   `obx.ParseVocabulary` reads another copy. `Materials.WithNames` and
   `Care.WithNames` fill names (and care category/symbol) for known codes and
   keep what was written for others, without empty strings.
+- Qualifier constants `obx.QualifierInConversion`, `QualifierPreConsumer`
+  and `QualifierPostConsumer` (the spec's new vocabulary codes).
+- **Portal filter on qualifiers** (Node Admin API): `nodeadmin.PortalFilter.Qualifier`
+  and `Facets.Qualifiers`; the mock filters `/admin/api/portal/products`,
+  the facets, the CSV and download filters on `qualifier` (a product matches
+  when any fibre has any of the codes) and returns the facet `qualifiers`
+  with the vocabulary's names as labels. Conformance A-PORT-1 (portal
+  profile, optional) checks the filter, and the facet when it is sent.
 - The mock portal stores and returns the vocabulary's names, categories and
   symbols for known codes (on every write path: Ingest API, imports, admin);
   writes may leave them out, so PUTting back a GET is still `unchanged`.
 - **Conformance** P-CAT-6 checks the terms: no material code starting with
-  `recycled_`/`organic_`, no 0.2 fibre properties, every known part, material
+  `recycled_`/`organic_`, no 0.2 fibre properties, no single `qualifier`
+  (every fibre has the list `qualifiers`, `[]` when none, without repeats),
+  KO-1003 has `organic` then `regenerative`, every known part, material
   and qualifier has a name (P-CAT-5 pins the vocabulary's names for the Kestrel
   products), the part `main` has the name `null`, care codes of the vocabulary
   have exactly its category and symbol and a name, and no name has an empty
-  string. P-CAT-1 and P-CAT-5 match the 0.3 expected fixtures.
+  string. P-CAT-1 and P-CAT-5 match the 0.3 expected fixtures; P-CAT-5
+  also checks that KO-1009 keeps `recycled` then `post_consumer`.
+- **Conformance I-IMP-11** (ingest profile, obx-go's own until the spec lists
+  it): an import with several qualifiers per fibre (after a 0.1 key, with a
+  repeat) comes back in order through the Ingest API and the protocol, and
+  `100% cotton (organic, recycled)` is one `validation_failed` row error at
+  `materials` that writes nothing.
 - **Conformance P-FEED-7** (spec protocol.md §6.4: a node that upgrades
   0.2 → 0.3 answers every earlier cursor with `410 cursor_expired`): takes a
   live cursor, asks the operator for the new optional action
@@ -61,7 +87,10 @@ and only 0.3 is supported.
   action (`conformance.ErrActionNotSupported`, or no `simulated: true`), without
   an operator and in the online check. `mock.Node.SimulateSpecUpgrade` bumps
   the mock's cursor epoch; `TestMockPassesAll` covers it.
-- `scripts/sync-spec.sh` copies `vocabularies/` too.
+- `scripts/sync-spec.sh` copies `vocabularies/` too. `specdata` holds spec
+  commit 5737aa2 (several qualifiers per fibre, the codes `in_conversion`,
+  `pre_consumer` and `post_consumer`, KO-1003 `(organic) (regenerative)` and
+  KO-1009 `(recycled) (post_consumer)` in the Kestrel fixtures).
 
 ## [0.2.1] - 2026-11-12
 
@@ -243,7 +272,8 @@ First release, for Open Brand Exchange specification 0.1.0.
 - The shared filename test vectors: `obx-conformance` and the mock read image names as
   the specification's `fixtures/expected/image-filenames.json` says.
 
-[Unreleased]: https://github.com/openbrandexchange/obx-go/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/openbrandexchange/obx-go/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/openbrandexchange/obx-go/releases/tag/v0.3.0
 [0.2.1]: https://github.com/openbrandexchange/obx-go/releases/tag/v0.2.1
 [0.2.0]: https://github.com/openbrandexchange/obx-go/releases/tag/v0.2.0
 [0.1.0]: https://github.com/openbrandexchange/obx-go/releases/tag/v0.1.0

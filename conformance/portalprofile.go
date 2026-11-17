@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"sort"
 	"strings"
 	"time"
 
@@ -592,6 +593,31 @@ func testPortal(t *T) {
 	t.call(c, http.MethodGet, "/portal/facets", nil, &facets)
 	if len(facets.Brands) != 2 || len(facets.Colors) == 0 || len(facets.ItemTypes) == 0 {
 		t.Errorf("facets: %s", short(facets))
+	}
+	// The qualifier filter (spec 0.3): a product matches when any fibre has
+	// any of the codes; values of one parameter are OR-ed.
+	var byQualifier nodeadmin.PortalProductList
+	t.call(c, http.MethodGet, "/portal/products?qualifier=post_consumer&qualifier=regenerative", nil, &byQualifier)
+	var styles []string
+	for _, it := range byQualifier.Items {
+		styles = append(styles, it.StyleNumber)
+	}
+	sort.Strings(styles)
+	if strings.Join(styles, ",") != "KO-1003,KO-1009" {
+		t.Errorf("filter qualifier=post_consumer&qualifier=regenerative: %v, want KO-1003 (organic, regenerative) and KO-1009 (recycled, post_consumer)", styles)
+	}
+	if facets.Qualifiers != nil {
+		var pc *nodeadmin.FacetValue
+		for i := range facets.Qualifiers {
+			if facets.Qualifiers[i].Value == obx.QualifierPostConsumer {
+				pc = &facets.Qualifiers[i]
+			}
+		}
+		if pc == nil || pc.Count != 1 {
+			t.Errorf("facet qualifiers: %s, want post_consumer with count 1 (KO-1009)", short(facets.Qualifiers))
+		}
+	} else {
+		t.Notef("the facets have no qualifiers (optional)")
 	}
 	var detail obx.ProductDetail
 	t.call(c, http.MethodGet, "/portal/products/"+t.productID("KO-1001"), nil, &detail)

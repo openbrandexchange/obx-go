@@ -154,10 +154,10 @@ func term(t Term, lookup func(string) (LocalizedText, bool)) Term {
 }
 
 // WithNames returns a copy of m as a node stores and returns it: every fibre
-// normalised (NormalizeFiber), and for every part, material and qualifier
-// the vocabulary's name when its code is known, otherwise the name that was
-// written (empty strings dropped, nil when there is none). v may be nil,
-// which only normalises and cleans.
+// normalised (NormalizeFiber: repeated qualifiers dropped), and for every
+// part, material and qualifier the vocabulary's name when its code is known,
+// otherwise the name that was written (empty strings dropped, nil when there
+// is none). v may be nil, which only normalises and cleans.
 func (m Materials) WithNames(v *Vocabulary) Materials {
 	if m == nil {
 		return nil
@@ -170,9 +170,8 @@ func (m Materials) WithNames(v *Vocabulary) Materials {
 			for j, f := range p.Fibers {
 				f = NormalizeFiber(f)
 				g := Fiber{Material: term(f.Material, v.MaterialName), Percentage: f.Percentage}
-				if f.Qualifier != nil {
-					qt := term(*f.Qualifier, v.QualifierName)
-					g.Qualifier = &qt
+				for _, qu := range f.Qualifiers {
+					g.Qualifiers = append(g.Qualifiers, term(qu, v.QualifierName))
 				}
 				q.Fibers[j] = g
 			}

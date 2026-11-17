@@ -39,8 +39,12 @@ func TestSchemasCompile(t *testing.T) {
 	if err := v.Validate("Materials", []byte(`[{"part": "main", "fibers": [{"fiber": "cotton", "percentage": 100}]}]`)); err == nil {
 		t.Error("Materials accepts the 0.2 shape")
 	}
-	if err := v.Validate("Materials", []byte(`[{"part": {"code": "main"}, "fibers": [{"material": {"code": "cotton"}, "percentage": 100, "qualifier": {"code": "organic"}}]}]`)); err != nil {
+	if err := v.Validate("Materials", []byte(`[{"part": {"code": "main"}, "fibers": [{"material": {"code": "cotton"}, "percentage": 100, "qualifiers": [{"code": "organic"}, {"code": "regenerative"}]}, {"material": {"code": "wool"}, "percentage": 1}]}]`)); err != nil {
 		t.Error(err)
+	}
+	// Since the 0.3 release a fibre has a list of qualifiers, not one.
+	if err := v.Validate("Materials", []byte(`[{"part": {"code": "main"}, "fibers": [{"material": {"code": "cotton"}, "percentage": 100, "qualifier": {"code": "organic"}}]}]`)); err == nil {
+		t.Error("Materials accepts the property qualifier")
 	}
 }
 

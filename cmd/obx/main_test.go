@@ -716,5 +716,5 @@ func TestPushShowsLabelWarnings(t *testing.T) {
 // the vocabulary's names.
 func recycledPolyester(f obx.Fiber) bool {
 	return f.Material.Code == "polyester" && f.Material.Name["nl"] == "Polyester" && f.Percentage == 100 &&
-		f.Qualifier != nil && f.Qualifier.Code == "recycled" && f.Qualifier.Name["nl"] == "Gerecycled"
+		len(f.Qualifiers) == 1 && f.Qualifiers[0].Code == "recycled" && f.Qualifiers[0].Name["nl"] == "Gerecycled"
 }

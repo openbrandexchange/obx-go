@@ -74,7 +74,7 @@ func (n *Node) handlePortalViewer(w http.ResponseWriter, r *http.Request, ac *ad
 func portalFilter(r *http.Request) nodeadmin.PortalFilter {
 	q := r.URL.Query()
 	f := nodeadmin.PortalFilter{Q: strings.TrimSpace(q.Get("q")), BrandID: q["brand_id"], ItemType: q["item_type"], Color: q["color"],
-		Season: q["season"], Collection: q["collection"], TargetGroup: q["target_group"]}
+		Season: q["season"], Collection: q["collection"], TargetGroup: q["target_group"], Qualifier: q["qualifier"]}
 	if v := q.Get("updated_since"); v != "" {
 		if t, err := time.Parse(time.RFC3339, v); err == nil {
 			f.UpdatedSince = &t
@@ -110,6 +110,9 @@ func (n *Node) filteredProducts(pc *portalCtx, f nodeadmin.PortalFilter) []*reco
 		if len(f.TargetGroup) > 0 && !obx.Contains(f.TargetGroup, obx.Str(in.TargetGroup)) {
 			continue
 		}
+		if len(f.Qualifier) > 0 && !hasAnyQualifier(in.Materials, f.Qualifier) {
+			continue
+		}
 		if len(f.Color) > 0 {
 			match := false
 			for _, v := range s.childrenOf(p.extID, obx.KindVariant) {
@@ -143,6 +146,20 @@ func (n *Node) filteredProducts(pc *portalCtx, f nodeadmin.PortalFilter) []*reco
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].product.StyleNumber < out[j].product.StyleNumber })
 	return out
+}
+
+// hasAnyQualifier reports whether any fibre of any part has any of codes.
+func hasAnyQualifier(m obx.Materials, codes []string) bool {
+	for _, p := range m {
+		for _, f := range p.Fibers {
+			for _, q := range f.Qualifiers {
+				if obx.Contains(codes, q.Code) {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func variantGTINs(s *state, p *record) []string {
@@ -211,7 +228,7 @@ func (n *Node) handlePortalFacets(w http.ResponseWriter, r *http.Request, ac *ad
 		labels map[string]any
 	}
 	mk := func() *counter { return &counter{counts: map[string]int{}, labels: map[string]any{}} }
-	brands, types, colors, seasons, collections, groups := mk(), mk(), mk(), mk(), mk(), mk()
+	brands, types, colors, seasons, collections, groups, qualifiers := mk(), mk(), mk(), mk(), mk(), mk(), mk()
 	add := func(c *counter, v string, label any) {
 		if v == "" {
 			return
@@ -230,6 +247,21 @@ func (n *Node) handlePortalFacets(w http.ResponseWriter, r *http.Request, ac *ad
 		add(seasons, obx.Str(in.Season), nil)
 		add(collections, obx.Str(in.Collection), nil)
 		add(groups, obx.Str(in.TargetGroup), nil)
+		seenQ := map[string]bool{}
+		for _, part := range in.Materials {
+			for _, f := range part.Fibers {
+				for _, q := range f.Qualifiers {
+					if !seenQ[q.Code] {
+						seenQ[q.Code] = true
+						var label any
+						if len(q.Name) > 0 {
+							label = q.Name
+						}
+						add(qualifiers, q.Code, label)
+					}
+				}
+			}
+		}
 		seen := map[string]bool{}
 		for _, v := range s.childrenOf(p.extID, obx.KindVariant) {
 			if s.isVisible(v, now) && !seen[v.variant.Color.Code] {
@@ -250,7 +282,7 @@ func (n *Node) handlePortalFacets(w http.ResponseWriter, r *http.Request, ac *ad
 		}
 		return out
 	}
-	writeJSON(w, http.StatusOK, nodeadmin.Facets{Brands: list(brands), ItemTypes: list(types), Colors: list(colors), Seasons: list(seasons), Collections: list(collections), TargetGroups: list(groups)})
+	writeJSON(w, http.StatusOK, nodeadmin.Facets{Brands: list(brands), ItemTypes: list(types), Colors: list(colors), Seasons: list(seasons), Collections: list(collections), TargetGroups: list(groups), Qualifiers: list(qualifiers)})
 }
 
 func (n *Node) portalProduct(w http.ResponseWriter, pc *portalCtx, id string) *record {

@@ -63,19 +63,25 @@ var (
 	TargetGroups = []string{"women", "men", "unisex", "girls", "boys", "kids", "baby"}
 )
 
-var fiberQualifier = regexp.MustCompile(`\s*\(([^()]*)\)\s*$`)
+var (
+	fiberQualifier = regexp.MustCompile(`\s*\(([^()]*)\)\s*$`)
+	// listInBrackets finds "(organic, recycled)": brackets hold one code each.
+	listInBrackets = regexp.MustCompile(`\([^()]*,[^()]*\)`)
+)
 
 // ParseMaterials parses the materials grammar:
 //
 //	materials := part (";" part)*
 //	part      := [part_name ":"] fiber ("," fiber)*
-//	fiber     := number "%" material_code [qualifier]
+//	fiber     := number "%" material_code qualifier*
 //	qualifier := "(" qualifier_code ")"
 //
-// A qualifier in brackets ("(organic)", "(recycled)", "(regenerative)" or
-// another code) sets the fibre's qualifier; two are an error. The 0.1 keys
-// recycled_<fibre> and organic_<fibre> are normalised to the material with
-// that qualifier (obx.NormalizeFiber), so "100% recycled_polyester" and
+// Each qualifier in brackets ("(organic)", "(recycled)", "(post_consumer)" or
+// another code) adds a code to the fibre's qualifiers, in order; a repeated
+// code counts once. Brackets hold one code each: "(organic, recycled)" is an
+// error, because the comma separates fibres. The 0.1 keys recycled_<fibre>
+// and organic_<fibre> are normalised to the material with that qualifier,
+// first in the list (obx.NormalizeFiber), so "100% recycled_polyester" and
 // "100% polyester (recycled)" give the same materials. The result holds codes
 // only: the node adds the names. err is set when the text does not follow
 // the grammar. Percentages that do not sum to 100 are not an error: the node
@@ -101,6 +107,9 @@ func ParseMaterials(s string) (obx.Materials, []string, error) {
 				return nil, nil, fmt.Errorf("part name %q is not a valid key", strings.TrimSpace(name))
 			}
 		}
+		if m := listInBrackets.FindString(body); m != "" {
+			return nil, nil, fmt.Errorf("%s: brackets hold one qualifier code each, write %s", m, oneCodePerBracket(m))
+		}
 		part := obx.MaterialPart{Part: obx.Term{Code: partName}}
 		for _, rawFiber := range strings.Split(body, ",") {
 			rawFiber = strings.TrimSpace(rawFiber)
@@ -116,16 +125,13 @@ func ParseMaterials(s string) (obx.Materials, []string, error) {
 				return nil, nil, fmt.Errorf("%q: %q is not a percentage between 0 and 100", rawFiber, strings.TrimSpace(num))
 			}
 			f := obx.Fiber{Percentage: pct}
-			if m := fiberQualifier.FindStringSubmatch(key); m != nil {
+			for m := fiberQualifier.FindStringSubmatch(key); m != nil; m = fiberQualifier.FindStringSubmatch(key) {
 				key = key[:len(key)-len(m[0])]
-				if fiberQualifier.MatchString(key) {
-					return nil, nil, fmt.Errorf("%q: a fibre has one qualifier", rawFiber)
-				}
 				q := NormalizeKey(m[1])
 				if !IsKey(q) {
 					return nil, nil, fmt.Errorf("%q: qualifier %q is not a valid key", rawFiber, strings.TrimSpace(m[1]))
 				}
-				f.Qualifier = &obx.Term{Code: q}
+				f.Qualifiers = append([]obx.Term{{Code: q}}, f.Qualifiers...)
 			}
 			f.Material.Code = NormalizeKey(key)
 			if !IsKey(f.Material.Code) {
@@ -145,21 +151,33 @@ func ParseMaterials(s string) (obx.Materials, []string, error) {
 }
 
 // FormatMaterials writes materials in the grammar ParseMaterials reads (codes
-// only, the qualifier in brackets).
+// only, each qualifier in its own brackets).
 func FormatMaterials(m obx.Materials) string {
 	parts := make([]string, 0, len(m))
 	for _, p := range m {
 		fibers := make([]string, 0, len(p.Fibers))
 		for _, f := range p.Fibers {
 			s := strconv.FormatFloat(f.Percentage, 'f', -1, 64) + "% " + f.Material.Code
-			if f.Qualifier != nil {
-				s += " (" + f.Qualifier.Code + ")"
+			for _, q := range f.Qualifiers {
+				s += " (" + q.Code + ")"
 			}
 			fibers = append(fibers, s)
 		}
 		parts = append(parts, p.Part.Code+": "+strings.Join(fibers, ", "))
 	}
 	return strings.Join(parts, "; ")
+}
+
+// oneCodePerBracket rewrites "(organic, recycled)" as "(organic) (recycled)".
+func oneCodePerBracket(list string) string {
+	codes := strings.Split(strings.Trim(list, "()"), ",")
+	out := make([]string, 0, len(codes))
+	for _, c := range codes {
+		if c = strings.TrimSpace(c); c != "" {
+			out = append(out, "("+c+")")
+		}
+	}
+	return strings.Join(out, " ")
 }
 
 // ParseCare parses "|"-separated care codes. Unknown codes that look like

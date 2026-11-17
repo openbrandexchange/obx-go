@@ -42,6 +42,15 @@ func (t *T) matchProducts(exts ...string) {
 // with the vocabulary's names for parts, materials, qualifiers and care.
 func testArticleRoundTrip(t *T) {
 	t.matchProducts("KO-1008", "KO-1009", "KO-1010", "KT-2001")
+	// Several qualifiers per fibre, in the brand's order (protocol.md
+	// 5.9.1): the fixture has "(recycled) (post_consumer)".
+	res := t.get(t.r.full, "/products/"+t.productID("KO-1009"))
+	var p map[string]any
+	if res.status == http.StatusOK && json.Unmarshal(res.body, &p) == nil {
+		if got, want := materialCodes(p["materials"]), "outer: 100% polyester (recycled) (post_consumer); lining: 100% polyamide"; got != want {
+			t.Errorf("KO-1009/materials: %s, want %s (two qualifiers, in this order)", got, want)
+		}
+	}
 }
 
 var (
@@ -143,8 +152,8 @@ func testArticleShape(t *T) {
 		t.Errorf("KO-1003 is not in the snapshot")
 		return
 	}
-	if got := materialCodes(ko1003["materials"]); got != "main: 100% cotton (organic)" {
-		t.Errorf("KO-1003/materials: %s, want a main fibre with material code cotton, percentage 100 and qualifier code organic", got)
+	if got := materialCodes(ko1003["materials"]); got != "main: 100% cotton (organic) (regenerative)" {
+		t.Errorf("KO-1003/materials: %s, want a main fibre with material code cotton, percentage 100 and the qualifier codes organic and regenerative, in that order", got)
 	}
 	wantCerts := []any{
 		map[string]any{"scheme": "gots", "licence_number": "CU 200301", "scope": "product"},
@@ -174,8 +183,9 @@ func materialCodes(materials any) string {
 		for _, f := range fibers {
 			fm, _ := f.(map[string]any)
 			s := fmt.Sprintf("%v%% %s", fm["percentage"], termCode(fm["material"]))
-			if q := termCode(fm["qualifier"]); q != "" {
-				s += " (" + q + ")"
+			qs, _ := fm["qualifiers"].([]any)
+			for _, q := range qs {
+				s += " (" + termCode(q) + ")"
 			}
 			fs = append(fs, s)
 		}
@@ -249,10 +259,21 @@ func checkMaterials(t *T, ext string, materials any) {
 				}
 			}
 			checkTerm(t, where, "material", fm["material"], v.MaterialName)
-			if _, ok := fm["qualifier"]; !ok {
-				t.Errorf("%s: fibre %s has no property qualifier (null when there is none)", where, code)
-			} else if fm["qualifier"] != nil {
-				checkTerm(t, where, "qualifier", fm["qualifier"], v.QualifierName)
+			if _, ok := fm["qualifier"]; ok {
+				t.Errorf("%s: fibre %s has the property qualifier; since 0.3 a fibre has the list qualifiers", where, code)
+			}
+			qs, isList := fm["qualifiers"].([]any)
+			if !isList {
+				t.Errorf("%s: fibre %s has qualifiers %s, want a list ([] when there is none)", where, code, short(fm["qualifiers"]))
+			}
+			seen := map[string]bool{}
+			for _, q := range qs {
+				checkTerm(t, where, "qualifier", q, v.QualifierName)
+				if c := termCode(q); seen[c] {
+					t.Errorf("%s: fibre %s has the qualifier %q twice; a node drops repeats", where, code, c)
+				} else {
+					seen[c] = true
+				}
 			}
 		}
 	}
@@ -494,4 +515,54 @@ func labelCoded(probs []obx.ImportRowError) []obx.ImportRowError {
 		}
 	}
 	return out
+}
+
+// testImportQualifiers is I-IMP-11 (obx-go; import-format.md 1.4 since the
+// 0.3 release): a fibre's qualifiers in the import are one code per
+// bracket, kept in order, a repeated code counts once and the qualifier of a
+// 0.1 key comes first; brackets with a list ("(organic, recycled)") are a
+// validation_failed error for that row, and the other rows are imported.
+func testImportQualifiers(t *T) {
+	const good, bad = "OBX-CONF-IMP11", "OBX-CONF-IMP11B"
+	csv := "brand,style_number,name:en,item_type,materials,contains_animal_origin\n" +
+		"Kestrel," + good + ",Conformance Qualifier Scarf,scarf,\"outer: 70% recycled_polyester (post_consumer) (recycled), 30% cotton (organic) (regenerative) (organic); lining: 100% cotton\",no\n" +
+		"Kestrel," + bad + ",Conformance Bracket Scarf,scarf,\"main: 100% cotton (organic, recycled)\",no\n"
+	defer func() {
+		_, _ = t.r.ing.Delete(t.ctx, obx.KindProduct, good)
+		_, _ = t.r.ing.Delete(t.ctx, obx.KindProduct, bad)
+	}()
+	job, probs := t.runImport(&ingest.ImportRequest{CSV: &ingest.File{Name: "products.csv", Data: []byte(csv)}, Options: obx.ImportOptions{Mode: obx.ImportModeUpsert}})
+	if job.Status != obx.JobSucceeded {
+		t.Errorf("an import with one bad row must still succeed, got %s (%s)", job.Status, short(probs))
+	}
+	errs := errorsOf(probs)
+	if len(errs) != 1 || obx.Str(errs[0].Column) != "materials" || errs[0].Row == nil || *errs[0].Row != 2 || errs[0].ObxError != obx.ErrValidationFailed {
+		t.Errorf("\"(organic, recycled)\" must give one validation_failed error at row 2, column materials; got %s", short(errs))
+	}
+	if _, err := t.r.ing.Get(t.ctx, obx.KindProduct, bad); err == nil {
+		t.Errorf("product %s with \"(organic, recycled)\" was written", bad)
+	}
+	rec, err := t.r.ing.Get(t.ctx, obx.KindProduct, good)
+	if err != nil {
+		t.Errorf("product %s was not imported: %v", good, err)
+		return
+	}
+	var data map[string]any
+	_ = json.Unmarshal(rec.Data, &data)
+	want := "outer: 70% polyester (recycled) (post_consumer), 30% cotton (organic) (regenerative); lining: 100% cotton"
+	if got := materialCodes(data["materials"]); got != want {
+		t.Errorf("%s/materials through the Ingest API: %s, want %s", good, got, want)
+	}
+	if t.r.full != nil {
+		res := t.get(t.r.full, "/products/"+rec.ID)
+		var p map[string]any
+		if res.status != http.StatusOK || json.Unmarshal(res.body, &p) != nil {
+			t.Errorf("GET /products/%s (%s): %d", rec.ID, good, res.status)
+			return
+		}
+		if got := materialCodes(p["materials"]); got != want {
+			t.Errorf("%s/materials in the protocol: %s, want %s", good, got, want)
+		}
+		checkMaterials(t, good, p["materials"])
+	}
 }
