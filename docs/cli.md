@@ -14,7 +14,7 @@ obx version
 ```
 
 A wrong option or command says what is wrong and which help to read. Errors are written for people:
-"the address brands.kestrel.exmple does not exist. Check it for typing mistakes." rather than a Go
+"the address brands.maison-noor.exmple does not exist. Check it for typing mistakes." rather than a Go
 error. With `--json` (`push`, `info`, `status`, `config`) the output is for scripts.
 
 ## Languages
@@ -143,7 +143,7 @@ finishes cleanly. See [automation.md](automation.md) for running it as a service
 ## obx pull (retailers)
 
 ```sh
-obx pull https://brands.kestrel.example --out ./kestrel --renditions web,original --follow
+obx pull https://brands.maison-noor.example --out ./maison-noor --renditions web,original --follow
 ```
 
 Keeps a folder in sync with a brand's change feed, using the API key for your software that the

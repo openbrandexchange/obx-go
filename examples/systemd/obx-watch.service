@@ -8,7 +8,7 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-Environment=OBX_URL=https://brands.kestrel.example
+Environment=OBX_URL=https://brands.maison-noor.example
 # Put the access key in a file only root can read: OBX_TOKEN=obxi_…
 EnvironmentFile=/etc/obx/token.env
 ExecStart=/usr/local/bin/obx watch /data/outbox

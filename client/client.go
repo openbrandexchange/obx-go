@@ -1,7 +1,7 @@
 // Package client is a Go client for the OBX Protocol, the read side of a
 // brand node that retailers' software uses (docs/protocol.md).
 //
-//	c, _ := client.New(client.Config{BaseURL: "https://brands.kestrel.example", ClientID: id, ClientSecret: secret})
+//	c, _ := client.New(client.Config{BaseURL: "https://brands.maison-noor.example", ClientID: id, ClientSecret: secret})
 //	err := c.Sync(ctx, client.FileCursorStore("cursor.txt"), client.SyncOptions{}, func(ctx context.Context, ev client.Event) error {
 //		// store ev.Change …
 //		return nil
@@ -29,7 +29,7 @@ import (
 
 // Config configures a Client.
 type Config struct {
-	// BaseURL is the node's address ("https://brands.kestrel.example") or
+	// BaseURL is the node's address ("https://brands.maison-noor.example") or
 	// its discovery URL (".../.well-known/obx").
 	BaseURL string
 	// ClientID and ClientSecret are the API key for your software (OAuth2

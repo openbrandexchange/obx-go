@@ -53,8 +53,8 @@ func freshNode(t *testing.T, opts mock.Options, wrap ...func(http.Handler) http.
 	adm, _ := nodeadmin.New(srv.URL, nil)
 	ctx := context.Background()
 	if _, err := adm.Setup(ctx, nodeadmin.SetupInput{SetupCode: n.SetupCode(),
-		Company: nodeadmin.SetupCompany{Name: "Kestrel Outfitters", FirstBrandName: "Kestrel", DefaultLanguage: "nl", Languages: []string{"nl", "en"}},
-		Admin:   nodeadmin.SetupAdmin{Name: "Admin", Email: "admin@kestrel.example", Password: "admin-password-1"}}); err != nil {
+		Company: nodeadmin.SetupCompany{Name: "MAISON NOOR Group", FirstBrandName: "MAISON NOOR", DefaultLanguage: "nl", Languages: []string{"nl", "en"}},
+		Admin:   nodeadmin.SetupAdmin{Name: "Admin", Email: "admin@maison-noor.example", Password: "admin-password-1"}}); err != nil {
 		t.Fatal(err)
 	}
 	tok, err := adm.CreateIngestToken(ctx, nodeadmin.IngestTokenInput{Name: "test", Scopes: []string{obx.IngestScopeRead, obx.IngestScopeWrite, obx.IngestScopeDelete}})
@@ -80,11 +80,11 @@ func (h *harness) run(args ...string) (int, string, string) {
 	return code, out.String(), errb.String()
 }
 
-// fixtureFolder copies spec fixtures/kestrel into a temporary folder.
+// fixtureFolder copies spec fixtures/maison-noor into a temporary folder.
 func fixtureFolder(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	err := fs.WalkDir(specdata.Fixtures(), "kestrel", func(p string, d fs.DirEntry, err error) error {
+	err := fs.WalkDir(specdata.Fixtures(), "maison-noor", func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || strings.HasSuffix(p, "images.json") {
 			return err
 		}
@@ -92,7 +92,7 @@ func fixtureFolder(t *testing.T) string {
 		if err != nil {
 			return err
 		}
-		dst := filepath.Join(dir, strings.TrimPrefix(p, "kestrel/"))
+		dst := filepath.Join(dir, strings.TrimPrefix(p, "maison-noor/"))
 		os.MkdirAll(filepath.Dir(dst), 0o755)
 		return os.WriteFile(dst, b, 0o644)
 	})
@@ -105,7 +105,7 @@ func fixtureFolder(t *testing.T) string {
 func TestLoginPushRerunStatus(t *testing.T) {
 	h, tok := freshNode(t, mock.Options{})
 	code, out, errOut := h.run("login", h.srv.URL, "--token", tok)
-	if code != 0 || !strings.Contains(out, "Connected to Kestrel Outfitters") {
+	if code != 0 || !strings.Contains(out, "Connected to MAISON NOOR Group") {
 		t.Fatalf("login: %d %s %s", code, out, errOut)
 	}
 	if runtime.GOOS != "windows" {
@@ -124,16 +124,16 @@ func TestLoginPushRerunStatus(t *testing.T) {
 	}
 	// The 0.2 article data arrives with the push.
 	ic, _ := ingest.New(h.srv.URL, tok)
-	rec, err := ic.Get(context.Background(), obx.KindProduct, "KO-1008")
+	rec, err := ic.Get(context.Background(), obx.KindProduct, "MN-1008")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var pin obx.ProductInput
 	_ = json.Unmarshal(rec.Data, &pin)
 	if pin.Features == nil || pin.Features.Wheels == nil || *pin.Features.Wheels != 4 || obx.Str(pin.ItemSubtype) != "cabin" {
-		t.Fatalf("pushed KO-1008 lacks its article data: %s", rec.Data)
+		t.Fatalf("pushed MN-1008 lacks its article data: %s", rec.Data)
 	}
-	rec, err = ic.Get(context.Background(), obx.KindVariant, "KO-1009-CHR-ONE SIZE")
+	rec, err = ic.Get(context.Background(), obx.KindVariant, "MN-1009-CHR-ONE SIZE")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +202,7 @@ func TestLoginPushRerunStatus(t *testing.T) {
 		t.Fatalf("mirror that would empty the catalog: want exit 1 and a hint, got %d %s", code, errOut)
 	}
 	code, out, _ = h.run("info")
-	if code != 0 || !strings.Contains(out, "Kestrel Trail") {
+	if code != 0 || !strings.Contains(out, "NOOR ATELIER") {
 		t.Fatalf("info: %d %s", code, out)
 	}
 }
@@ -221,11 +221,11 @@ func TestPushDryRunChangesNothing(t *testing.T) {
 		}
 		ic, _ := ingest.New(h.srv.URL, tok)
 		ctx := context.Background()
-		img, _ := os.ReadFile(filepath.Join(dir, "images", "KO-1001_NVY_1_front.png"))
+		img, _ := os.ReadFile(filepath.Join(dir, "images", "MN-1001_NVY_1_front.png"))
 		if has, err := ic.HasBlob(ctx, ingest.HashBytes(img)); err != nil || has {
 			t.Fatalf("a dry run uploaded an image: %v %v", has, err)
 		}
-		if _, err := ic.Get(ctx, obx.KindProduct, "KO-1001"); !obx.IsCode(err, obx.ErrNotFound) {
+		if _, err := ic.Get(ctx, obx.KindProduct, "MN-1001"); !obx.IsCode(err, obx.ErrNotFound) {
 			t.Fatalf("a dry run created a product: %v", err)
 		}
 		if code, out, _ := h.run("push", dir, "--json"); code != exitOK || !strings.Contains(out, `"uploaded_files": 35`) {
@@ -288,7 +288,7 @@ func TestInterruptedUploadResumes(t *testing.T) {
 	h.vars["OBX_URL"], h.vars["OBX_TOKEN"] = h.srv.URL, tok
 	dir := fixtureFolder(t)
 	big := bigPNG(t)
-	os.WriteFile(filepath.Join(dir, "images", "KO-1001_NVY_9.png"), big, 0o644)
+	os.WriteFile(filepath.Join(dir, "images", "MN-1001_NVY_9.png"), big, 0o644)
 
 	ctx, c := context.WithCancel(context.Background())
 	mu.Lock()
@@ -333,7 +333,7 @@ func TestInterruptedUploadResumes(t *testing.T) {
 	if has, _ := ic.HasBlob(context.Background(), ingest.HashBytes(big)); !has {
 		t.Fatal("the big image is not on the portal after the resumed run")
 	}
-	rec, err := ic.Get(context.Background(), obx.KindAsset, "KO-1001_NVY_9")
+	rec, err := ic.Get(context.Background(), obx.KindAsset, "MN-1001_NVY_9")
 	if err != nil || rec.Visibility != obx.VisibilityVisible {
 		t.Fatalf("asset of the big image: %+v %v", rec, err)
 	}
@@ -348,7 +348,7 @@ func TestPushMakesRenditionsForClientRenderingNodes(t *testing.T) {
 		t.Fatalf("push: %d\n%s\n%s", code, out, errOut)
 	}
 	ic, _ := ingest.New(h.srv.URL, tok)
-	rec, err := ic.Get(context.Background(), obx.KindAsset, "KO-1002_OLV_1")
+	rec, err := ic.Get(context.Background(), obx.KindAsset, "MN-1002_OLV_1")
 	if err != nil || rec.Visibility != obx.VisibilityVisible || len(rec.MissingFiles) != 0 {
 		t.Fatalf("asset after push on a client-rendering node: %+v %v", rec, err)
 	}
@@ -375,7 +375,7 @@ func TestWatchOnce(t *testing.T) {
 	}
 	// Only the image with the new alt text changes: the images that lost their
 	// assets.csv row keep their embargo, credit and AI label (import rule 8).
-	os.WriteFile(filepath.Join(dir, "assets.csv"), []byte("file,alt_text:en\nKO-1001_NVY_1_front.png,Navy sweater seen from the front\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "assets.csv"), []byte("file,alt_text:en\nMN-1001_NVY_1_front.png,Navy sweater seen from the front\n"), 0o644)
 	code, _, errOut = h.run("watch", dir, "--once")
 	if code != 0 || !strings.Contains(errOut, "updated: 1 ") {
 		t.Fatalf("watch after a change: %d %s", code, errOut)
@@ -384,7 +384,7 @@ func TestWatchOnce(t *testing.T) {
 
 func TestLoginWithPassword(t *testing.T) {
 	h, _ := freshNode(t, mock.Options{})
-	h.stdin = "\nadmin@kestrel.example\n"
+	h.stdin = "\nadmin@maison-noor.example\n"
 	h.vars["OBX_PASSWORD"] = "admin-password-1"
 	code, out, errOut := h.run("login", h.srv.URL)
 	if code != 0 || !strings.Contains(errOut, "Created access key") {
@@ -392,12 +392,12 @@ func TestLoginWithPassword(t *testing.T) {
 	}
 	// A script can pipe all three answers; the password is read from the same stream.
 	delete(h.vars, "OBX_PASSWORD")
-	h.stdin = "\nadmin@kestrel.example\nadmin-password-1\n"
+	h.stdin = "\nadmin@maison-noor.example\nadmin-password-1\n"
 	if code, out, errOut := h.run("login", h.srv.URL); code != 0 || !strings.Contains(errOut, "Created access key") {
 		t.Fatalf("login with piped password: %d %s %s", code, out, errOut)
 	}
 	h.vars["OBX_PASSWORD"] = "wrong-password-1"
-	if code, _, errOut := h.run("login", h.srv.URL, "--email", "admin@kestrel.example"); code != exitFailed || !strings.Contains(errOut, "e-mail address or password is not right") {
+	if code, _, errOut := h.run("login", h.srv.URL, "--email", "admin@maison-noor.example"); code != exitFailed || !strings.Contains(errOut, "e-mail address or password is not right") {
 		t.Fatalf("wrong password: %d %s", code, errOut)
 	}
 	if code, out, _ := h.run("logout"); code != 0 || !strings.Contains(out, "Forgot") {
@@ -422,12 +422,12 @@ func TestPull(t *testing.T) {
 	if !strings.Contains(stdout, "images downloaded: 70") {
 		t.Fatalf("first pull: %s", stdout)
 	}
-	img := filepath.Join(out, "images", "KO-1001", "web", "KO-1001_NVY_1_front_web.jpg")
+	img := filepath.Join(out, "images", "MN-1001", "web", "MN-1001_NVY_1_front_web.jpg")
 	if _, err := os.Stat(img); err != nil {
 		t.Fatalf("missing %s: %v", img, err)
 	}
-	orig, _ := os.ReadFile(filepath.Join(out, "images", "KO-1001", "original", "KO-1001_NVY_1_front.png"))
-	fixture, _ := fs.ReadFile(specdata.Fixtures(), "kestrel/images/KO-1001_NVY_1_front.png")
+	orig, _ := os.ReadFile(filepath.Join(out, "images", "MN-1001", "original", "MN-1001_NVY_1_front.png"))
+	fixture, _ := fs.ReadFile(specdata.Fixtures(), "maison-noor/images/MN-1001_NVY_1_front.png")
 	if !bytes.Equal(orig, fixture) {
 		t.Fatal("original differs from the fixture")
 	}
@@ -440,41 +440,41 @@ func TestPull(t *testing.T) {
 	for _, e := range products {
 		b, _ := os.ReadFile(filepath.Join(out, "products", e.Name()))
 		var p obx.Product
-		if json.Unmarshal(b, &p) == nil && p.ExternalID == "KO-1008" {
+		if json.Unmarshal(b, &p) == nil && p.ExternalID == "MN-1008" {
 			suitcase = &p
 			if !strings.Contains(string(b), `"item_subtype": "cabin"`) || !strings.Contains(string(b), `"contains_animal_origin": null`) {
-				t.Fatalf("pulled KO-1008: %s", b)
+				t.Fatalf("pulled MN-1008: %s", b)
 			}
 		}
 	}
 	if suitcase == nil || suitcase.Features == nil || obx.Str(suitcase.Features.Lock) != "tsa_combination" || !recycledPolyester(suitcase.Materials[1].Fibers[0]) {
-		t.Fatalf("pulled KO-1008 lacks its article data: %+v", suitcase)
+		t.Fatalf("pulled MN-1008 lacks its article data: %+v", suitcase)
 	}
 	variants, _ := os.ReadDir(filepath.Join(out, "variants"))
 	found := false
 	for _, e := range variants {
 		b, _ := os.ReadFile(filepath.Join(out, "variants", e.Name()))
 		var v obx.Variant
-		if json.Unmarshal(b, &v) == nil && v.ExternalID == "KO-1008-BLK-CABIN" {
+		if json.Unmarshal(b, &v) == nil && v.ExternalID == "MN-1008-BLK-CABIN" {
 			found = v.Measurements != nil && v.Measurements.VolumeExpandedL != nil && *v.Measurements.VolumeExpandedL == 42 && obx.Str(v.Color.Family) == "black"
 		}
 	}
 	if !found {
-		t.Fatal("pulled variant KO-1008-BLK-CABIN lacks its measurements or colour family")
+		t.Fatal("pulled variant MN-1008-BLK-CABIN lacks its measurements or colour family")
 	}
 	code, stdout, _ = h.run("pull", srv.URL, "--out", out, "--renditions", "web,original")
 	if code != 0 || !strings.Contains(stdout, "nothing changed") {
 		t.Fatalf("second pull should download nothing and say so: %s", stdout)
 	}
 	ic, _ := ingest.New(srv.URL, creds.IngestToken)
-	if _, err := ic.Unpublish(context.Background(), obx.KindProduct, "KO-1006"); err != nil {
+	if _, err := ic.Unpublish(context.Background(), obx.KindProduct, "MN-1006"); err != nil {
 		t.Fatal(err)
 	}
 	code, stdout, _ = h.run("pull", srv.URL, "--out", out, "--renditions", "web,original")
 	if code != 0 || !strings.Contains(stdout, "removed: 5") {
 		t.Fatalf("pull after unpublish: %s", stdout)
 	}
-	if _, err := os.Stat(filepath.Join(out, "images", "KO-1006", "web", "KO-1006_NVY_1_front_web.jpg")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(out, "images", "MN-1006", "web", "MN-1006_NVY_1_front_web.jpg")); !os.IsNotExist(err) {
 		t.Fatalf("image of an unpublished product still there: %v", err)
 	}
 	h.vars["OBX_CLIENT_SECRET"] = "obxs_wrong"
@@ -712,7 +712,7 @@ func TestPushShowsLabelWarnings(t *testing.T) {
 	}
 }
 
-// recycledPolyester: the KO-1008 lining fibre as a 0.3 node returns it, with
+// recycledPolyester: the MN-1008 lining fibre as a 0.3 node returns it, with
 // the vocabulary's names.
 func recycledPolyester(f obx.Fiber) bool {
 	return f.Material.Code == "polyester" && f.Material.Name["nl"] == "Polyester" && f.Percentage != nil && *f.Percentage == 100 &&

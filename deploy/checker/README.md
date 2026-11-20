@@ -60,8 +60,8 @@ The website binds the Worker in its `wrangler.toml` (`[[services]] binding = "CH
 
 ## The demo portal
 
-`obx-demo` serves `obx-conformance mock --read-only` with the Kestrel Outfitters test data
-(spec `fixtures/kestrel`). Only the protocol's reads are answered; writes answer 403, the ingest
+`obx-demo` serves `obx-conformance mock --read-only` with the MAISON NOOR Group test data
+(spec `fixtures/maison-noor`). Only the protocol's reads are answered; writes answer 403, the ingest
 and admin APIs 404. The data is in memory: a restart (the container sleeps after 15 minutes
 without requests) resets it. Its API key is published on purpose; it can only read the demo:
 

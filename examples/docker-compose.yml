@@ -5,7 +5,7 @@ services:
     command: ["watch", "/outbox"]
     restart: unless-stopped
     environment:
-      OBX_URL: https://brands.kestrel.example
+      OBX_URL: https://brands.maison-noor.example
       OBX_TOKEN: ${OBX_TOKEN}
     volumes:
       - ./outbox:/outbox:ro

@@ -46,33 +46,33 @@ func pngBytes(t *testing.T, w, h, pad int) []byte {
 func TestWritesAreIdempotent(t *testing.T) {
 	_, c := node(t, mock.Options{})
 	ctx := context.Background()
-	in := obx.ProductInput{BrandExternalID: obx.Ptr("kestrel"), StyleNumber: "KO-7001", Name: obx.LocalizedText{"en": "Rain Hat"}}
-	r, err := c.PutProduct(ctx, "KO-7001", in, nil)
+	in := obx.ProductInput{BrandExternalID: obx.Ptr("maison-noor"), StyleNumber: "MN-7001", Name: obx.LocalizedText{"en": "Rain Hat"}}
+	r, err := c.PutProduct(ctx, "MN-7001", in, nil)
 	if err != nil || r.Result != obx.ResultCreated {
 		t.Fatalf("create: %v %+v", err, r)
 	}
-	r, err = c.PutProduct(ctx, "KO-7001", in, nil)
+	r, err = c.PutProduct(ctx, "MN-7001", in, nil)
 	if err != nil || r.Result != obx.ResultUnchanged {
 		t.Fatalf("repeat: %v %+v", err, r)
 	}
-	if _, err := c.PutProduct(ctx, "KO-7001", in, &ingest.WriteOptions{IfMatch: `"stale"`}); !obx.IsCode(err, obx.ErrPreconditionFailed) {
+	if _, err := c.PutProduct(ctx, "MN-7001", in, &ingest.WriteOptions{IfMatch: `"stale"`}); !obx.IsCode(err, obx.ErrPreconditionFailed) {
 		t.Fatalf("If-Match: %v", err)
 	}
-	rec, _ := c.Get(ctx, obx.KindProduct, "KO-7001")
-	if _, err := c.PutProduct(ctx, "KO-7001", in, &ingest.WriteOptions{IfMatch: rec.ETag}); err != nil {
+	rec, _ := c.Get(ctx, obx.KindProduct, "MN-7001")
+	if _, err := c.PutProduct(ctx, "MN-7001", in, &ingest.WriteOptions{IfMatch: rec.ETag}); err != nil {
 		t.Fatalf("If-Match with the current ETag: %v", err)
 	}
-	if r, _ := c.Unpublish(ctx, obx.KindProduct, "KO-7001"); r.Result != obx.ResultUpdated || obx.Str(r.Visibility) != obx.VisibilityHidden {
+	if r, _ := c.Unpublish(ctx, obx.KindProduct, "MN-7001"); r.Result != obx.ResultUpdated || obx.Str(r.Visibility) != obx.VisibilityHidden {
 		t.Fatalf("unpublish: %+v", r)
 	}
 	// A nightly sync without status must not publish it again.
-	if r, _ := c.PutProduct(ctx, "KO-7001", in, nil); r.Result != obx.ResultUnchanged || obx.Str(r.Visibility) != obx.VisibilityHidden {
+	if r, _ := c.PutProduct(ctx, "MN-7001", in, nil); r.Result != obx.ResultUnchanged || obx.Str(r.Visibility) != obx.VisibilityHidden {
 		t.Fatalf("sync after unpublish: %+v", r)
 	}
-	if r, _ := c.Delete(ctx, obx.KindProduct, "KO-7001"); r.Result != obx.ResultDeleted {
+	if r, _ := c.Delete(ctx, obx.KindProduct, "MN-7001"); r.Result != obx.ResultDeleted {
 		t.Fatalf("delete: %+v", r)
 	}
-	if r, _ := c.Delete(ctx, obx.KindProduct, "KO-7001"); r.Result != obx.ResultUnchanged {
+	if r, _ := c.Delete(ctx, obx.KindProduct, "MN-7001"); r.Result != obx.ResultUnchanged {
 		t.Fatalf("delete again: %+v", r)
 	}
 }
@@ -124,14 +124,14 @@ func TestPreparerGeneratesRenditionsOnlyWhenNeeded(t *testing.T) {
 	img := pngBytes(t, 800, 1000, 0)
 	_, server := node(t, mock.Options{})
 	p := &ingest.Preparer{Client: server}
-	res, err := p.Prepare(ctx, ingest.ImageSource{Name: "KO-1001_NVY_9.png", Data: img})
+	res, err := p.Prepare(ctx, ingest.ImageSource{Name: "MN-1001_NVY_9.png", Data: img})
 	if err != nil || res.Manifest.Renditions != nil || res.Uploaded != 1 || res.Manifest.Width != 800 {
 		t.Fatalf("server-rendering node: %v %+v", err, res)
 	}
 	_, clientNode := node(t, mock.Options{ClientRenditions: true})
 	cache := &ingest.FileRenditionCache{Path: filepath.Join(t.TempDir(), "r.json")}
 	p = &ingest.Preparer{Client: clientNode, Cache: cache}
-	res, err = p.Prepare(ctx, ingest.ImageSource{Name: "KO-1001_NVY_9.png", Data: img})
+	res, err = p.Prepare(ctx, ingest.ImageSource{Name: "MN-1001_NVY_9.png", Data: img})
 	if err != nil || res.Manifest.Renditions == nil || res.Uploaded != 4 {
 		t.Fatalf("client-rendering node: %v %+v", err, res)
 	}
@@ -139,7 +139,7 @@ func TestPreparerGeneratesRenditionsOnlyWhenNeeded(t *testing.T) {
 	if r.Web.Width != 800 || r.Square.Width != 1000 || r.Thumb.Height != 600 {
 		t.Fatalf("rendition sizes: %+v %+v %+v", r.Web, r.Square, r.Thumb)
 	}
-	again, err := p.Prepare(ctx, ingest.ImageSource{Name: "KO-1001_NVY_9.png", Data: img})
+	again, err := p.Prepare(ctx, ingest.ImageSource{Name: "MN-1001_NVY_9.png", Data: img})
 	if err != nil || again.Uploaded != 0 || again.Manifest.Renditions.Web.SHA256 != r.Web.SHA256 {
 		t.Fatalf("second prepare: %v %+v", err, again)
 	}
@@ -151,11 +151,11 @@ func TestPreparerGeneratesRenditionsOnlyWhenNeeded(t *testing.T) {
 func TestBatchSyncAndAsync(t *testing.T) {
 	_, c := node(t, mock.Options{})
 	ctx := context.Background()
-	data, _ := json.Marshal(obx.VariantInput{ProductExternalID: "KO-1001", GTIN: obx.Ptr("2000100101018"), Color: obx.Color{Code: "NVY"}, Size: obx.Ptr("S")})
+	data, _ := json.Marshal(obx.VariantInput{ProductExternalID: "MN-1001", GTIN: obx.Ptr("2000100101018"), Color: obx.Color{Code: "NVY"}, Size: obx.Ptr("S")})
 	ops := []obx.IngestOperation{
-		{Op: obx.IngestOpPatch, Kind: obx.KindProduct, ExternalID: "KO-1001", Data: json.RawMessage(`{"season":"AW27"}`)},
+		{Op: obx.IngestOpPatch, Kind: obx.KindProduct, ExternalID: "MN-1001", Data: json.RawMessage(`{"season":"AW27"}`)},
 		{Op: obx.IngestOpUpsert, Kind: obx.KindVariant, ExternalID: "dup", Data: data},
-		{Op: obx.IngestOpUnpublish, Kind: obx.KindAsset, ExternalID: "KO-1001_NVY_2"},
+		{Op: obx.IngestOpUnpublish, Kind: obx.KindAsset, ExternalID: "MN-1001_NVY_2"},
 	}
 	out, err := c.Batch(ctx, ops, ingest.BatchOptions{})
 	if err != nil || out.Job != nil || len(out.Results) != 3 {
@@ -173,7 +173,7 @@ func TestBatchSyncAndAsync(t *testing.T) {
 func TestImportReportsRowProblems(t *testing.T) {
 	_, c := node(t, mock.Options{})
 	ctx := context.Background()
-	csv := "brand,style_number,name:en,gtin,color_code,size\nKestrel,KO-8001,Wool Gloves,2000199901018,GRY,M\nKestrel,KO-8001,Wool Gloves,12345,GRY,L\n"
+	csv := "brand,style_number,name:en,gtin,color_code,size\nMAISON NOOR,MN-8001,Wool Gloves,2000199901018,GRY,M\nMAISON NOOR,MN-8001,Wool Gloves,12345,GRY,L\n"
 	job, err := c.Import(ctx, ingest.ImportRequest{CSV: &ingest.File{Name: "products.csv", Data: []byte(csv)}, Options: obx.ImportOptions{DryRun: true}})
 	if err != nil {
 		t.Fatal(err)
@@ -182,7 +182,7 @@ func TestImportReportsRowProblems(t *testing.T) {
 	if err != nil || job.Status != obx.JobSucceeded || job.ImportRun.Counts.Created != 2 || !job.ImportRun.DryRun {
 		t.Fatalf("dry run: %v %+v", err, job.ImportRun)
 	}
-	if _, err := c.Get(ctx, obx.KindProduct, "KO-8001"); !obx.IsCode(err, obx.ErrNotFound) {
+	if _, err := c.Get(ctx, obx.KindProduct, "MN-8001"); !obx.IsCode(err, obx.ErrNotFound) {
 		t.Fatalf("a dry run wrote data: %v", err)
 	}
 	probs, err := c.ImportProblems(ctx, job.ID)

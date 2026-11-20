@@ -1,5 +1,5 @@
 // obx-demo: the public read-only demo portal (obx-conformance mock
-// --read-only) with the Kestrel test data, the green reference for the online
+// --read-only) with the MAISON NOOR test data, the green reference for the online
 // compatibility check. The data lives in the container's memory: a restart
 // resets it. Its API key is public on purpose: it can only read demo data.
 

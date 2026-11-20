@@ -15,7 +15,7 @@ import (
 	"github.com/openbrandexchange/obx-go/obx"
 )
 
-// fixtureNode returns a fresh mock node with the Kestrel fixtures.
+// fixtureNode returns a fresh mock node with the MAISON NOOR fixtures.
 func fixtureNode(t *testing.T) (*mock.Node, *httptest.Server) {
 	t.Helper()
 	n := mock.New(mock.Options{Fixtures: true})
@@ -98,14 +98,14 @@ func TestSyncSnapshotThenLive(t *testing.T) {
 		t.Fatal("cursor not saved")
 	}
 	ing, _ := ingest.New(srv.URL, n.Credentials().IngestToken)
-	if _, err := ing.Unpublish(ctx, obx.KindProduct, "KO-1006"); err != nil {
+	if _, err := ing.Unpublish(ctx, obx.KindProduct, "MN-1006"); err != nil {
 		t.Fatal(err)
 	}
 	if err := c.Sync(ctx, store, client.SyncOptions{}, m.handle); err != nil {
 		t.Fatal(err)
 	}
 	if m.count("product") != 10 || m.count("variant") != 44 || m.count("asset") != 33 {
-		t.Fatalf("after unpublishing KO-1006: %d products %d variants %d assets", m.count("product"), m.count("variant"), m.count("asset"))
+		t.Fatalf("after unpublishing MN-1006: %d products %d variants %d assets", m.count("product"), m.count("variant"), m.count("asset"))
 	}
 }
 
@@ -120,8 +120,8 @@ func TestSyncToleratesDuplicates(t *testing.T) {
 	}
 	n.SetDuplicateChanges(true)
 	ing, _ := ingest.New(srv.URL, n.Credentials().IngestToken)
-	ing.Patch(ctx, obx.KindProduct, "KO-1001", map[string]any{"season": "AW27"}, nil)
-	ing.Unpublish(ctx, obx.KindAsset, "KO-1001_NVY_2")
+	ing.Patch(ctx, obx.KindProduct, "MN-1001", map[string]any{"season": "AW27"}, nil)
+	ing.Unpublish(ctx, obx.KindAsset, "MN-1001_NVY_2")
 	changes := 0
 	err := c.Sync(ctx, store, client.SyncOptions{}, func(ctx context.Context, ev client.Event) error {
 		if ev.Kind == client.EventChange {
@@ -151,7 +151,7 @@ func TestSyncRestartsOnExpiredCursor(t *testing.T) {
 	}
 	n.ExpireCursors()
 	ing, _ := ingest.New(srv.URL, n.Credentials().IngestToken)
-	ing.Delete(ctx, obx.KindProduct, "KT-2002")
+	ing.Delete(ctx, obx.KindProduct, "NA-2002")
 	m.events = nil
 	if err := c.Sync(ctx, store, client.SyncOptions{}, m.handle); err != nil {
 		t.Fatal(err)
@@ -160,7 +160,7 @@ func TestSyncRestartsOnExpiredCursor(t *testing.T) {
 		t.Fatalf("resyncs %v", m.resyncs)
 	}
 	if m.count("product") != 10 {
-		t.Fatalf("mark and sweep after the restart should drop KT-2002: %d products", m.count("product"))
+		t.Fatalf("mark and sweep after the restart should drop NA-2002: %d products", m.count("product"))
 	}
 	if !contains(m.events, client.EventSnapshotComplete) {
 		t.Fatalf("no snapshot_complete after the restart: %v", m.events)
@@ -177,7 +177,7 @@ func TestSyncResyncsOnGrantChange(t *testing.T) {
 	if err := c.Sync(ctx, store, client.SyncOptions{}, m.handle); err != nil {
 		t.Fatal(err)
 	}
-	if err := n.SetRetailerBrands(creds.Full.RetailerID, []string{creds.KestrelBrandID}); err != nil {
+	if err := n.SetRetailerBrands(creds.Full.RetailerID, []string{creds.MaisonNoorBrandID}); err != nil {
 		t.Fatal(err)
 	}
 	if err := c.Sync(ctx, store, client.SyncOptions{}, m.handle); err != nil {
@@ -278,7 +278,7 @@ func TestLookupSplitsLongLists(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(res.Products) != 1 || res.Products[0].ExternalID != "KO-1001" {
+	if len(res.Products) != 1 || res.Products[0].ExternalID != "MN-1001" {
 		t.Fatalf("got %+v", res.Products)
 	}
 }
@@ -299,11 +299,11 @@ func TestAccessRequestFlow(t *testing.T) {
 
 func TestNodeBase(t *testing.T) {
 	cases := map[string]string{
-		"brands.kestrel.example":                         "https://brands.kestrel.example",
-		"https://brands.kestrel.example/.well-known/obx": "https://brands.kestrel.example",
-		"https://brands.kestrel.example/obx/v1/ingest":   "https://brands.kestrel.example",
-		"http://localhost:8080/":                         "http://localhost:8080",
-		"https://host.example/sub/obx/v1/changes?x=1":    "https://host.example/sub",
+		"brands.maison-noor.example":                         "https://brands.maison-noor.example",
+		"https://brands.maison-noor.example/.well-known/obx": "https://brands.maison-noor.example",
+		"https://brands.maison-noor.example/obx/v1/ingest":   "https://brands.maison-noor.example",
+		"http://localhost:8080/":                             "http://localhost:8080",
+		"https://host.example/sub/obx/v1/changes?x=1":        "https://host.example/sub",
 	}
 	for in, want := range cases {
 		got, err := client.NodeBase(in)

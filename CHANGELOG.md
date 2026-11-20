@@ -8,6 +8,20 @@ it reads stay compatible within a minor version.
 
 ## [Unreleased]
 
+### Changed
+
+- **Test data: MAISON NOOR replaces Kestrel** (spec 0.3.1, commit in
+  `specdata/SPEC_COMMIT`). The embedded fixtures moved from
+  `specdata/fixtures/kestrel` to `specdata/fixtures/maison-noor`; brands
+  `kestrel` → `maison-noor` and `kestrel-trail` → `noor-atelier`, ingest brand
+  `kestrel-lab` → `maison-noor-lab`, style numbers `KO-` → `MN-`, `KT-` → `NA-`,
+  `KL-` → `ML-`, `KX-` → `MX-` (GTINs unchanged), image hashes regenerated. The
+  conformance suite, the mock node, `obx-conformance setup` and the docs and
+  examples use the new data: the setup creates company "MAISON NOOR Group" with
+  first brand "MAISON NOOR". A node under test must load the new fixtures.
+  `mock.Credentials.KestrelBrandID`/`TrailBrandID` are now
+  `MaisonNoorBrandID`/`AtelierBrandID`. Entries below keep the old name.
+
 ## [0.3.0] - 2026-11-17
 
 For Open Brand Exchange specification 0.3.0: materials and care as terms with

@@ -74,7 +74,7 @@ func logOnline(t *testing.T, rep *conformance.Report) {
 		rep.Passed, rep.Failed, rep.Skipped, rep.Requests, rep.Bytes>>10, rep.Millis, strings.Join(partial, ","))
 }
 
-// The online check against the mock with the Kestrel data: every online
+// The online check against the mock with the MAISON NOOR data: every online
 // test passes, nothing is written, and the result is never a claim.
 func TestOnlineCheckIsReadOnly(t *testing.T) {
 	n := mock.New(mock.Options{Fixtures: true})
@@ -121,7 +121,7 @@ func TestOnlineCheckIsReadOnly(t *testing.T) {
 	}
 }
 
-// A key that does not see the Kestrel data (a real catalog): the
+// A key that does not see the MAISON NOOR data (a real catalog): the
 // fixture-independent checks run, partly, and the fixture checks are skipped.
 func TestOnlineCheckWithoutFixtures(t *testing.T) {
 	n := mock.New(mock.Options{Fixtures: true})
@@ -133,7 +133,7 @@ func TestOnlineCheckWithoutFixtures(t *testing.T) {
 	if _, err := admin.Login(ctx, c.AdminEmail, c.AdminPassword); err != nil {
 		t.Fatal(err)
 	}
-	rt, err := admin.CreateRetailer(ctx, nodeadmin.RetailerInput{Name: "Trail only", BrandIDs: &[]string{c.TrailBrandID}})
+	rt, err := admin.CreateRetailer(ctx, nodeadmin.RetailerInput{Name: "Atelier only", BrandIDs: &[]string{c.AtelierBrandID}})
 	if err != nil {
 		t.Fatal(err)
 	}

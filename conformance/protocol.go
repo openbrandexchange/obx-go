@@ -43,16 +43,16 @@ func init() {
 	register(p, "P-FEED-1", "snapshot lists exactly the visible fixture objects in type order, then live", true, testSnapshot)
 	register(p, "P-FEED-2", "next_cursor always present; limit=1 gives the same entries as limit=500", true, testPaging)
 	register(p, "P-FEED-3", "garbage cursor → 400 cursor_invalid", true, testGarbageCursor)
-	register(p, "P-FEED-4", "restricted retailer only sees brand kestrel", true, testRestricted)
+	register(p, "P-FEED-4", "restricted retailer only sees brand maison-noor", true, testRestricted)
 	registerPhase(phaseOf[ProfileIngest]+1, p, "P-FEED-5", "ingest replay produces exactly expected-changes.json", true, testReplayFeed)
 	register(p, "P-FEED-6", "grant change → grant entry with resync:true", true, testGrantResync)
 	register(p, "P-FEED-7", "cursors from before a spec upgrade → 410 cursor_expired; without a cursor works", true, testSpecUpgradeCursor)
-	register(p, "P-CAT-1", "products KO-1001 and KO-1005 match the expected fixtures, including the article data with names", true, testProductFixtures)
+	register(p, "P-CAT-1", "products MN-1001 and MN-1005 match the expected fixtures, including the article data with names", true, testProductFixtures)
 	register(p, "P-CAT-2", "GET /products pagination is complete and stable; ids= filter; limit above the maximum clamps, limit=0 and limit=abc → 400 invalid_request", true, testProductList)
 	register(p, "P-CAT-3", "GTIN lookup matches the expected fixture; 2001 codes → limit_exceeded", true, testGTINLookup)
-	register(p, "P-CAT-4", "invisible objects answer 404, never 403; unpublishing KO-1006 gives the delete cascade, publishing it the upserts with GET's data", true, testInvisible404)
-	register(p, "P-CAT-5", "article data round trip: KO-1008, KO-1009, KO-1010 and KT-2001 match the expected fixtures", true, testArticleRoundTrip)
-	register(p, "P-CAT-6", "article data shape over the whole snapshot: properties present, valid, every fibre with percentage (number or null) and qualifiers, vocabulary names, categories and symbols, no empty objects; KO-1005 outer leather without a percentage", true, testArticleShape)
+	register(p, "P-CAT-4", "invisible objects answer 404, never 403; unpublishing MN-1006 gives the delete cascade, publishing it the upserts with GET's data", true, testInvisible404)
+	register(p, "P-CAT-5", "article data round trip: MN-1008, MN-1009, MN-1010 and NA-2001 match the expected fixtures", true, testArticleRoundTrip)
+	register(p, "P-CAT-6", "article data shape over the whole snapshot: properties present, valid, every fibre with percentage (number or null) and qualifiers, vocabulary names, categories and symbols, no empty objects; MN-1005 outer leather without a percentage", true, testArticleShape)
 	register(p, "P-MEDIA-1", "assets match the expected fixtures (AI, embargo, large original, no original)", true, testAssetFixtures)
 	register(p, "P-MEDIA-2", "renditions: sha256, ETag, OBX-Content-SHA256, Range, If-None-Match, signed URLs; tampered or expired → 403 forbidden, neither signature nor token → 401", true, testRenditionHTTP)
 	register(p, "P-MEDIA-3", "originals byte-identical; web ≤ 2000, thumb ≤ 600, square is square, JPEG, never upscaled", true, testRenditionRules)
@@ -403,18 +403,18 @@ func testNoOriginal(t *T) {
 			t.Errorf("a client without originals obtained a token with media:original")
 		}
 	}
-	p := t.get(t.r.noOrig, "/products/"+t.productID("KO-1005"))
+	p := t.get(t.r.noOrig, "/products/"+t.productID("MN-1005"))
 	if p.status != http.StatusOK {
 		t.Fatalf("GET product: %d", p.status)
 	}
 	if bytes.Contains(p.body, []byte(`"original"`)) {
 		t.Errorf("the product answer contains an original rendition")
 	}
-	a := t.get(t.r.noOrig, "/assets/"+t.assetID("KO-1005_COG_1"))
+	a := t.get(t.r.noOrig, "/assets/"+t.assetID("MN-1005_COG_1"))
 	if bytes.Contains(a.body, []byte(`"original"`)) {
 		t.Errorf("the asset answer contains an original rendition")
 	}
-	r := t.get(t.r.noOrig, "/assets/"+t.assetID("KO-1005_COG_1")+"/renditions/original")
+	r := t.get(t.r.noOrig, "/assets/"+t.assetID("MN-1005_COG_1")+"/renditions/original")
 	t.expectStatus(r, http.StatusForbidden, obx.ErrOriginalNotAllowed, "GET /renditions/original without media:original")
 	g := t.get(t.r.noOrig, "/products:by-gtin?gtin=2000100501016")
 	if bytes.Contains(g.body, []byte(`"original"`)) {
@@ -510,7 +510,7 @@ func testSnapshot(t *T) {
 	}
 	for _, k := range []string{"brands", "products", "variants", "assets"} {
 		if t.r.online() && !t.r.fixturesPresent {
-			t.partialf("the counts of expected/counts.json (needs the Kestrel test data)")
+			t.partialf("the counts of expected/counts.json (needs the MAISON NOOR test data)")
 			break
 		}
 		exp := int(want.(map[string]any)[k].(float64))
@@ -538,12 +538,12 @@ func testSnapshot(t *T) {
 }
 
 // brandProductCount counts the products of a brand (by its name in the brand
-// column) in kestrel/products.csv.
+// column) in maison-noor/products.csv.
 func (t *T) brandProductCount(brand string) int {
-	data, err := t.r.fixture("kestrel/products.csv")
-	t.Check(err, "read kestrel/products.csv")
+	data, err := t.r.fixture("maison-noor/products.csv")
+	t.Check(err, "read maison-noor/products.csv")
 	rows, err := csv.NewReader(bytes.NewReader(data)).ReadAll()
-	t.Check(err, "parse kestrel/products.csv")
+	t.Check(err, "parse maison-noor/products.csv")
 	seen := map[string]bool{}
 	for _, r := range rows[1:] {
 		if len(r) > 1 && r[0] == brand {
@@ -614,13 +614,13 @@ func testGarbageCursor(t *T) {
 
 func testRestricted(t *T) {
 	if t.r.second == nil {
-		t.Skip("needs an API key restricted to brand kestrel (--second-client-id) or admin credentials")
+		t.Skip("needs an API key restricted to brand maison-noor (--second-client-id) or admin credentials")
 	}
-	kestrel := t.r.brandIDs["kestrel"]
+	maisonNoor := t.r.brandIDs["maison-noor"]
 	f := t.readFeed(t.r.second, "", 500)
 	var products int
 	for _, ch := range f.snapshot {
-		if ch.BrandID == nil || *ch.BrandID != kestrel {
+		if ch.BrandID == nil || *ch.BrandID != maisonNoor {
 			if ch.Type != obx.ChangeGrant {
 				t.Errorf("restricted snapshot contains %s %s of brand %v", ch.Type, ch.ExternalIDValue(), ch.BrandID)
 			}
@@ -629,20 +629,20 @@ func testRestricted(t *T) {
 			products++
 		}
 	}
-	if want := t.brandProductCount("Kestrel"); products != want {
-		t.Errorf("restricted snapshot has %d products, want the %d of brand kestrel", products, want)
+	if want := t.brandProductCount("MAISON NOOR"); products != want {
+		t.Errorf("restricted snapshot has %d products, want the %d of brand maison-noor", products, want)
 	}
-	res := t.get(t.r.second, "/products/"+t.productID("KT-2001"))
-	t.expectStatus(res, http.StatusNotFound, obx.ErrNotFound, "GET a kestrel-trail product with the restricted key")
+	res := t.get(t.r.second, "/products/"+t.productID("NA-2001"))
+	t.expectStatus(res, http.StatusNotFound, obx.ErrNotFound, "GET a noor-atelier product with the restricted key")
 	lookup, err := t.r.second.LookupGTINs(t.ctx, []string{"2000200101017"})
 	t.Check(err, "lookup")
 	if len(lookup.Results) != 1 || lookup.Results[0].Status != obx.GTINUnmatched || len(lookup.Products) != 0 {
-		t.Errorf("a kestrel-trail EAN must be unmatched for the restricted key, got %s", short(lookup))
+		t.Errorf("a noor-atelier EAN must be unmatched for the restricted key, got %s", short(lookup))
 	}
 	var n int
 	t.Check(t.r.second.EachProduct(t.ctx, client.ProductsQuery{Limit: 100}, func(p *obx.ProductDetail) error {
 		n++
-		if p.BrandID != kestrel {
+		if p.BrandID != maisonNoor {
 			t.Errorf("GET /products returned %s of another brand", p.ExternalID)
 		}
 		return nil
@@ -663,7 +663,7 @@ func testRestricted(t *T) {
 					BrandID string `json:"brand_id"`
 				}
 				json.Unmarshal(l.Data, &x)
-				if (l.Type == "brand" && x.ID != kestrel) || (l.Type == "product" && x.BrandID != kestrel) {
+				if (l.Type == "brand" && x.ID != maisonNoor) || (l.Type == "product" && x.BrandID != maisonNoor) {
 					t.Errorf("the restricted export contains a %s of another brand", l.Type)
 				}
 			}
@@ -677,20 +677,20 @@ func testRestricted(t *T) {
 	cur2 := f.cursor
 	cur1 := t.liveCursor(t.r.full)
 	if t.r.ing != nil {
-		_, err = t.r.ing.Patch(t.ctx, obx.KindProduct, "KT-2001", map[string]any{"season": "SS27"}, nil)
-		t.Check(err, "change KT-2001")
-		defer t.r.ing.Patch(t.ctx, obx.KindProduct, "KT-2001", map[string]any{"season": "SS26"}, nil)
+		_, err = t.r.ing.Patch(t.ctx, obx.KindProduct, "NA-2001", map[string]any{"season": "SS27"}, nil)
+		t.Check(err, "change NA-2001")
+		defer t.r.ing.Patch(t.ctx, obx.KindProduct, "NA-2001", map[string]any{"season": "SS26"}, nil)
 	} else {
-		t.opStep(productAction(ActUpdateProduct, "KT-2001", "Change the season of this product.", "field", "season", "value", "SS27"))
-		defer t.r.operate(t.ctx, productAction(ActUpdateProduct, "KT-2001", "Change the season of this product back.", "field", "season", "value", "SS26"))
+		t.opStep(productAction(ActUpdateProduct, "NA-2001", "Change the season of this product.", "field", "season", "value", "SS27"))
+		defer t.r.operate(t.ctx, productAction(ActUpdateProduct, "NA-2001", "Change the season of this product back.", "field", "season", "value", "SS26"))
 	}
 	live1, _ := t.newEntries(t.r.full, cur1)
 	live2, _ := t.newEntries(t.r.second, cur2)
 	if len(live1) == 0 {
-		t.Errorf("the unrestricted key saw no entry for a change of KT-2001")
+		t.Errorf("the unrestricted key saw no entry for a change of NA-2001")
 	}
 	for _, ch := range live2 {
-		if ch.Type != obx.ChangeGrant && (ch.BrandID == nil || *ch.BrandID != kestrel) {
+		if ch.Type != obx.ChangeGrant && (ch.BrandID == nil || *ch.BrandID != maisonNoor) {
 			t.Errorf("the restricted key saw live entry %s %s of another brand", ch.Type, ch.ExternalIDValue())
 		}
 	}
@@ -700,13 +700,13 @@ func testGrantResync(t *T) {
 	t.needOperator("changing a grant")
 	c := t.newThrowawayKey("OBX conformance: grant change", nil)
 	cursor := t.liveCursor(c)
-	kestrel := t.r.brandIDs["kestrel"]
+	maisonNoor := t.r.brandIDs["maison-noor"]
 	if t.r.admin != nil {
-		_, err := t.r.admin.PatchRetailer(t.ctx, c.retailerID, map[string]any{"brand_ids": []string{kestrel}})
+		_, err := t.r.admin.PatchRetailer(t.ctx, c.retailerID, map[string]any{"brand_ids": []string{maisonNoor}})
 		t.Check(err, "change the grant")
 	} else {
-		t.opStep(Action{Name: ActSetGrant, Params: map[string]string{"client_id": c.id, "brands": "kestrel"},
-			Hint: "Let the retailer of this API key see only brand kestrel."})
+		t.opStep(Action{Name: ActSetGrant, Params: map[string]string{"client_id": c.id, "brands": "maison-noor"},
+			Hint: "Let the retailer of this API key see only brand maison-noor."})
 	}
 	live, _ := t.newEntries(c, cursor)
 	found := false
@@ -717,7 +717,7 @@ func testGrantResync(t *T) {
 				t.Errorf("grant entry without resync:true")
 			}
 			var g obx.Grant
-			if err := ch.Decode(&g); err != nil || len(g.BrandIDs) != 1 || g.BrandIDs[0] != kestrel {
+			if err := ch.Decode(&g); err != nil || len(g.BrandIDs) != 1 || g.BrandIDs[0] != maisonNoor {
 				t.Errorf("grant entry data does not show the new brands: %s", truncate(ch.Data))
 			}
 		}
@@ -727,7 +727,7 @@ func testGrantResync(t *T) {
 	}
 	f := t.readFeed(c, "", 500)
 	for _, ch := range f.snapshot {
-		if ch.BrandID != nil && *ch.BrandID != kestrel {
+		if ch.BrandID != nil && *ch.BrandID != maisonNoor {
 			t.Errorf("after the grant change the snapshot still has %s %s", ch.Type, ch.ExternalIDValue())
 			break
 		}
@@ -778,7 +778,7 @@ func testSpecUpgradeCursor(t *T) {
 // ---- catalog
 
 func testProductFixtures(t *T) {
-	for _, ext := range []string{"KO-1001", "KO-1005"} {
+	for _, ext := range []string{"MN-1001", "MN-1005"} {
 		want, err := t.r.fixtureExpect("product-" + ext + ".json")
 		t.Check(err, "fixture")
 		res := t.get(t.r.full, "/products/"+t.productID(ext))
@@ -834,7 +834,7 @@ func testProductList(t *T) {
 	}
 	t.checkLimitClamp()
 	if t.r.online() && !t.r.fixturesPresent {
-		t.partialf("the number of products (needs the Kestrel test data)")
+		t.partialf("the number of products (needs the MAISON NOOR test data)")
 		if len(all) < 2 {
 			t.Notef("ids= filter not checked: fewer than two products")
 			return
@@ -849,7 +849,7 @@ func testProductList(t *T) {
 	if want := t.fixtureCount("products"); len(all) != want {
 		t.Errorf("GET /products lists %d products, want %d", len(all), want)
 	}
-	ids := []string{t.productID("KO-1001"), t.productID("KT-2002"), "prd_does-not-exist"}
+	ids := []string{t.productID("MN-1001"), t.productID("NA-2002"), "prd_does-not-exist"}
 	page, err := t.r.full.Products(t.ctx, client.ProductsQuery{IDs: ids, Limit: 100})
 	t.Check(err, "ids filter")
 	if len(page.Items) != 2 {
@@ -910,7 +910,7 @@ func testGTINLookup(t *T) {
 	}
 	t.validate("GtinLookupResult", res.body, "the lookup result")
 	if t.r.online() && !t.r.fixturesPresent {
-		t.partialf("the answer against expected/gtin-lookup.json (needs the Kestrel test data); its shape was checked")
+		t.partialf("the answer against expected/gtin-lookup.json (needs the MAISON NOOR test data); its shape was checked")
 	} else {
 		var got any
 		json.Unmarshal(res.body, &got)
@@ -937,9 +937,9 @@ func testInvisible404(t *T) {
 		t.expectStatus(t.get(t.r.full, p), http.StatusNotFound, obx.ErrNotFound, "GET "+p)
 	}
 	if t.r.second != nil && (!t.r.online() || t.r.fixturesPresent) {
-		t.expectStatus(t.get(t.r.second, "/products/"+t.productID("KT-2001")), http.StatusNotFound, obx.ErrNotFound, "product outside the grant")
-		t.expectStatus(t.get(t.r.second, "/assets/"+t.assetID("KT-2001_BLK_1")), http.StatusNotFound, obx.ErrNotFound, "image outside the grant")
-		t.expectStatus(t.get(t.r.second, "/brands/"+t.r.brandIDs["kestrel-trail"]), http.StatusNotFound, obx.ErrNotFound, "brand outside the grant")
+		t.expectStatus(t.get(t.r.second, "/products/"+t.productID("NA-2001")), http.StatusNotFound, obx.ErrNotFound, "product outside the grant")
+		t.expectStatus(t.get(t.r.second, "/assets/"+t.assetID("NA-2001_BLK_1")), http.StatusNotFound, obx.ErrNotFound, "image outside the grant")
+		t.expectStatus(t.get(t.r.second, "/brands/"+t.r.brandIDs["noor-atelier"]), http.StatusNotFound, obx.ErrNotFound, "brand outside the grant")
 	}
 	if t.r.online() {
 		t.partialf("unpublished products answer 404 and the feed's delete cascade (needs a brand-side step)")
@@ -949,7 +949,7 @@ func testInvisible404(t *T) {
 		t.SkipNeeds("an upload key, admin credentials or an operator that offers "+ActUnpublishProduct+" and "+ActPublishProduct,
 			"the unpublish half (404 and the feed's delete entries) needs an upload key, admin credentials or an operator")
 	}
-	const ext = "KO-1006"
+	const ext = "MN-1006"
 	pid := t.productID(ext)
 	before := t.get(t.r.full, "/products/"+pid)
 	var detail map[string]any
@@ -988,7 +988,7 @@ func testInvisible404(t *T) {
 		}
 	}()
 	t.expectStatus(t.get(t.r.full, "/products/"+pid), http.StatusNotFound, obx.ErrNotFound, "unpublished product")
-	t.expectStatus(t.get(t.r.full, "/assets/"+t.assetID("KO-1006_NVY_1")), http.StatusNotFound, obx.ErrNotFound, "image of an unpublished product")
+	t.expectStatus(t.get(t.r.full, "/assets/"+t.assetID("MN-1006_NVY_1")), http.StatusNotFound, obx.ErrNotFound, "image of an unpublished product")
 
 	// The feed says so (protocol.md 6.2, 6.3): one delete for the product,
 	// then its variants by external_id, then its assets by color_code (null
@@ -1206,10 +1206,10 @@ func testAssetFixtures(t *T) {
 		file, ext string
 		c         *apiKey
 	}{
-		{"asset-ai-generated.json", "KO-1003_RST_3", t.r.full},
-		{"asset-embargoed.json", "KO-1002_BLK_2", t.r.full},
-		{"asset-large-original.json", "KO-1002_OLV_1", t.r.full},
-		{"asset-without-original-scope.json", "KO-1001_NVY_1", t.r.noOrig},
+		{"asset-ai-generated.json", "MN-1003_RST_3", t.r.full},
+		{"asset-embargoed.json", "MN-1002_BLK_2", t.r.full},
+		{"asset-large-original.json", "MN-1002_OLV_1", t.r.full},
+		{"asset-without-original-scope.json", "MN-1001_NVY_1", t.r.noOrig},
 	}
 	for _, c := range cases {
 		if c.c == nil {
@@ -1233,7 +1233,7 @@ func testAssetFixtures(t *T) {
 }
 
 // onlineAssets returns up to n images of whatever catalog the key sees, for
-// the media checks of an online run without the Kestrel test data.
+// the media checks of an online run without the MAISON NOOR test data.
 func (t *T) onlineAssets(n int) []*obx.Asset {
 	page, err := t.r.full.Products(t.ctx, client.ProductsQuery{Limit: 10})
 	t.Check(err, "list products")
@@ -1262,13 +1262,13 @@ func testRenditionHTTP(t *T) {
 	var targets []target
 	names := obx.RenditionNames
 	if t.r.online() && !t.r.fixturesPresent {
-		t.partialf("originals are not downloaded online without the Kestrel test data; web, square and thumb of %s were checked", "the first images of the catalog")
+		t.partialf("originals are not downloaded online without the MAISON NOOR test data; web, square and thumb of %s were checked", "the first images of the catalog")
 		names = obx.DerivedRenditionNames
 		for _, a := range t.onlineAssets(2) {
 			targets = append(targets, target{a.ID, a})
 		}
 	} else {
-		for _, ext := range []string{"KO-1001_NVY_1", "KO-1002_OLV_1", "KO-1003_RST_3"} {
+		for _, ext := range []string{"MN-1001_NVY_1", "MN-1002_OLV_1", "MN-1003_RST_3"} {
 			a, err := t.r.full.Asset(t.ctx, t.assetID(ext))
 			t.Check(err, "asset "+ext)
 			targets = append(targets, target{ext, a})
@@ -1421,7 +1421,7 @@ func sha(b []byte) string {
 
 func testRenditionRules(t *T) {
 	if t.r.online() && !t.r.fixturesPresent {
-		t.partialf("byte-identical originals (needs the Kestrel test data); the rules for web, square and thumb were checked on the first images of the catalog")
+		t.partialf("byte-identical originals (needs the MAISON NOOR test data); the rules for web, square and thumb were checked on the first images of the catalog")
 		for _, a := range t.onlineAssets(2) {
 			t.checkDerived(a.ID, a, a.Width, a.Height)
 		}
@@ -1432,7 +1432,7 @@ func testRenditionRules(t *T) {
 		Width  int    `json:"width"`
 		Height int    `json:"height"`
 	}
-	raw, err := t.r.fixture("kestrel/images.json")
+	raw, err := t.r.fixture("maison-noor/images.json")
 	t.Check(err, "images.json")
 	json.Unmarshal(raw, &info)
 	byExt := map[string]string{}
@@ -1459,7 +1459,7 @@ func testRenditionRules(t *T) {
 			t.Errorf("%s original: %v", ext, err)
 			continue
 		}
-		fixture, _ := t.r.fixture("kestrel/images/" + file)
+		fixture, _ := t.r.fixture("maison-noor/images/" + file)
 		if !bytes.Equal(ob.Bytes(), fixture) {
 			t.Errorf("%s: the original is not byte-identical to %s", ext, file)
 		}
@@ -1473,9 +1473,9 @@ func testExport(t *T) {
 	if t.r.discovery == nil || !t.r.discovery.Has(obx.CapExports) {
 		t.NotApplicable("capability exports not offered")
 	}
-	kestrel := t.r.brandIDs["kestrel"]
+	maisonNoor := t.r.brandIDs["maison-noor"]
 	idemKey := "conformance-" + randomSuffix()
-	req := obx.ExportRequest{Filter: &obx.ExportFilter{BrandIDs: []string{kestrel}}, Renditions: []string{obx.RenditionWeb}}
+	req := obx.ExportRequest{Filter: &obx.ExportFilter{BrandIDs: []string{maisonNoor}}, Renditions: []string{obx.RenditionWeb}}
 	e, err := t.r.full.CreateExport(t.ctx, req, idemKey)
 	t.Check(err, "POST /exports")
 	// The same Idempotency-Key and body return the same export, also while
@@ -1488,7 +1488,7 @@ func testExport(t *T) {
 	case again.ID != e.ID:
 		t.Errorf("POST /exports again with the same Idempotency-Key and body gave export %s, want %s", again.ID, e.ID)
 	}
-	other := obx.ExportRequest{Filter: &obx.ExportFilter{BrandIDs: []string{kestrel}}, Renditions: []string{obx.RenditionThumb}}
+	other := obx.ExportRequest{Filter: &obx.ExportFilter{BrandIDs: []string{maisonNoor}}, Renditions: []string{obx.RenditionThumb}}
 	if x, err := t.r.full.CreateExport(t.ctx, other, idemKey); !obx.IsCode(err, obx.ErrIdempotencyKeyReused) {
 		t.Errorf("POST /exports with the same Idempotency-Key and another body: want 409 idempotency_key_reused, got %v", err)
 		if err == nil && x.ID == e.ID {
@@ -1531,8 +1531,8 @@ func testExport(t *T) {
 	if header == nil {
 		t.Fatalf("the manifest has no header line")
 	}
-	if want := t.brandProductCount("Kestrel"); header.Counts == nil || header.Counts.Products != products || products != want {
-		t.Errorf("header counts %+v, product lines %d, want %d kestrel products", header.Counts, products, want)
+	if want := t.brandProductCount("MAISON NOOR"); header.Counts == nil || header.Counts.Products != products || products != want {
+		t.Errorf("header counts %+v, product lines %d, want %d maison-noor products", header.Counts, products, want)
 	}
 	entries := map[string][]byte{}
 	for _, p := range e.Parts {
@@ -1677,8 +1677,8 @@ func testUsage(t *T) {
 	}
 	now := time.Now().UTC().Truncate(time.Second)
 	n, err := t.r.full.ReportUsage(t.ctx, []obx.UsageEvent{
-		{AssetID: t.assetID("KO-1001_NVY_1"), Rendition: obx.Ptr("web"), Event: obx.UsagePublished, Channel: obx.Ptr("webshop"), At: now},
-		{AssetID: t.assetID("KO-1001_NVY_2"), Rendition: obx.Ptr("web"), Event: obx.UsageSynced, At: now},
+		{AssetID: t.assetID("MN-1001_NVY_1"), Rendition: obx.Ptr("web"), Event: obx.UsagePublished, Channel: obx.Ptr("webshop"), At: now},
+		{AssetID: t.assetID("MN-1001_NVY_2"), Rendition: obx.Ptr("web"), Event: obx.UsageSynced, At: now},
 		{AssetID: "ast_unknown-to-this-node", Event: obx.UsageSynced, At: now},
 	})
 	t.Check(err, "POST /usage")

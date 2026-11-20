@@ -1,5 +1,5 @@
 # The public read-only demo portal (obx-conformance mock --read-only) with the
-# Kestrel test data, behind the obx-demo Worker. In memory: a restart resets
+# MAISON NOOR test data, behind the obx-demo Worker. In memory: a restart resets
 # it. OBX_MOCK_CLIENT (id:secret) and OBX_PUBLIC_URL come from the Worker.
 FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build
 ARG TARGETOS=linux TARGETARCH=amd64

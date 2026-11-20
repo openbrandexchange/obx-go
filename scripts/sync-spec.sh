@@ -14,7 +14,7 @@ rm -rf "$DEST/schemas" "$DEST/vocabularies" "$DEST/fixtures"
 mkdir -p "$DEST/schemas" "$DEST/vocabularies" "$DEST/fixtures"
 cp "$SPEC"/schemas/*.json "$DEST/schemas/"
 cp "$SPEC"/vocabularies/*.json "$DEST/vocabularies/"
-for d in kestrel expected ingest examples imports; do
+for d in maison-noor expected ingest examples imports; do
   cp -R "$SPEC/fixtures/$d" "$DEST/fixtures/$d"
 done
 cp "$SPEC/fixtures/README.md" "$DEST/fixtures/README.md"

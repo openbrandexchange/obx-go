@@ -29,7 +29,7 @@ type Credentials struct {
 	IngestToken string
 	// Full sees every brand and may download originals.
 	Full ClientCredentials
-	// Restricted only sees brand "kestrel".
+	// Restricted only sees brand "maison-noor".
 	Restricted ClientCredentials
 	// NoOriginals sees every brand but never gets originals.
 	NoOriginals ClientCredentials
@@ -37,15 +37,15 @@ type Credentials struct {
 	// Full retailer.
 	RetailerEmail    string
 	RetailerPassword string
-	// KestrelBrandID and TrailBrandID are the protocol ids of the brands.
-	KestrelBrandID string
-	TrailBrandID   string
+	// MaisonNoorBrandID and AtelierBrandID are the protocol ids of the brands.
+	MaisonNoorBrandID string
+	AtelierBrandID    string
 }
 
 // Fixture account defaults. They only exist on mock nodes with Fixtures.
 const (
-	FixtureAdminEmail       = "admin@kestrel.example"
-	FixtureAdminPassword    = "kestrel-admin-password"
+	FixtureAdminEmail       = "admin@maison-noor.example"
+	FixtureAdminPassword    = "maison-noor-admin-password"
 	FixtureRetailerEmail    = "buyer@store.example"
 	FixtureRetailerPassword = "store-buyer-password"
 )
@@ -58,14 +58,14 @@ func (n *Node) Credentials() Credentials {
 }
 
 // loadFixtures completes setup like the conformance suite does and imports
-// the Kestrel Outfitters fixtures.
+// the MAISON NOOR Group fixtures.
 func (n *Node) loadFixtures() error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	s := n.st
 	if _, p := n.completeSetup(nodeadmin.SetupInput{SetupCode: n.opts.SetupCode,
-		Company: nodeadmin.SetupCompany{Name: "Kestrel Outfitters", FirstBrandName: "Kestrel", DefaultLanguage: "nl", Languages: []string{"nl", "en"}, ContactEmail: "hello@kestrel.example"},
-		Admin:   nodeadmin.SetupAdmin{Name: "Kestrel Admin", Email: FixtureAdminEmail, Password: FixtureAdminPassword}}); p != nil {
+		Company: nodeadmin.SetupCompany{Name: "MAISON NOOR Group", FirstBrandName: "MAISON NOOR", DefaultLanguage: "nl", Languages: []string{"nl", "en"}, ContactEmail: "hello@maison-noor.example"},
+		Admin:   nodeadmin.SetupAdmin{Name: "MAISON NOOR Admin", Email: FixtureAdminEmail, Password: FixtureAdminPassword}}); p != nil {
 		return p
 	}
 	c := &n.creds
@@ -83,8 +83,8 @@ func (n *Node) loadFixtures() error {
 	if run.Status != obx.JobSucceeded || run.Counts.Errors > 0 {
 		return fmt.Errorf("fixture import: %s, %d errors: %+v", run.Status, run.Counts.Errors, problems)
 	}
-	c.KestrelBrandID = s.brands["kestrel"].id
-	c.TrailBrandID = s.brands["kestrel-trail"].id
+	c.MaisonNoorBrandID = s.brands["maison-noor"].id
+	c.AtelierBrandID = s.brands["noor-atelier"].id
 
 	mk := func(name string, brands []string, original *bool) ClientCredentials {
 		rt := n.newRetailer(name)
@@ -100,7 +100,7 @@ func (n *Node) loadFixtures() error {
 		return ClientCredentials{RetailerID: rt.id, ClientID: cl.clientID, ClientSecret: secret}
 	}
 	c.Full = mk("Example Store", nil, nil)
-	c.Restricted = mk("Restricted Store", []string{c.KestrelBrandID}, nil)
+	c.Restricted = mk("Restricted Store", []string{c.MaisonNoorBrandID}, nil)
 	c.NoOriginals = mk("No Originals Store", nil, ptr(false))
 	hash, _ := bcrypt.GenerateFromPassword([]byte(FixtureRetailerPassword), bcryptCost)
 	u := &user{id: s.newID("usr"), email: FixtureRetailerEmail, name: "Store Buyer", role: nodeadmin.RoleRetailer, retailerID: c.Full.RetailerID, status: "active", language: "nl", passwordHash: hash, createdAt: n.now()}
@@ -109,27 +109,27 @@ func (n *Node) loadFixtures() error {
 	return nil
 }
 
-// fixtureImport is the Kestrel import with its blobs.
+// fixtureImport is the MAISON NOOR import with its blobs.
 type fixtureImport struct {
 	importInput
 	blobs []blob
 }
 
-// fixtureImportFor builds the Kestrel import. With serverRenditions false the
+// fixtureImportFor builds the MAISON NOOR import. With serverRenditions false the
 // images go in as a manifest with pre-generated renditions, like the CLI
 // does for nodes without an image library.
 func fixtureImportFor(serverRenditions bool) (*fixtureImport, error) {
 	fx := specdata.Fixtures()
-	csv, err := fs.ReadFile(fx, "kestrel/products.csv")
+	csv, err := fs.ReadFile(fx, "maison-noor/products.csv")
 	if err != nil {
 		return nil, err
 	}
-	assets, err := fs.ReadFile(fx, "kestrel/assets.csv")
+	assets, err := fs.ReadFile(fx, "maison-noor/assets.csv")
 	if err != nil {
 		return nil, err
 	}
 	out := &fixtureImport{importInput: importInput{csv: csv, csvName: "products.csv", assets: assets, options: obx.ImportOptions{Mode: obx.ImportModeUpsert}}}
-	entries, err := fs.ReadDir(fx, "kestrel/images")
+	entries, err := fs.ReadDir(fx, "maison-noor/images")
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +137,7 @@ func fixtureImportFor(serverRenditions bool) (*fixtureImport, error) {
 		if !strings.HasSuffix(e.Name(), ".png") {
 			continue
 		}
-		data, err := fs.ReadFile(fx, path.Join("kestrel/images", e.Name()))
+		data, err := fs.ReadFile(fx, path.Join("maison-noor/images", e.Name()))
 		if err != nil {
 			return nil, err
 		}

@@ -51,7 +51,7 @@ publish:
     name: ghcr.io/openbrandexchange/obx:v0
     entrypoint: [""]          # the image's entrypoint is obx; GitLab needs a shell
   script: ["obx push export"]
-  variables: { OBX_URL: "https://brands.kestrel.example" }   # OBX_TOKEN as a masked CI variable
+  variables: { OBX_URL: "https://brands.maison-noor.example" }   # OBX_TOKEN as a masked CI variable
 ```
 
 ## Good to know

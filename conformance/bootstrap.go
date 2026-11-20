@@ -22,9 +22,9 @@ import (
 
 // Setup defaults for a fresh node (docs/conformance.md).
 const (
-	fixtureCompany   = "Kestrel Outfitters"
-	fixtureBrand     = "Kestrel"
-	defaultAdminMail = "conformance@kestrel.example"
+	fixtureCompany   = "MAISON NOOR Group"
+	fixtureBrand     = "MAISON NOOR"
+	defaultAdminMail = "conformance@maison-noor.example"
 )
 
 // setupNotes collects the A-SETUP-1 observations made during bootstrap.
@@ -91,9 +91,9 @@ func (r *runner) bootstrap(ctx context.Context, want map[string]bool) error {
 		return fmt.Errorf("the portal address is not a public internet address: %w", err)
 	}
 	if r.admin != nil {
-		kestrel, err := r.admin.BrandID(ctx, "kestrel")
+		maisonNoor, err := r.admin.BrandID(ctx, "maison-noor")
 		if err != nil {
-			return fmt.Errorf("the node has no brand with external id \"kestrel\" (first brand of the fixture setup): %w", err)
+			return fmt.Errorf("the node has no brand with external id \"maison-noor\" (first brand of the fixture setup): %w", err)
 		}
 		if cfg.IngestToken == "" && (want[ProfileIngest] || want[ProfileProtocol] || want[ProfileSecurity]) {
 			tok, err := r.admin.CreateIngestToken(ctx, nodeadmin.IngestTokenInput{Name: "OBX conformance", Scopes: []string{obx.IngestScopeRead, obx.IngestScopeWrite, obx.IngestScopeDelete}})
@@ -121,7 +121,7 @@ func (r *runner) bootstrap(ctx context.Context, want map[string]bool) error {
 			}
 		}
 		if cfg.SecondClientID == "" {
-			if cfg.SecondClientID, cfg.SecondClientSecret, err = mk("OBX conformance: Kestrel only", &[]string{kestrel}, nil, all); err != nil {
+			if cfg.SecondClientID, cfg.SecondClientSecret, err = mk("OBX conformance: MAISON NOOR only", &[]string{maisonNoor}, nil, all); err != nil {
 				return err
 			}
 		}
@@ -141,7 +141,7 @@ func (r *runner) bootstrap(ctx context.Context, want map[string]bool) error {
 		}
 		for _, n := range []need{
 			{&cfg.ClientID, &cfg.ClientSecret, "OBX conformance: all brands", nil, true},
-			{&cfg.SecondClientID, &cfg.SecondClientSecret, "OBX conformance: Kestrel only", []string{"kestrel"}, true},
+			{&cfg.SecondClientID, &cfg.SecondClientSecret, "OBX conformance: MAISON NOOR only", []string{"maison-noor"}, true},
 			{&cfg.NoOriginalClientID, &cfg.NoOriginalClientSecret, "OBX conformance: no originals", nil, false},
 		} {
 			if *n.id != "" {
@@ -232,12 +232,12 @@ func randomSuffix() string {
 	return fmt.Sprintf("%x", time.Now().UnixNano()&0xffffffffff)
 }
 
-// ensureFixtures imports fixtures/kestrel when the node does not have it yet
+// ensureFixtures imports fixtures/maison-noor when the node does not have it yet
 // and loads the ids of the fixture objects.
 func (r *runner) ensureFixtures(ctx context.Context) error {
 	present := false
 	if r.ing != nil {
-		if _, err := r.ing.Get(ctx, obx.KindProduct, "KO-1001"); err == nil {
+		if _, err := r.ing.Get(ctx, obx.KindProduct, "MN-1001"); err == nil {
 			present = true
 		}
 	} else if r.full != nil {
@@ -246,23 +246,23 @@ func (r *runner) ensureFixtures(ctx context.Context) error {
 		}
 	}
 	if !present && r.online() {
-		r.note("the API key does not see the Kestrel test data; checks that need it are skipped")
+		r.note("the API key does not see the MAISON NOOR test data; checks that need it are skipped")
 		return nil
 	}
 	r.fixturesPresent = present
 	if !present {
 		if r.ing == nil {
-			return errors.New("the node has no fixture data: load fixtures/kestrel with the node's own import, or give an upload key (--token) so the suite imports it")
+			return errors.New("the node has no fixture data: load fixtures/maison-noor with the node's own import, or give an upload key (--token) so the suite imports it")
 		}
 		job, err := r.importFixtures(ctx, "package")
 		if err != nil {
-			return fmt.Errorf("import fixtures/kestrel: %w", err)
+			return fmt.Errorf("import fixtures/maison-noor: %w", err)
 		}
 		if job.Status != obx.JobSucceeded || job.ImportRun == nil || job.ImportRun.Counts.Errors > 0 {
 			probs, _ := r.ing.ImportProblems(ctx, job.ID)
-			return fmt.Errorf("import fixtures/kestrel: job %s, problems: %s", job.Status, short(probs))
+			return fmt.Errorf("import fixtures/maison-noor: job %s, problems: %s", job.Status, short(probs))
 		}
-		r.note("imported fixtures/kestrel (%d created)", job.ImportRun.Counts.Created)
+		r.note("imported fixtures/maison-noor (%d created)", job.ImportRun.Counts.Created)
 		r.fixturesPresent = true
 	}
 	if r.full != nil {
@@ -292,7 +292,7 @@ func (r *runner) loadIDs(ctx context.Context) error {
 	})
 }
 
-// importFixtures imports fixtures/kestrel through the ingest API. how is
+// importFixtures imports fixtures/maison-noor through the ingest API. how is
 // "package" (zip), "files" (csv + assets_csv + images) or "manifest" (blobs
 // first). On nodes without server renditions every form falls back to the
 // manifest with client-generated renditions when the images are new.
@@ -308,17 +308,17 @@ func (r *runner) importFixtures(ctx context.Context, how string) (*obx.IngestJob
 	return r.ing.WaitJob(ctx, job.ID, 200*time.Millisecond)
 }
 
-// fixtureImport builds an import request for fixtures/kestrel. csvFilter,
+// fixtureImport builds an import request for fixtures/maison-noor. csvFilter,
 // when set, keeps only the products.csv rows it returns true for.
 func (r *runner) fixtureImport(ctx context.Context, how string, csvFilter func(row []string) bool) (*ingest.ImportRequest, error) {
-	csvData, err := r.fixture("kestrel/products.csv")
+	csvData, err := r.fixture("maison-noor/products.csv")
 	if err != nil {
 		return nil, err
 	}
 	if csvFilter != nil {
 		csvData = filterCSV(csvData, csvFilter)
 	}
-	assetsData, err := r.fixture("kestrel/assets.csv")
+	assetsData, err := r.fixture("maison-noor/assets.csv")
 	if err != nil {
 		return nil, err
 	}
@@ -345,7 +345,7 @@ func (r *runner) fixtureImport(ctx context.Context, how string, csvFilter func(r
 			add("images/"+img.Name, img.Data)
 		}
 		zw.Close()
-		req.Package = &ingest.File{Name: "kestrel.zip", Data: buf.Bytes()}
+		req.Package = &ingest.File{Name: "maison-noor.zip", Data: buf.Bytes()}
 	case "files":
 		req.CSV = &ingest.File{Name: "products.csv", Data: csvData}
 		req.AssetsCSV = &ingest.File{Name: "assets.csv", Data: assetsData}
@@ -367,7 +367,7 @@ func (r *runner) fixtureImport(ctx context.Context, how string, csvFilter func(r
 }
 
 func (r *runner) fixtureImages() ([]ingest.File, error) {
-	entries, err := fs.ReadDir(r.fixtures, "kestrel/images")
+	entries, err := fs.ReadDir(r.fixtures, "maison-noor/images")
 	if err != nil {
 		return nil, err
 	}
@@ -376,7 +376,7 @@ func (r *runner) fixtureImages() ([]ingest.File, error) {
 		if e.IsDir() {
 			continue
 		}
-		b, err := r.fixture(path.Join("kestrel/images", e.Name()))
+		b, err := r.fixture(path.Join("maison-noor/images", e.Name()))
 		if err != nil {
 			return nil, err
 		}

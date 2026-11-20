@@ -150,7 +150,7 @@ func TestImportVariantIdentity(t *testing.T) {
 		}
 		var detail *obx.ProductDetail
 		if err := f.c.EachProduct(ctx, client.ProductsQuery{Limit: 100}, func(p *obx.ProductDetail) error {
-			if p.ExternalID == "KL-8101" {
+			if p.ExternalID == "ML-8101" {
 				detail = p
 			}
 			return nil
@@ -158,9 +158,9 @@ func TestImportVariantIdentity(t *testing.T) {
 			t.Fatal(err)
 		}
 		if detail == nil {
-			t.Fatalf("%s: KL-8101 not served", cs.File)
+			t.Fatalf("%s: ML-8101 not served", cs.File)
 		}
-		want := cs.Products["KL-8101"].Variants
+		want := cs.Products["ML-8101"].Variants
 		if len(detail.Variants) != len(want) {
 			t.Fatalf("%s: %d variants, want %d", cs.File, len(detail.Variants), len(want))
 		}
@@ -180,26 +180,26 @@ func TestImportVariantIdentity(t *testing.T) {
 			ids[gv.ExternalID] = gv.ID
 		}
 	}
-	// I-IMP-7 case 3: a row without size finds KO-1008-BLK-CABIN by its GTIN.
+	// I-IMP-7 case 3: a row without size finds MN-1008-BLK-CABIN by its GTIN.
 	run, probs := f.importCSV(t, fixtureFile(t, "imports/3-measurement-update.csv"), false)
 	if run.Counts.Updated != 1 || run.Counts.Unchanged != 1 || run.Counts.Created != 0 || len(errorsOnly(probs)) != 0 {
 		t.Fatalf("3-measurement-update: %+v %+v", run.Counts, probs)
 	}
-	rec, err := f.ing.Get(ctx, obx.KindVariant, "KO-1008-BLK-CABIN")
+	rec, err := f.ing.Get(ctx, obx.KindVariant, "MN-1008-BLK-CABIN")
 	if err != nil || !strings.Contains(string(rec.Data), `"weight_kg":2.7`) {
-		t.Fatalf("KO-1008-BLK-CABIN: %v %s", err, rec.Data)
+		t.Fatalf("MN-1008-BLK-CABIN: %v %s", err, rec.Data)
 	}
-	if _, err := f.ing.Get(ctx, obx.KindVariant, "KO-1008-BLK"); !obx.IsCode(err, obx.ErrNotFound) {
+	if _, err := f.ing.Get(ctx, obx.KindVariant, "MN-1008-BLK"); !obx.IsCode(err, obx.ErrNotFound) {
 		t.Fatalf("no default-id variant may be created: %v", err)
 	}
 }
 
-// The Kestrel fixtures use default variant ids and give no material_unknown;
+// The MAISON NOOR fixtures use default variant ids and give no material_unknown;
 // label-warnings.csv gives material_unknown on the product's first row.
 func TestImportMaterialUnknown(t *testing.T) {
 	f := newFixtureNode(t, mock.Options{})
 	ctx := context.Background()
-	for _, id := range []string{"KO-1001-NVY-M", "KO-1004-IND-30-32", "KO-1005-COG-ONE SIZE"} {
+	for _, id := range []string{"MN-1001-NVY-M", "MN-1004-IND-30-32", "MN-1005-COG-ONE SIZE"} {
 		if _, err := f.ing.Get(ctx, obx.KindVariant, id); err != nil {
 			t.Errorf("fixture variant %s: %v", id, err)
 		}
@@ -207,7 +207,7 @@ func TestImportMaterialUnknown(t *testing.T) {
 	_, probs := f.importCSV(t, fixtureFile(t, "imports/6-restore.csv"), false)
 	for _, p := range probs {
 		if p.ObxError == obx.WarnMaterialUnknown {
-			t.Errorf("the Kestrel import must have no material_unknown: %+v", p)
+			t.Errorf("the MAISON NOOR import must have no material_unknown: %+v", p)
 		}
 	}
 	var exp struct {
@@ -243,12 +243,12 @@ func TestImportMaterialUnknown(t *testing.T) {
 // pointer /gtin and a detail naming that variant and its product.
 func TestIngestGTINConflict(t *testing.T) {
 	f := newFixtureNode(t, mock.Options{})
-	status, body := f.raw(t, http.MethodPut, obx.PathIngest+"/variants/KO-1002-X-1",
-		[]byte(`{"product_external_id":"KO-1002","gtin":"2000100101025","color":{"code":"X"}}`), nil)
+	status, body := f.raw(t, http.MethodPut, obx.PathIngest+"/variants/MN-1002-X-1",
+		[]byte(`{"product_external_id":"MN-1002","gtin":"2000100101025","color":{"code":"X"}}`), nil)
 	var p obx.Problem
 	json.Unmarshal(body, &p)
 	if status != http.StatusConflict || p.ObxError != obx.ErrGTINConflict || len(p.Errors) == 0 || obx.Str(p.Errors[0].Pointer) != "/gtin" ||
-		!strings.Contains(p.DetailString(), "KO-1001-NVY-M") || !strings.Contains(p.DetailString(), "KO-1001") {
+		!strings.Contains(p.DetailString(), "MN-1001-NVY-M") || !strings.Contains(p.DetailString(), "MN-1001") {
 		t.Fatalf("%d %s", status, body)
 	}
 }
@@ -260,12 +260,12 @@ func TestExtensionsAndUnknownMembers(t *testing.T) {
 	ctx := context.Background()
 	var doc map[string]any
 	json.Unmarshal(fixtureFile(t, "examples/ProductInput.extension.json"), &doc)
-	doc["brand_external_id"] = "kestrel"
+	doc["brand_external_id"] = "maison-noor"
 	doc["unknown_member"] = "x"
 	fiber := doc["materials"].([]any)[0].(map[string]any)["fibers"].([]any)[0].(map[string]any)
 	fiber["unknown_nested"] = true
 	big := strings.Repeat("a", 9000)
-	doc["x-kestrel-big"] = big
+	doc["x-noor-big"] = big
 	res, err := f.ing.Put(ctx, obx.KindProduct, "KX-EXT", doc, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -274,14 +274,14 @@ func TestExtensionsAndUnknownMembers(t *testing.T) {
 	if res.Result != obx.ResultCreated || !strings.Contains(ws, "/unknown_member") || !strings.Contains(ws, "/materials/0/fibers/0/unknown_nested") {
 		t.Fatalf("%+v", res)
 	}
-	vres, err := f.ing.Put(ctx, obx.KindVariant, "KX-EXT-NVY-M", map[string]any{"product_external_id": "KX-EXT", "x-kestrel-bin": "A-12",
-		"color": map[string]any{"code": "NVY", "x-kestrel-pantone": "19-4023", "bogus": 1}, "size": "M"}, nil)
+	vres, err := f.ing.Put(ctx, obx.KindVariant, "KX-EXT-NVY-M", map[string]any{"product_external_id": "KX-EXT", "x-noor-bin": "A-12",
+		"color": map[string]any{"code": "NVY", "x-noor-pantone": "19-4023", "bogus": 1}, "size": "M"}, nil)
 	if err != nil || len(vres.Warnings) != 1 || !strings.Contains(vres.Warnings[0], "/color/bogus") {
 		t.Fatalf("variant: %v %+v", err, vres)
 	}
 	rec, _ := f.ing.Get(ctx, obx.KindProduct, "KX-EXT")
 	data := string(rec.Data)
-	for _, want := range []string{`"x-kestrel-fabric-weight-gsm":180`, `"x-kestrel-mill":"Mill 7"`, `"x-kestrel-care-note":{"en":"Wrinkles are part of the look"}`} {
+	for _, want := range []string{`"x-noor-fabric-weight-gsm":180`, `"x-noor-mill":"Mill 7"`, `"x-noor-care-note":{"en":"Wrinkles are part of the look"}`} {
 		if !strings.Contains(data, want) {
 			t.Errorf("Ingest GET lacks %s: %s", want, data)
 		}
@@ -297,9 +297,9 @@ func TestExtensionsAndUnknownMembers(t *testing.T) {
 		}
 		return nil
 	})
-	if detail == nil || string(detail.X["x-kestrel-fabric-weight-gsm"]) != "180" || len(detail.Variants) != 1 ||
-		string(detail.Variants[0].X["x-kestrel-bin"]) != `"A-12"` || string(detail.Variants[0].Color.X["x-kestrel-pantone"]) != `"19-4023"` ||
-		string(detail.Materials[0].Fibers[0].Material.X["x-kestrel-mill"]) != `"Mill 7"` || len(detail.X["x-kestrel-big"]) < 9000 {
+	if detail == nil || string(detail.X["x-noor-fabric-weight-gsm"]) != "180" || len(detail.Variants) != 1 ||
+		string(detail.Variants[0].X["x-noor-bin"]) != `"A-12"` || string(detail.Variants[0].Color.X["x-noor-pantone"]) != `"19-4023"` ||
+		string(detail.Materials[0].Fibers[0].Material.X["x-noor-mill"]) != `"Mill 7"` || len(detail.X["x-noor-big"]) < 9000 {
 		t.Fatalf("protocol product: %+v", detail)
 	}
 	var feed []byte
@@ -319,48 +319,48 @@ func TestExtensionsAndUnknownMembers(t *testing.T) {
 			break
 		}
 	}
-	if !strings.Contains(string(feed), `"x-kestrel-mill":"Mill 7"`) {
+	if !strings.Contains(string(feed), `"x-noor-mill":"Mill 7"`) {
 		t.Fatalf("/changes data: %s", feed)
 	}
 	// Repeat = unchanged; change = updated; PATCH null removes.
 	if r, err := f.ing.Put(ctx, obx.KindProduct, "KX-EXT", doc, nil); err != nil || r.Result != obx.ResultUnchanged {
 		t.Fatalf("repeat: %v %+v", err, r)
 	}
-	doc["x-kestrel-fabric-weight-gsm"] = 200
+	doc["x-noor-fabric-weight-gsm"] = 200
 	if r, err := f.ing.Put(ctx, obx.KindProduct, "KX-EXT", doc, nil); err != nil || r.Result != obx.ResultUpdated {
 		t.Fatalf("change: %v %+v", err, r)
 	}
-	if r, err := f.ing.Patch(ctx, obx.KindProduct, "KX-EXT", json.RawMessage(`{"x-kestrel-big":null}`), nil); err != nil || r.Result != obx.ResultUpdated {
+	if r, err := f.ing.Patch(ctx, obx.KindProduct, "KX-EXT", json.RawMessage(`{"x-noor-big":null}`), nil); err != nil || r.Result != obx.ResultUpdated {
 		t.Fatalf("patch null: %v %+v", err, r)
 	}
 	rec, _ = f.ing.Get(ctx, obx.KindProduct, "KX-EXT")
-	if strings.Contains(string(rec.Data), "x-kestrel-big") || !strings.Contains(string(rec.Data), `"x-kestrel-fabric-weight-gsm":200`) {
+	if strings.Contains(string(rec.Data), "x-noor-big") || !strings.Contains(string(rec.Data), `"x-noor-fabric-weight-gsm":200`) {
 		t.Fatalf("after patch: %s", rec.Data)
 	}
 	// An asset keeps its extension; an import keeps the extensions of the
 	// objects it writes (rule 9).
-	if _, err := f.ing.Patch(ctx, obx.KindAsset, "KO-1001_NVY_1", map[string]any{"x-kestrel-shoot": "SS26-03", "rights": map[string]any{"x-kestrel-contract": "C-1"}}, nil); err != nil {
+	if _, err := f.ing.Patch(ctx, obx.KindAsset, "MN-1001_NVY_1", map[string]any{"x-noor-shoot": "SS26-03", "rights": map[string]any{"x-noor-contract": "C-1"}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.ing.Patch(ctx, obx.KindVariant, "KO-1001-NVY-M", map[string]any{"x-kestrel-bin": "B-1"}, nil); err != nil {
+	if _, err := f.ing.Patch(ctx, obx.KindVariant, "MN-1001-NVY-M", map[string]any{"x-noor-bin": "B-1"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.ing.Patch(ctx, obx.KindProduct, "KO-1001", map[string]any{"x-kestrel-line": "core"}, nil); err != nil {
+	if _, err := f.ing.Patch(ctx, obx.KindProduct, "MN-1001", map[string]any{"x-noor-line": "core"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	f.importCSV(t, fixtureFile(t, "imports/6-restore.csv"), false)
-	for kind, ext := range map[string]string{obx.KindAsset: "KO-1001_NVY_1", obx.KindVariant: "KO-1001-NVY-M", obx.KindProduct: "KO-1001"} {
+	for kind, ext := range map[string]string{obx.KindAsset: "MN-1001_NVY_1", obx.KindVariant: "MN-1001-NVY-M", obx.KindProduct: "MN-1001"} {
 		rec, _ := f.ing.Get(ctx, kind, ext)
-		if !strings.Contains(string(rec.Data), `"x-kestrel-`) {
+		if !strings.Contains(string(rec.Data), `"x-noor-`) {
 			t.Errorf("%s %s lost its extension in the import: %s", kind, ext, rec.Data)
 		}
 	}
-	rec, _ = f.ing.Get(ctx, obx.KindAsset, "KO-1001_NVY_1")
-	if !strings.Contains(string(rec.Data), `"x-kestrel-contract":"C-1"`) || !strings.Contains(string(rec.Data), `"x-kestrel-shoot":"SS26-03"`) {
+	rec, _ = f.ing.Get(ctx, obx.KindAsset, "MN-1001_NVY_1")
+	if !strings.Contains(string(rec.Data), `"x-noor-contract":"C-1"`) || !strings.Contains(string(rec.Data), `"x-noor-shoot":"SS26-03"`) {
 		t.Errorf("asset: %s", rec.Data)
 	}
 	a, err := f.c.Asset(ctx, rec.ID)
-	if err != nil || string(a.X["x-kestrel-shoot"]) != `"SS26-03"` || string(a.Rights.X["x-kestrel-contract"]) != `"C-1"` {
+	if err != nil || string(a.X["x-noor-shoot"]) != `"SS26-03"` || string(a.Rights.X["x-noor-contract"]) != `"C-1"` {
 		t.Errorf("protocol asset: %v %+v", err, a)
 	}
 }
@@ -382,7 +382,7 @@ func TestDraftQualifier(t *testing.T) {
 				map[string]any{"material": map[string]any{"code": "elastane"}, "percentage": 5},
 			}
 		}
-		return map[string]any{"brand_external_id": "kestrel", "style_number": "KX-Q", "name": map[string]string{"en": "Q"}, "item_type": "t_shirt",
+		return map[string]any{"brand_external_id": "maison-noor", "style_number": "KX-Q", "name": map[string]string{"en": "Q"}, "item_type": "t_shirt",
 			"contains_animal_origin": false, "materials": []any{map[string]any{"part": map[string]any{"code": "main"}, "fibers": fibers}}}
 	}
 	res, err := f.ing.Put(ctx, obx.KindProduct, "KX-Q", body(true), nil)
@@ -458,7 +458,7 @@ func TestSignedURLErrors(t *testing.T) {
 	ck := &clock{t: time.Now()}
 	f := newFixtureNode(t, mock.Options{Clock: ck.now})
 	ctx := context.Background()
-	rec, _ := f.ing.Get(ctx, obx.KindAsset, "KO-1001_NVY_1")
+	rec, _ := f.ing.Get(ctx, obx.KindAsset, "MN-1001_NVY_1")
 	a, err := f.c.Asset(ctx, rec.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -531,7 +531,7 @@ func TestIdempotencyKey(t *testing.T) {
 	f := newFixtureNode(t, mock.Options{})
 	ctx := context.Background()
 	// batch
-	ops := []byte(`[{"op":"upsert","kind":"product","external_id":"KX-IDEM","data":{"brand_external_id":"kestrel","style_number":"KX-IDEM","name":{"en":"A"}}}]`)
+	ops := []byte(`[{"op":"upsert","kind":"product","external_id":"KX-IDEM","data":{"brand_external_id":"maison-noor","style_number":"KX-IDEM","name":{"en":"A"}}}]`)
 	h := func(key string) http.Header { return http.Header{obx.HeaderIdempotencyKey: {key}} }
 	s1, b1 := f.raw(t, http.MethodPost, obx.PathIngest+"/batch", ops, h("k1"))
 	s2, b2 := f.raw(t, http.MethodPost, obx.PathIngest+"/batch", ops, h("k1"))
@@ -548,7 +548,7 @@ func TestIdempotencyKey(t *testing.T) {
 		t.Fatalf("nothing may be written: %s", rec.Data)
 	}
 	// imports
-	csv := []byte("brand,style_number,name:en\nKestrel,KX-IMP,Import\n")
+	csv := []byte("brand,style_number,name:en\nMAISON NOOR,KX-IMP,Import\n")
 	imp := func(data []byte) (*obx.IngestJob, error) {
 		return f.ing.Import(ctx, ingest.ImportRequest{CSV: &ingest.File{Name: "products.csv", Data: data}, IdempotencyKey: "k2"})
 	}
@@ -560,7 +560,7 @@ func TestIdempotencyKey(t *testing.T) {
 	if err != nil || j2.ID != j1.ID {
 		t.Fatalf("import replay: %v %v %v", err, j1.ID, j2.ID)
 	}
-	if _, err := imp(append(csv, []byte("Kestrel,KX-IMP2,Other\n")...)); !obx.IsCode(err, obx.ErrIdempotencyKeyReused) {
+	if _, err := imp(append(csv, []byte("MAISON NOOR,KX-IMP2,Other\n")...)); !obx.IsCode(err, obx.ErrIdempotencyKeyReused) {
 		t.Fatalf("import other body: %v", err)
 	}
 	if _, err := f.ing.Get(ctx, obx.KindProduct, "KX-IMP2"); !obx.IsCode(err, obx.ErrNotFound) {
@@ -584,7 +584,7 @@ func TestIdempotencyKey(t *testing.T) {
 func TestPercentageNullAndLanguageTags(t *testing.T) {
 	f := newFixtureNode(t, mock.Options{})
 	ctx := context.Background()
-	body := map[string]any{"brand_external_id": "kestrel", "style_number": "KX-P", "name": map[string]string{"en": "Bag", "zh-Hant": "包", "es-419": "Bolso"}, "item_type": "bag",
+	body := map[string]any{"brand_external_id": "maison-noor", "style_number": "KX-P", "name": map[string]string{"en": "Bag", "zh-Hant": "包", "es-419": "Bolso"}, "item_type": "bag",
 		"contains_animal_origin": true,
 		"materials":              []any{map[string]any{"part": map[string]any{"code": "outer"}, "fibers": []any{map[string]any{"material": map[string]any{"code": "leather"}}}}}}
 	res, err := f.ing.Put(ctx, obx.KindProduct, "KX-P", body, nil)
@@ -599,7 +599,7 @@ func TestPercentageNullAndLanguageTags(t *testing.T) {
 	if !strings.Contains(string(b), `"percentage":null`) || p.Name["zh-Hant"] != "包" || p.Name["es-419"] != "Bolso" {
 		t.Fatalf("%s %v", b, p.Name)
 	}
-	csv := []byte("brand,style_number,name:en,name:ZH_hant,item_type,materials,contains_animal_origin\nKestrel,KX-L,Tee,T恤,bag,outer: leather,yes\n")
+	csv := []byte("brand,style_number,name:en,name:ZH_hant,item_type,materials,contains_animal_origin\nMAISON NOOR,KX-L,Tee,T恤,bag,outer: leather,yes\n")
 	run, probs := f.importCSV(t, csv, false)
 	if run.Counts.Created != 1 || len(errorsOnly(probs)) != 0 {
 		t.Fatalf("%+v %+v", run.Counts, probs)

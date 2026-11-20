@@ -47,11 +47,11 @@ const (
 	// OnlineAnonymous tests run without credentials.
 	OnlineAnonymous = "anonymous"
 	// OnlineAPIKey tests need one API key (OAuth2 client credentials). On a
-	// portal without the Kestrel test data their fixture parts are skipped
+	// portal without the MAISON NOOR test data their fixture parts are skipped
 	// and the result is marked partial.
 	OnlineAPIKey = "api_key"
 	// OnlineFixtures tests need one API key whose retailer sees exactly the
-	// Kestrel test data (spec fixtures/kestrel).
+	// MAISON NOOR test data (spec fixtures/maison-noor).
 	OnlineFixtures = "fixtures"
 )
 
@@ -70,7 +70,7 @@ var onlineTier = map[string]string{
 	"P-CAT-2":   OnlineAPIKey, // count only with fixtures
 	"P-CAT-3":   OnlineAPIKey, // expected answer only with fixtures
 	"P-CAT-4":   OnlineAPIKey, // without the unpublish part
-	"P-CAT-6":   OnlineAPIKey, // KO-1003/KO-1004 only with fixtures
+	"P-CAT-6":   OnlineAPIKey, // MN-1003/MN-1004 only with fixtures
 	"P-RATE-1":  OnlineAPIKey, // headers only, never provokes a 429
 	"P-CAT-1":   OnlineFixtures,
 	"P-CAT-5":   OnlineFixtures,
@@ -78,7 +78,7 @@ var onlineTier = map[string]string{
 	"P-MEDIA-2": OnlineAPIKey,   // without fixtures: the first images of the catalog, no originals
 	"P-MEDIA-3": OnlineAPIKey,   // without fixtures: the derived rules, not byte-identical originals
 	"P-AUTH-3":  OnlineFixtures, // only with a second key without originals
-	"P-FEED-4":  OnlineFixtures, // only with a key restricted to brand kestrel; no export, no live part
+	"P-FEED-4":  OnlineFixtures, // only with a key restricted to brand maison-noor; no export, no live part
 }
 
 // OnlineTier returns what a test needs in a read-only run, or "" when it is
@@ -285,10 +285,10 @@ func (r *runner) onlineGate(id string) string {
 		}
 	case OnlineFixtures:
 		if r.full == nil {
-			return "not checked online: needs a test API key (client id and secret) of a test account with the Kestrel test data"
+			return "not checked online: needs a test API key (client id and secret) of a test account with the MAISON NOOR test data"
 		}
 		if !r.fixturesPresent {
-			return "not checked online: needs a test account with the Kestrel test data (spec fixtures/kestrel)"
+			return "not checked online: needs a test account with the MAISON NOOR test data (spec fixtures/maison-noor)"
 		}
 		if id == "P-AUTH-3" && r.cfg.NoOriginalClientID == "" {
 			return "not checked online: needs a second test API key without access to originals; run obx-conformance locally"

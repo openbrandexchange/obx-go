@@ -488,7 +488,7 @@ func testAdminCatalog(t *T) {
 			t.Errorf("%s: /changes gave [%s], want [%s] (as with ingest)", step, got, want)
 		}
 	}
-	p := obx.ProductInput{BrandExternalID: obx.Ptr("kestrel"), StyleNumber: "OBX-CONF-ADMIN", Name: obx.LocalizedText{"en": "Admin Test Cap", "nl": "Testpet"}}
+	p := obx.ProductInput{BrandExternalID: obx.Ptr("maison-noor"), StyleNumber: "OBX-CONF-ADMIN", Name: obx.LocalizedText{"en": "Admin Test Cap", "nl": "Testpet"}}
 	res, err := t.r.admin.CatalogWrite(t.ctx, http.MethodPut, obx.KindProduct, "OBX-CONF-ADMIN", p)
 	t.Check(err, "PUT product")
 	if res.Result != obx.ResultCreated {
@@ -518,14 +518,14 @@ func testAdminCatalog(t *T) {
 	}
 	expect("delete of an unpublished product", "")
 	var list nodeadmin.ProductList
-	t.call(t.r.admin, http.MethodGet, "/catalog/products?q=KO-1001", nil, &list)
-	if list.Total < 1 || len(list.Items) == 0 || list.Items[0].ExternalID != "KO-1001" {
-		t.Errorf("admin product search for KO-1001: %s", short(list))
+	t.call(t.r.admin, http.MethodGet, "/catalog/products?q=MN-1001", nil, &list)
+	if list.Total < 1 || len(list.Items) == 0 || list.Items[0].ExternalID != "MN-1001" {
+		t.Errorf("admin product search for MN-1001: %s", short(list))
 	}
 	var detail nodeadmin.ProductDetail
-	t.call(t.r.admin, http.MethodGet, "/catalog/products/KO-1001", nil, &detail)
+	t.call(t.r.admin, http.MethodGet, "/catalog/products/MN-1001", nil, &detail)
 	if len(detail.Variants) != 8 || len(detail.Assets) != 4 {
-		t.Errorf("admin detail of KO-1001: %d variants, %d images", len(detail.Variants), len(detail.Assets))
+		t.Errorf("admin detail of MN-1001: %d variants, %d images", len(detail.Variants), len(detail.Assets))
 	}
 }
 
@@ -607,7 +607,7 @@ func testPortal(t *T) {
 	}
 	var filtered nodeadmin.PortalProductList
 	t.call(c, http.MethodGet, "/portal/products?item_type=jacket&q=waxed", nil, &filtered)
-	if filtered.Total != 1 || len(filtered.Items) != 1 || filtered.Items[0].StyleNumber != "KO-1002" {
+	if filtered.Total != 1 || len(filtered.Items) != 1 || filtered.Items[0].StyleNumber != "MN-1002" {
 		t.Errorf("filter item_type=jacket q=waxed: %s", short(filtered))
 	}
 	var facets nodeadmin.Facets
@@ -624,8 +624,8 @@ func testPortal(t *T) {
 		styles = append(styles, it.StyleNumber)
 	}
 	sort.Strings(styles)
-	if strings.Join(styles, ",") != "KO-1003,KO-1009" {
-		t.Errorf("filter qualifier=post_consumer&qualifier=regenerative: %v, want KO-1003 (organic, regenerative) and KO-1009 (recycled, post_consumer)", styles)
+	if strings.Join(styles, ",") != "MN-1003,MN-1009" {
+		t.Errorf("filter qualifier=post_consumer&qualifier=regenerative: %v, want MN-1003 (organic, regenerative) and MN-1009 (recycled, post_consumer)", styles)
 	}
 	if facets.Qualifiers != nil {
 		var pc *nodeadmin.FacetValue
@@ -635,15 +635,15 @@ func testPortal(t *T) {
 			}
 		}
 		if pc == nil || pc.Count != 1 {
-			t.Errorf("facet qualifiers: %s, want post_consumer with count 1 (KO-1009)", short(facets.Qualifiers))
+			t.Errorf("facet qualifiers: %s, want post_consumer with count 1 (MN-1009)", short(facets.Qualifiers))
 		}
 	} else {
 		t.Notef("the facets have no qualifiers (optional)")
 	}
 	var detail obx.ProductDetail
-	t.call(c, http.MethodGet, "/portal/products/"+t.productID("KO-1001"), nil, &detail)
-	if detail.ExternalID != "KO-1001" || len(detail.Variants) != 8 || len(detail.Assets) != 4 {
-		t.Errorf("detail of KO-1001: %d variants, %d images", len(detail.Variants), len(detail.Assets))
+	t.call(c, http.MethodGet, "/portal/products/"+t.productID("MN-1001"), nil, &detail)
+	if detail.ExternalID != "MN-1001" || len(detail.Variants) != 8 || len(detail.Assets) != 4 {
+		t.Errorf("detail of MN-1001: %d variants, %d images", len(detail.Variants), len(detail.Assets))
 	}
 	var lookup obx.GTINLookupResult
 	t.call(c, http.MethodPost, "/portal/gtin-lookup", map[string]string{"text": "2000100101025\n12345\n2000999901010"}, &lookup)
@@ -651,17 +651,17 @@ func testPortal(t *T) {
 		t.Errorf("EAN paste: %s", short(lookup.Results))
 	}
 	var sel nodeadmin.Selection
-	t.call(c, http.MethodPut, "/portal/selection", map[string]any{"product_ids": []string{t.productID("KO-1001"), t.productID("KO-1005")}}, &sel)
+	t.call(c, http.MethodPut, "/portal/selection", map[string]any{"product_ids": []string{t.productID("MN-1001"), t.productID("MN-1005")}}, &sel)
 	if len(sel.ProductIDs) != 2 || sel.ImageCount != 7 {
 		t.Errorf("selection: %s (want 2 products, 7 images)", short(sel))
 	}
-	status, h, data := t.download(c, "/portal/products/"+t.productID("KO-1005")+"/download.zip?variant=web")
+	status, h, data := t.download(c, "/portal/products/"+t.productID("MN-1005")+"/download.zip?variant=web")
 	if status != http.StatusOK || !strings.Contains(h.Get("Content-Disposition"), "attachment") {
 		t.Errorf("product zip: %d %s", status, h.Get("Content-Disposition"))
 	} else {
-		names, _ := zipImages(t, "product zip of KO-1005", data)
+		names, _ := zipImages(t, "product zip of MN-1005", data)
 		if len(names) != 3 {
-			t.Errorf("product zip of KO-1005 has %d images, want 3: %v", len(names), names)
+			t.Errorf("product zip of MN-1005 has %d images, want 3: %v", len(names), names)
 		}
 		for _, n := range names {
 			if !strings.HasSuffix(n, "_web.jpg") {
@@ -678,16 +678,16 @@ func testPortal(t *T) {
 			t.Errorf("selection zip has %d images, want 7", len(names))
 		}
 		for _, n := range names {
-			if !strings.HasPrefix(n, "KO-1001/") && !strings.HasPrefix(n, "KO-1005/") {
+			if !strings.HasPrefix(n, "MN-1001/") && !strings.HasPrefix(n, "MN-1005/") {
 				t.Errorf("selection zip entry %q is not in a folder per style number", n)
 			}
 		}
 	}
 	// The rights, the embargo and the AI provenance travel with the files.
 	for _, c2 := range []struct{ style, file, column, want string }{
-		{"KO-1002", "KO-1002_BLK_2", "embargo_until", "2030-01-01"},
-		{"KO-1002", "KO-1002_BLK_2", "credit", "Photo: Kestrel Studio"},
-		{"KO-1003", "KO-1003_RST_3", "ai_generated", "true"},
+		{"MN-1002", "MN-1002_BLK_2", "embargo_until", "2030-01-01"},
+		{"MN-1002", "MN-1002_BLK_2", "credit", "Photo: MAISON NOOR Studio"},
+		{"MN-1003", "MN-1003_RST_3", "ai_generated", "true"},
 	} {
 		status, _, data = t.download(c, "/portal/products/"+t.productID(c2.style)+"/download.zip?variant=web")
 		if status != http.StatusOK {
@@ -736,9 +736,9 @@ func testPortal(t *T) {
 			}
 		}
 	}
-	status, _, data = t.download(c, "/portal/products/data.csv?brand_id="+url.QueryEscape(t.r.brandIDs["kestrel-trail"]))
+	status, _, data = t.download(c, "/portal/products/data.csv?brand_id="+url.QueryEscape(t.r.brandIDs["noor-atelier"]))
 	if status != http.StatusOK || bytes.Count(data, []byte("\n")) != 7 {
-		t.Errorf("filtered CSV for kestrel-trail: %d, %d lines (want header + 6)", status, bytes.Count(data, []byte("\n")))
+		t.Errorf("filtered CSV for noor-atelier: %d, %d lines (want header + 6)", status, bytes.Count(data, []byte("\n")))
 	}
 	var job nodeadmin.DownloadJob
 	t.call(c, http.MethodPost, "/portal/download-jobs", nodeadmin.DownloadJobInput{Source: "selection", Variant: obx.RenditionWeb}, &job)
@@ -764,33 +764,33 @@ func testPortal(t *T) {
 
 func testPortalRestricted(t *T) {
 	t.needAdmin("the portal")
-	kestrel := t.r.brandIDs["kestrel"]
-	c, _ := t.portalUser("OBX conformance: portal kestrel only", nodeadmin.RetailerInput{BrandIDs: &[]string{kestrel}})
+	maisonNoor := t.r.brandIDs["maison-noor"]
+	c, _ := t.portalUser("OBX conformance: portal maison-noor only", nodeadmin.RetailerInput{BrandIDs: &[]string{maisonNoor}})
 	var list nodeadmin.PortalProductList
 	t.call(c, http.MethodGet, "/portal/products?limit=100", nil, &list)
-	if want := t.brandProductCount("Kestrel"); list.Total != want {
+	if want := t.brandProductCount("MAISON NOOR"); list.Total != want {
 		t.Errorf("restricted retailer sees %d products, want %d", list.Total, want)
 	}
 	for _, p := range list.Items {
-		if p.Brand.ID != kestrel {
+		if p.Brand.ID != maisonNoor {
 			t.Errorf("restricted retailer sees %s of brand %s", p.StyleNumber, p.Brand.Name)
 		}
 	}
 	var facets nodeadmin.Facets
 	t.call(c, http.MethodGet, "/portal/facets", nil, &facets)
-	if len(facets.Brands) != 1 || facets.Brands[0].Value != kestrel {
+	if len(facets.Brands) != 1 || facets.Brands[0].Value != maisonNoor {
 		t.Errorf("restricted facets: %s", short(facets.Brands))
 	}
-	if status, _, _ := t.download(c, "/portal/products/"+t.productID("KT-2001")); status != http.StatusNotFound {
-		t.Errorf("restricted retailer GET kestrel-trail product: %d, want 404", status)
+	if status, _, _ := t.download(c, "/portal/products/"+t.productID("NA-2001")); status != http.StatusNotFound {
+		t.Errorf("restricted retailer GET noor-atelier product: %d, want 404", status)
 	}
-	if status, _, _ := t.download(c, "/portal/assets/"+t.assetID("KT-2001_BLK_1")+"/download?variant=web"); status != http.StatusNotFound {
-		t.Errorf("restricted retailer download of a kestrel-trail image: %d, want 404", status)
+	if status, _, _ := t.download(c, "/portal/assets/"+t.assetID("NA-2001_BLK_1")+"/download?variant=web"); status != http.StatusNotFound {
+		t.Errorf("restricted retailer download of a noor-atelier image: %d, want 404", status)
 	}
 	var lookup obx.GTINLookupResult
 	t.call(c, http.MethodPost, "/portal/gtin-lookup", map[string]any{"gtins": []string{"2000200101017"}}, &lookup)
 	if len(lookup.Results) != 1 || lookup.Results[0].Status != obx.GTINUnmatched || len(lookup.Products) != 0 {
-		t.Errorf("restricted EAN lookup of a kestrel-trail EAN: %s", short(lookup))
+		t.Errorf("restricted EAN lookup of a noor-atelier EAN: %s", short(lookup))
 	}
 	var v nodeadmin.PortalViewer
 	t.call(c, http.MethodGet, "/portal/viewer", nil, &v)
@@ -802,15 +802,15 @@ func testPortalRestricted(t *T) {
 	if v.Permissions.OriginalDownload {
 		t.Errorf("viewer.permissions.original_download is true for a retailer without originals")
 	}
-	status, _, body := t.download(no, "/portal/assets/"+t.assetID("KO-1001_NVY_1")+"/download?variant=original")
+	status, _, body := t.download(no, "/portal/assets/"+t.assetID("MN-1001_NVY_1")+"/download?variant=original")
 	if status != http.StatusForbidden || nodeadmin.DecodeProblem(body) == nil || nodeadmin.DecodeProblem(body).ObxError != obx.ErrOriginalNotAllowed {
 		t.Errorf("original download without permission: %d %s, want 403 original_not_allowed", status, truncate(body))
 	}
-	status, _, body = t.download(no, "/portal/products/"+t.productID("KO-1001"))
+	status, _, body = t.download(no, "/portal/products/"+t.productID("MN-1001"))
 	if status != http.StatusOK || bytes.Contains(body, []byte(`"original"`)) {
 		t.Errorf("product detail for a retailer without originals contains an original (%d)", status)
 	}
-	if status, _, _ := t.download(no, "/portal/assets/"+t.assetID("KO-1001_NVY_1")+"/download"); status != http.StatusOK {
+	if status, _, _ := t.download(no, "/portal/assets/"+t.assetID("MN-1001_NVY_1")+"/download"); status != http.StatusOK {
 		t.Errorf("default download for a retailer without originals: %d, want 200 (web)", status)
 	}
 }
@@ -820,7 +820,7 @@ func testStats(t *T) {
 	c, rt := t.portalRetailer()
 	before, err := t.r.admin.Stats(t.ctx, 30)
 	t.Check(err, "stats")
-	if status, _, _ := t.download(c, "/portal/assets/"+t.assetID("KO-1005_COG_1")+"/download?variant=web"); status != http.StatusOK {
+	if status, _, _ := t.download(c, "/portal/assets/"+t.assetID("MN-1005_COG_1")+"/download?variant=web"); status != http.StatusOK {
 		t.Fatalf("retailer download: %d", status)
 	}
 	after, err := t.r.admin.Stats(t.ctx, 30)
@@ -842,7 +842,7 @@ func testStats(t *T) {
 	if len(events) == 0 || events[0].Kind != nodeadmin.DownloadImage {
 		t.Errorf("stats events for the retailer: %s", short(events))
 	}
-	if status, _, _ := t.download(t.r.admin, "/portal/assets/"+t.assetID("KO-1005_COG_1")+"/download?variant=web"); status != http.StatusOK {
+	if status, _, _ := t.download(t.r.admin, "/portal/assets/"+t.assetID("MN-1005_COG_1")+"/download?variant=web"); status != http.StatusOK {
 		t.Fatalf("admin preview download: %d", status)
 	}
 	final, err := t.r.admin.Stats(t.ctx, 30)

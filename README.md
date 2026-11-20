@@ -22,7 +22,7 @@ It works with every edition of the portal (Portal for Cloudflare, Portal for Goo
    - with Go 1.26+: `go install github.com/openbrandexchange/obx-go/cmd/obx@latest`.
 2. **Connect** this computer to your portal. Either paste an access key (in your portal: *Automatic upload → Access keys → New access key*), or press Enter and sign in with your admin e-mail and password; `obx` then creates a key for you:
    ```sh
-   obx login https://brands.kestrel.example
+   obx login https://brands.maison-noor.example
    ```
 3. **Check** a folder with `products.csv` (one row per size and colour) and images named `{style}_{colour}_{position}.jpg` without changing anything, then **publish** it:
    ```sh
@@ -41,10 +41,10 @@ export/
                       measurements (height_cm, weight_kg, …), feature:<key>, certifications, …
   assets.csv          optional: rights, AI information or alt text per image
   images/
-    KO-1001_NVY_1_front.jpg
-    KO-1001_NVY_2_back.jpg
-    KO-1001_ALL_4_detail.jpg     an image of every colour
-    KO-1003_RST_3_model.png
+    MN-1001_NVY_1_front.jpg
+    MN-1001_NVY_2_back.jpg
+    MN-1001_ALL_4_detail.jpg     an image of every colour
+    MN-1003_RST_3_model.png
 ```
 
 ## Commands
@@ -94,10 +94,10 @@ All commands read `OBX_URL` (your portal address) and `OBX_TOKEN` (the access ke
 With an API key for your software from the brand (client id and secret):
 
 ```sh
-OBX_CLIENT_ID=obxc_… OBX_CLIENT_SECRET=obxs_… obx pull https://brands.kestrel.example --out ./kestrel --renditions web
+OBX_CLIENT_ID=obxc_… OBX_CLIENT_SECRET=obxs_… obx pull https://brands.maison-noor.example --out ./maison-noor --renditions web
 ```
 
-This keeps `./kestrel` in sync: `products/`, `variants/`, `assets/` as JSON, and images under `images/<style>/<version>/`. Every file is checked against its sha256. Run it again (or with `--follow`) to pick up only what changed; things the brand took offline are removed. Without `--renditions` it downloads the web version of every image; add `original` for the full-size files when the brand allows it.
+This keeps `./maison-noor` in sync: `products/`, `variants/`, `assets/` as JSON, and images under `images/<style>/<version>/`. Every file is checked against its sha256. Run it again (or with `--follow`) to pick up only what changed; things the brand took offline are removed. Without `--renditions` it downloads the web version of every image; add `original` for the full-size files when the brand allows it.
 
 ## For developers: the Go SDK
 
@@ -114,14 +114,14 @@ go get github.com/openbrandexchange/obx-go
 | `renditions` | pure-Go web (≤ 2000 px), square and thumb (≤ 600 px) JPEG renditions, for portals without an image library |
 | `webhook` | HMAC-SHA256 signature signing and verification (`OBX-Webhook-Signature`) |
 | `nodeadmin` | client for the Node Admin + Portal API used by the shared admin UI |
-| `mock` | in-memory portal with the Kestrel Outfitters fixtures and edge-case knobs |
+| `mock` | in-memory portal with the MAISON NOOR Group fixtures and edge-case knobs |
 
 Every client has timeouts on its HTTP calls and retries 429 answers (after `Retry-After`) and, for idempotent requests, 5xx answers and network errors with backoff.
 
 Mirror a brand's catalog:
 
 ```go
-c, _ := client.New(client.Config{BaseURL: "https://brands.kestrel.example", ClientID: id, ClientSecret: secret})
+c, _ := client.New(client.Config{BaseURL: "https://brands.maison-noor.example", ClientID: id, ClientSecret: secret})
 err := c.Sync(ctx, client.FileCursorStore("cursor.txt"), client.SyncOptions{Follow: true}, func(ctx context.Context, ev client.Event) error {
 	switch ev.Kind {
 	case client.EventChange: // ev.Change.Op is upsert or delete; ev.Change.Data is the current object
@@ -134,8 +134,8 @@ err := c.Sync(ctx, client.FileCursorStore("cursor.txt"), client.SyncOptions{Foll
 Publish from a PIM connector:
 
 ```go
-ic, _ := ingest.New("https://brands.kestrel.example", os.Getenv("OBX_TOKEN"))
-res, err := ic.PutProduct(ctx, "KO-1001", obx.ProductInput{StyleNumber: "KO-1001", Name: obx.LocalizedText{"en": "Merino Crew Sweater"}}, nil)
+ic, _ := ingest.New("https://brands.maison-noor.example", os.Getenv("OBX_TOKEN"))
+res, err := ic.PutProduct(ctx, "MN-1001", obx.ProductInput{StyleNumber: "MN-1001", Name: obx.LocalizedText{"en": "Fine Merino Crew-Neck Sweater"}}, nil)
 // res.Result is created, updated or unchanged; unchanged costs nothing downstream.
 ```
 
@@ -181,7 +181,7 @@ In a portal's CI, use the [conformance action](conformance-action/action.yml) or
 
 ### Interop: do all portals answer the same?
 
-`scripts/interop.sh` runs the same automation against node-go, node-php and node-ts (sibling checkouts; needs Go, Docker and Bun): first-run setup, `obx push` of the Kestrel fixtures, `obx pull`, then `obx-interop trace`, which records the change feed, every product and the sha256 of every file and replays the spec's ingest script step by step, and finally an incremental and a fresh `obx pull`. Node ids, timestamps, cursors and signed URLs are replaced by stable labels such as `product:KO-1001` before `obx-interop compare` lists every difference. `NODES=go,ts` runs a subset.
+`scripts/interop.sh` runs the same automation against node-go, node-php and node-ts (sibling checkouts; needs Go, Docker and Bun): first-run setup, `obx push` of the MAISON NOOR fixtures, `obx pull`, then `obx-interop trace`, which records the change feed, every product and the sha256 of every file and replays the spec's ingest script step by step, and finally an incremental and a fresh `obx pull`. Node ids, timestamps, cursors and signed URLs are replaced by stable labels such as `product:MN-1001` before `obx-interop compare` lists every difference. `NODES=go,ts` runs a subset.
 
 The spec's schemas (0.3), vocabularies (`specdata.Vocabulary()`: the names of part, material, qualifier and care codes) and fixtures are embedded (`specdata/`, refreshed with `scripts/sync-spec.sh ../spec`); `--fixtures` points at another copy. Release v0.3.0 implements specification 0.3.0; v0.2.x implements 0.2.0.
 

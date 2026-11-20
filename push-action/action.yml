@@ -7,7 +7,7 @@ branding:
 
 inputs:
   url:
-    description: Address of your portal, for example https://brands.kestrel.example (store it as a secret or variable).
+    description: Address of your portal, for example https://brands.maison-noor.example (store it as a secret or variable).
     required: true
   token:
     description: Access key from your portal (Automatic upload → Access keys; starts with obxi_). Store it as a repository secret.

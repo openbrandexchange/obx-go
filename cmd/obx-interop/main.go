@@ -12,7 +12,7 @@
 //	obx-interop compare a.json b.json [c.json …]                  prints every difference
 //
 // Node-assigned ids, timestamps, cursors and signed URLs are replaced by
-// stable labels ("product:KO-1001") before anything is compared.
+// stable labels ("product:MN-1001") before anything is compared.
 package main
 
 import (

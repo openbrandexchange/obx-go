@@ -1,11 +1,11 @@
 // Command obx publishes a brand's product content to its Open Brand
 // Exchange portal and mirrors a brand's catalog for retailers.
 //
-//	obx login https://brands.kestrel.example
+//	obx login https://brands.maison-noor.example
 //	obx push --csv products.csv --images ./images
 //	obx watch ./outbox
 //	obx status
-//	obx pull https://brands.kestrel.example --out ./kestrel
+//	obx pull https://brands.maison-noor.example --out ./maison-noor
 //
 // Exit codes: 0 = everything worked, 2 = done but some rows or images had
 // problems (they are listed), 1 = failed.
@@ -81,7 +81,7 @@ func (c *command) summary(e *env) string { return e.t("cmd." + c.name + ".summar
 func commands() []*command {
 	return []*command{
 		{name: "login", args: "<portal address>", argKind: "url", define: defineLogin,
-			examples: []string{"obx login https://brands.kestrel.example", "obx login https://brands.kestrel.example --token obxi_…", "OBX_TOKEN=obxi_… obx login https://brands.kestrel.example"}},
+			examples: []string{"obx login https://brands.maison-noor.example", "obx login https://brands.maison-noor.example --token obxi_…", "OBX_TOKEN=obxi_… obx login https://brands.maison-noor.example"}},
 		{name: "logout", args: "[<portal address>]", argKind: "url", define: defineLogout,
 			examples: []string{"obx logout"}},
 		{name: "info", define: defineInfo, examples: []string{"obx info", "obx info --json"}},
@@ -91,7 +91,7 @@ func commands() []*command {
 			examples: []string{"obx watch /data/outbox", "obx watch ./outbox --once"}},
 		{name: "status", define: defineStatus, examples: []string{"obx status", "obx status --job job_…"}},
 		{name: "pull", args: "<portal address> --out <folder>", argKind: "url", define: definePull,
-			examples: []string{"OBX_CLIENT_ID=obxc_… OBX_CLIENT_SECRET=obxs_… obx pull https://brands.kestrel.example --out ./kestrel", "obx pull https://brands.kestrel.example --out ./kestrel --renditions web,original --follow"}},
+			examples: []string{"OBX_CLIENT_ID=obxc_… OBX_CLIENT_SECRET=obxs_… obx pull https://brands.maison-noor.example --out ./maison-noor", "obx pull https://brands.maison-noor.example --out ./maison-noor --renditions web,original --follow"}},
 		{name: "config", args: "[path]", define: defineConfig, examples: []string{"obx config", "obx config path"}},
 		{name: "completion", args: "<bash|zsh|fish|powershell>", argKind: "shell", define: defineCompletion,
 			examples: []string{"obx completion bash > /etc/bash_completion.d/obx", "obx completion zsh > \"${fpath[1]}/_obx\"", "obx completion fish > ~/.config/fish/completions/obx.fish", "obx completion powershell >> $PROFILE"}},
@@ -398,7 +398,7 @@ var _ = register(map[string]string{
 	"main.examples":           "Examples",
 	"main.default":            "default: {value}",
 	"main.env_title":          "Settings can also come from the environment",
-	"main.env_url":            "your portal address, for example https://brands.kestrel.example",
+	"main.env_url":            "your portal address, for example https://brands.maison-noor.example",
 	"main.env_token":          "your access key for automatic upload (starts with obxi_)",
 	"main.env_client":         "API key for your software, for \"obx pull\"",
 	"main.env_lang":           "language of obx's messages, for example nl or de (default: your computer's language)",

@@ -69,8 +69,8 @@ func (t *T) xlsxRequest(c xlsxCase, dryRun bool) *ingest.ImportRequest {
 		prep := &ingest.Preparer{Client: t.r.ing}
 		req.Manifest = []obx.ManifestImage{}
 		for _, name := range c.Send.ImagesManifest {
-			b, err := t.r.fixture(path.Join("kestrel/images", name))
-			t.Check(err, "read fixtures/kestrel/images/"+name)
+			b, err := t.r.fixture(path.Join("maison-noor/images", name))
+			t.Check(err, "read fixtures/maison-noor/images/"+name)
 			p, err := prep.Prepare(t.ctx, ingest.ImageSource{Name: name, Data: b})
 			t.Check(err, "upload "+name)
 			req.Manifest = append(req.Manifest, p.Manifest)
@@ -227,9 +227,9 @@ func testXlsxRefusals(t *T) {
 				t.Errorf("%s: a refused workbook wrote change entries: %v", c.File, changeKeys(live))
 			}
 		}
-		// The refusal fixtures hold products KX-9901 to KX-9907; none may exist.
+		// The refusal fixtures hold products MX-9901 to MX-9907; none may exist.
 		for i := 1; i <= 7; i++ {
-			ext := fmt.Sprintf("KX-990%d", i)
+			ext := fmt.Sprintf("MX-990%d", i)
 			if _, err := t.r.ing.Get(t.ctx, obx.KindProduct, ext); err == nil {
 				t.Errorf("%s: product %s was written", c.File, ext)
 				_, _ = t.r.ing.Delete(t.ctx, obx.KindProduct, ext)

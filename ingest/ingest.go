@@ -3,8 +3,8 @@
 // (docs/ingest.md). Every call is idempotent: sending the same data again
 // answers "unchanged" and costs nothing downstream.
 //
-//	c, _ := ingest.New("https://brands.kestrel.example", os.Getenv("OBX_TOKEN"))
-//	res, err := c.PutProduct(ctx, "KO-1001", obx.ProductInput{StyleNumber: "KO-1001", Name: obx.LocalizedText{"en": "Merino Crew Sweater"}}, nil)
+//	c, _ := ingest.New("https://brands.maison-noor.example", os.Getenv("OBX_TOKEN"))
+//	res, err := c.PutProduct(ctx, "MN-1001", obx.ProductInput{StyleNumber: "MN-1001", Name: obx.LocalizedText{"en": "Fine Merino Crew-Neck Sweater"}}, nil)
 package ingest
 
 import (

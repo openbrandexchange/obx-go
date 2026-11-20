@@ -24,7 +24,7 @@ type creds struct {
 }
 
 // setup completes first-run setup the same way on every node (the
-// conformance fixture setup: Kestrel Outfitters, brand "kestrel",
+// conformance fixture setup: MAISON NOOR Group, brand "maison-noor",
 // languages nl,en) and creates an upload key and an API key that sees
 // every brand, originals included.
 func setup(ctx context.Context, base, code string) (*creds, error) {
@@ -35,9 +35,9 @@ func setup(ctx context.Context, base, code string) (*creds, error) {
 	}
 	pw := make([]byte, 12)
 	rand.Read(pw)
-	c := &creds{URL: base, AdminEmail: "interop@kestrel.example", AdminPassword: "interop-" + hex.EncodeToString(pw)}
+	c := &creds{URL: base, AdminEmail: "interop@maison-noor.example", AdminPassword: "interop-" + hex.EncodeToString(pw)}
 	if _, err := admin.Setup(ctx, nodeadmin.SetupInput{SetupCode: code,
-		Company: nodeadmin.SetupCompany{Name: "Kestrel Outfitters", FirstBrandName: "Kestrel", DefaultLanguage: "nl", Languages: []string{"nl", "en"}},
+		Company: nodeadmin.SetupCompany{Name: "MAISON NOOR Group", FirstBrandName: "MAISON NOOR", DefaultLanguage: "nl", Languages: []string{"nl", "en"}},
 		Admin:   nodeadmin.SetupAdmin{Name: "Interop Admin", Email: c.AdminEmail, Password: c.AdminPassword}}); err != nil {
 		return nil, fmt.Errorf("first-run setup: %w", err)
 	}

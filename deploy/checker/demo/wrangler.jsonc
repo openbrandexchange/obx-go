@@ -1,4 +1,4 @@
-// obx-demo: the public read-only OBX demo portal (Kestrel test data).
+// obx-demo: the public read-only OBX demo portal (MAISON NOOR test data).
 // Deploy from deploy/checker:
 //   CLOUDFLARE_ACCOUNT_ID=34a316f1061b80c0053fffe17c0413c6 npx wrangler deploy -c demo/wrangler.jsonc
 {

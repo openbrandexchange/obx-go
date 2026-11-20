@@ -7,7 +7,7 @@ import (
 )
 
 func TestNormaliseReplacesIDsAndVolatileValues(t *testing.T) {
-	labels := map[string]string{"01HX": "product:KO-1001"}
+	labels := map[string]string{"01HX": "product:MN-1001"}
 	in := map[string]any{
 		"id": "01HX", "seq": 42.0, "updated_at": "2026-09-28T10:00:00Z", "embargo_until": "2030-01-01T00:00:00Z",
 		"renditions": map[string]any{
@@ -17,7 +17,7 @@ func TestNormaliseReplacesIDsAndVolatileValues(t *testing.T) {
 		"deleted_at": nil,
 	}
 	out := normalise(in, labels).(map[string]any)
-	if out["id"] != "product:KO-1001" || out["seq"] != "{{seq}}" || out["updated_at"] != "{{datetime}}" {
+	if out["id"] != "product:MN-1001" || out["seq"] != "{{seq}}" || out["updated_at"] != "{{datetime}}" {
 		t.Fatalf("ids and volatile keys: %v", out)
 	}
 	if out["embargo_until"] != "2030-01-01T00:00:00Z" {
@@ -53,21 +53,21 @@ func TestDiffReportsNullVersusMissingAndOrder(t *testing.T) {
 
 func TestMirrorUsesExternalIDs(t *testing.T) {
 	fsys := fstest.MapFS{
-		"products/01A.json":                   {Data: []byte(`{"id":"01A","external_id":"KO-1001","brand_id":"01B"}`)},
-		"brands/01B.json":                     {Data: []byte(`{"id":"01B","external_id":"kestrel"}`)},
-		"images/KO-1001/original/KO-1001.png": {Data: []byte("png")},
-		"images/KO-1001/web/KO-1001.jpg":      {Data: []byte("jpg")},
+		"products/01A.json":                   {Data: []byte(`{"id":"01A","external_id":"MN-1001","brand_id":"01B"}`)},
+		"brands/01B.json":                     {Data: []byte(`{"id":"01B","external_id":"maison-noor"}`)},
+		"images/MN-1001/original/MN-1001.png": {Data: []byte("png")},
+		"images/MN-1001/web/MN-1001.jpg":      {Data: []byte("jpg")},
 	}
 	m, err := normaliseMirror(fsys)
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := m["products"].(map[string]any)["product:KO-1001"].(map[string]any)
-	if p["brand_id"] != "brand:kestrel" {
+	p := m["products"].(map[string]any)["product:MN-1001"].(map[string]any)
+	if p["brand_id"] != "brand:maison-noor" {
 		t.Errorf("ids must become labels: %v", p)
 	}
 	imgs := m["images"].(map[string]any)
-	if imgs["images/KO-1001/web/KO-1001.jpg"] != "{{derived}}" || imgs["images/KO-1001/original/KO-1001.png"] == "{{derived}}" {
+	if imgs["images/MN-1001/web/MN-1001.jpg"] != "{{derived}}" || imgs["images/MN-1001/original/MN-1001.png"] == "{{derived}}" {
 		t.Errorf("images: %v", imgs)
 	}
 }

@@ -25,7 +25,7 @@ var files embed.FS
 
 // FS returns the embedded tree: schemas/*.json (0.3), vocabularies/*.json
 // (parts, materials, qualifiers and care codes with their names) and
-// fixtures/{kestrel,expected,ingest,examples,imports}.
+// fixtures/{maison-noor,expected,ingest,examples,imports}.
 func FS() fs.FS { return files }
 
 var (

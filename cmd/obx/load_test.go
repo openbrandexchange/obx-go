@@ -41,7 +41,7 @@ func TestLoad(t *testing.T) {
 				t.Fatal(err)
 			}
 			n++
-			fmt.Fprintf(&b, "Kestrel,LT-%05d,Load test %d,Laadtest %d,sweater,%s,Colour,%s,%s%c\n", p, p, p, colors[v/3], sizes[v%3], body, d)
+			fmt.Fprintf(&b, "MAISON NOOR,LT-%05d,Load test %d,Laadtest %d,sweater,%s,Colour,%s,%s%c\n", p, p, p, colors[v/3], sizes[v%3], body, d)
 		}
 	}
 	if err := os.WriteFile(filepath.Join(dir, "products.csv"), b.Bytes(), 0o644); err != nil {
@@ -69,7 +69,7 @@ func TestLoad(t *testing.T) {
 	// A retailer mirrors it.
 	ctx := context.Background()
 	adm, _ := nodeadmin.New(h.srv.URL, nil)
-	if _, err := adm.Login(ctx, "admin@kestrel.example", "admin-password-1"); err != nil {
+	if _, err := adm.Login(ctx, "admin@maison-noor.example", "admin-password-1"); err != nil {
 		t.Fatal(err)
 	}
 	rt, err := adm.CreateRetailer(ctx, nodeadmin.RetailerInput{Name: "Load test retailer"})

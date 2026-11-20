@@ -10,7 +10,7 @@ go build -o obx-conformance ./cmd/obx-conformance        # or download it from a
 obx-conformance all --url http://localhost:8080 --setup-code <code>
 ```
 
-`all` on a fresh portal is the reference run: it completes the first-run setup, imports the Kestrel
+`all` on a fresh portal is the reference run: it completes the first-run setup, imports the MAISON NOOR
 fixtures and runs every profile. Against a portal that is already set up, pass `--admin-user` and
 `--admin-password`, or only API keys (`--client id:secret`, `--second-client id:secret`,
 `--no-original-client id:secret`) and an access key (`--token obxi_…`) for the protocol and ingest
@@ -48,8 +48,8 @@ The standard is what retailers' software reads: the **protocol** profile. How a 
 and how a brand manages its retailers is up to the portal, so it needs neither the Ingest API nor the
 Node Admin API to be conformant. Such a portal:
 
-1. loads `fixtures/kestrel` from the spec (company "Kestrel Outfitters", brands `kestrel` and
-   `kestrel-trail`) with its own import, into a test account;
+1. loads `fixtures/maison-noor` from the spec (company "MAISON NOOR Group", brands `maison-noor` and
+   `noor-atelier`) with its own import, into a test account;
 2. runs the protocol profile with an **operator** that does the brand-side steps the tests need
    while they run.
 
@@ -61,7 +61,7 @@ obx-conformance protocol --url https://portal.example --operator-prompt     # do
 The hook is run once per step with the action name as its argument and the step as JSON on stdin
 (`{"action": …, "params": {…}, "result": […], "hint": "…"}`). It prints a JSON object with the
 `result` keys on stdout, or nothing, and exits 0; any other exit code fails the test. Brands are
-external ids (`kestrel`, `kestrel-trail`) or `all`; products are fixture external ids.
+external ids (`maison-noor`, `noor-atelier`) or `all`; products are fixture external ids.
 
 | Action | Params | Result |
 |---|---|---|
@@ -78,7 +78,7 @@ external ids (`kestrel`, `kestrel-trail`) or `all`; products are fixture externa
 print `{"client_secret": "obxs_…"}`. Access tokens issued with the old secret must then answer
 `401 invalid_token`, not `access_revoked`. An operator that does not offer it (no result, Enter at
 the prompt, or `conformance.ErrActionNotSupported`) makes P-AUTH-2 skip after its revocation part,
-so the run is INCOMPLETE. `unpublish_product` and `publish_product` of KO-1006 are also how P-CAT-4
+so the run is INCOMPLETE. `unpublish_product` and `publish_product` of MN-1006 are also how P-CAT-4
 checks the feed's delete cascade and the upserts after publishing again.
 
 `simulate_spec_upgrade` is for P-FEED-7 (spec protocol.md §6.4): do to the portal what an upgrade
@@ -109,19 +109,19 @@ for specification 0.2 (article data for fashion, shoes, bags and luggage) and ch
 |---|---|---|
 | P-AUTH-2 | protocol | no token → `401 unauthorized`, unknown token → `401 invalid_token`; a revoked API key's token → `401 access_revoked` and its secret `invalid_client`; after a **secret rotation** (admin API or operator `rotate_client_secret`) the token issued with the old secret → `401 invalid_token` (never `access_revoked`) and the new secret gets a working token. Skipped (INCOMPLETE) when neither the admin API nor the operator can rotate |
 | P-CAT-2 | protocol | keyset pagination complete and stable, `ids=`; **limits clamp**: `GET /products?limit=100000` and `GET /changes?limit=100000` answer 200 with at most `limits.products_page_max` / `limits.changes_page_max` entries; `limit=0` and `limit=abc` answer `400 invalid_request` on both |
-| P-CAT-4 | protocol | invisible objects → 404, never 403; then KO-1006 is unpublished (upload key or operator `unpublish_product`): 404 for it and its image, and `/changes` from a live cursor has exactly one `delete` for the product, then its variants (by `external_id`), then its images (by `color_code`, `null` first, then `position`), none with `data`, `seq` strictly increasing, nothing else for KO-1006; after `publish_product` the same objects as `upsert` in the same order, each `data` valid against its schema and equal to what `GET` returns (rendition URLs left out, they are signed per answer). Skipped (INCOMPLETE) without an upload key, admin credentials or operator |
+| P-CAT-4 | protocol | invisible objects → 404, never 403; then MN-1006 is unpublished (upload key or operator `unpublish_product`): 404 for it and its image, and `/changes` from a live cursor has exactly one `delete` for the product, then its variants (by `external_id`), then its images (by `color_code`, `null` first, then `position`), none with `data`, `seq` strictly increasing, nothing else for MN-1006; after `publish_product` the same objects as `upsert` in the same order, each `data` valid against its schema and equal to what `GET` returns (rendition URLs left out, they are signed per answer). Skipped (INCOMPLETE) without an upload key, admin credentials or operator |
 | P-MEDIA-2 | protocol | as before, and: a signed URL with a changed signature, or with its expiry moved into the past, answers `403 forbidden`; the URL with neither signature nor token `401 unauthorized` (signature and expiry are found as query parameters whose names contain `sig` and `exp`; a node that signs otherwise gets a note) |
 | P-EXP-1 | protocol (if `exports`) | as before, and `POST /exports` again with the same `Idempotency-Key` and body returns the same export id right away (while it may still run), the same key with another body → `409 idempotency_key_reused` |
 | P-FEED-7 | protocol | cursors from before a spec upgrade expire (protocol.md §6.4): a live cursor of a new API key works, the operator runs `simulate_spec_upgrade`, then `/changes` with the old cursor answers `410 cursor_expired` (problem+json), and `/changes` without a cursor gives a snapshot and a new cursor that works. Skipped when the operator does not offer the action, without an operator, and in the online check |
-| P-CAT-1 | protocol | KO-1001 and KO-1005 match the expected fixtures, now including the article data (materials and care with their names, `contains_animal_origin`, `features`, certifications, colour families, `item_subtype`, `strap_length_cm`) |
-| P-CAT-5 | protocol | the article data round trip: KO-1008 (suitcase), KO-1009 (laptop bag), KO-1010 (Chelsea boot) and KT-2001 (imported with the 0.1 fibre key `recycled_polyester`) match the expected fixtures, with the vocabulary's names for parts, materials, qualifiers and care codes; KO-1009's outer fibre has the qualifiers `recycled` and `post_consumer`, in that order |
-| P-CAT-6 | protocol | over the whole snapshot: every product and variant has the article data properties (`null` when not stated) and validates against the 0.3 schemas; no material code starting with `recycled_` or `organic_`, no 0.2 fibre properties and no single `qualifier`: every fibre has `percentage` (a number in (0, 100] or `null`) and the list `qualifiers` (`[]` when none) without a repeated code; KO-1005's part `outer` has the fibre `leather` with `percentage` `null`; every part, material and qualifier whose code is in the spec's `vocabularies/` has a name, the part `main` has the name `null`, every care code of `vocabularies/care.json` has exactly its `category` and `symbol` and a name, no name has an empty string; no empty `measurements` or `features`, `footwear_materials` with all three parts; KO-1004 and KO-1003 as listed in the spec, KO-1003's fibre with the qualifiers `organic` and `regenerative`, in that order |
+| P-CAT-1 | protocol | MN-1001 and MN-1005 match the expected fixtures, now including the article data (materials and care with their names, `contains_animal_origin`, `features`, certifications, colour families, `item_subtype`, `strap_length_cm`) |
+| P-CAT-5 | protocol | the article data round trip: MN-1008 (suitcase), MN-1009 (laptop bag), MN-1010 (Chelsea boot) and NA-2001 (imported with the 0.1 fibre key `recycled_polyester`) match the expected fixtures, with the vocabulary's names for parts, materials, qualifiers and care codes; MN-1009's outer fibre has the qualifiers `recycled` and `post_consumer`, in that order |
+| P-CAT-6 | protocol | over the whole snapshot: every product and variant has the article data properties (`null` when not stated) and validates against the 0.3 schemas; no material code starting with `recycled_` or `organic_`, no 0.2 fibre properties and no single `qualifier`: every fibre has `percentage` (a number in (0, 100] or `null`) and the list `qualifiers` (`[]` when none) without a repeated code; MN-1005's part `outer` has the fibre `leather` with `percentage` `null`; every part, material and qualifier whose code is in the spec's `vocabularies/` has a name, the part `main` has the name `null`, every care code of `vocabularies/care.json` has exactly its `category` and `symbol` and a name, no name has an empty string; no empty `measurements` or `features`, `footwear_materials` with all three parts; MN-1004 and MN-1003 as listed in the spec, MN-1003's fibre with the qualifiers `organic` and `regenerative`, in that order |
 | I-IDEM-1 | ingest | a repeated upsert is `unchanged` with no change entry; `POST /batch` and `POST /imports` with the same `Idempotency-Key` and body return the same answer or job; the same key with another body → `409 idempotency_key_reused`, and the product that body would create does not exist |
-| I-EXT-1 | ingest | extensions and unknown members (ingest.md §3.1): `PUT` of `fixtures/examples/ProductInput.extension.json` (as KO-1007 of brand `kestrel`) plus `unknown_member` and, in the first fibre, `unknown_nested` → `201`, never `422`, the warnings name both; the Ingest `GET`, `GET /products/{id}` and the `/changes` entry carry `x-kestrel-fabric-weight-gsm`, `x-kestrel-care-note` and the material's `x-kestrel-mill` and none of the unknown members; the same `PUT` → `unchanged`; `PATCH {"x-kestrel-fabric-weight-gsm": null}` → `updated`, one upsert, the member gone, the others kept. The same for a variant (`x-kestrel-bin`, `color.x-kestrel-pantone`) and an image (`x-kestrel-shoot`); the suite deletes them afterwards |
+| I-EXT-1 | ingest | extensions and unknown members (ingest.md §3.1): `PUT` of `fixtures/examples/ProductInput.extension.json` (as MN-1007 of brand `maison-noor`) plus `unknown_member` and, in the first fibre, `unknown_nested` → `201`, never `422`, the warnings name both; the Ingest `GET`, `GET /products/{id}` and the `/changes` entry carry `x-noor-fabric-weight-gsm`, `x-noor-care-note` and the material's `x-noor-mill` and none of the unknown members; the same `PUT` → `unchanged`; `PATCH {"x-noor-fabric-weight-gsm": null}` → `updated`, one upsert, the member gone, the others kept. The same for a variant (`x-noor-bin`, `color.x-noor-pantone`) and an image (`x-noor-shoot`); the suite deletes them afterwards |
 | I-MAT-1 | ingest | the draft single `qualifier`: `PUT` with fibres `qualifier: recycled`, `qualifier: organic` + `qualifiers: [regenerative]` and `qualifier: null` → `201`, never `422`, exactly one `warning_details` entry `qualifier_deprecated` (pointer `/materials/0/fibers/0/qualifier`) and a text in `warnings`; the Ingest `GET`, the protocol and `/changes` give the codes `[recycled]`, `[regenerative]`, `[]` and no `qualifier` member anywhere; the same product written with `qualifiers` only → `unchanged` |
-| I-IMP-7 | ingest | `fixtures/imports/1-feature-update.csv` to `6-restore.csv`, imported in order on a portal that holds exactly the Kestrel import (the suite restores it first): counts, error rows, change entries and fields as in `fixtures/imports/expected.json` (import rule 9 per feature key and measurement column); an error with `detail_prefix` (the decimal comma of `5-invalid.csv` row 5) must have a detail that starts with it |
-| I-IMP-8 | ingest | `fixtures/imports/label-warnings.csv` as a dry run: no errors, nothing written (KL-8001 to KL-8009), and exactly the warnings of `label-warnings.expected.json` whose code is in its `codes` list (the label completeness codes and `material_unknown`, with `value` when given); the Kestrel import has none |
-| I-IMP-12 | ingest | variant identity (import-format.md §1.2.1): the files of `fixtures/imports/variant-identity.expected.json` in order: counts, error rows, change entries and the variants of KL-8101 as listed, each variant keeping its protocol id from file to file; and every Kestrel variant has the external id `<style>-<color>-<size>[-<size_length>]`. The suite deletes KL-8101 afterwards |
+| I-IMP-7 | ingest | `fixtures/imports/1-feature-update.csv` to `6-restore.csv`, imported in order on a portal that holds exactly the MAISON NOOR import (the suite restores it first): counts, error rows, change entries and fields as in `fixtures/imports/expected.json` (import rule 9 per feature key and measurement column); an error with `detail_prefix` (the decimal comma of `5-invalid.csv` row 5) must have a detail that starts with it |
+| I-IMP-8 | ingest | `fixtures/imports/label-warnings.csv` as a dry run: no errors, nothing written (ML-8001 to ML-8009), and exactly the warnings of `label-warnings.expected.json` whose code is in its `codes` list (the label completeness codes and `material_unknown`, with `value` when given); the MAISON NOOR import has none |
+| I-IMP-12 | ingest | variant identity (import-format.md §1.2.1): the files of `fixtures/imports/variant-identity.expected.json` in order: counts, error rows, change entries and the variants of ML-8101 as listed, each variant keeping its protocol id from file to file; and every MAISON NOOR variant has the external id `<style>-<color>-<size>[-<size_length>]`. The suite deletes ML-8101 afterwards |
 | A-KEY-1 | portal | as before, and after a **rotation**: an access token of the old secret → `401 invalid_token`, the old secret → `invalid_client`, a token of the new secret works with a cursor from before; after a **revoke** `/grant`, `/changes` and `/products` answer `401 access_revoked` |
 | S-URL-1 | security | a signed URL moved to another asset or rendition, extended or re-signed answers `403 forbidden`; stripped of its query (neither signature nor token) `401 unauthorized` (as P-MEDIA-2); unpublished: `403 forbidden` or `404 not_found` |
 | I-IMP-11 | ingest | several qualifiers in the import (import-format.md §1.4). A products.csv with `outer: 70% recycled_polyester (post_consumer) (recycled), 30% cotton (organic) (regenerative) (organic); lining: 100% cotton` gives the qualifiers `[recycled, post_consumer]` and `[organic, regenerative]` through the Ingest API and the protocol (0.1 key first, order kept, repeats once); a second row with `100% cotton (organic, recycled)` is one `validation_failed` error at row 2, column `materials`, and is not written |
@@ -135,7 +135,7 @@ both are skipped when the portal answers a workbook with `unsupported_media_type
 | I-IMP-9 | ingest | each converting workbook of `fixtures/imports/xlsx/expected.json` sent as `products.xlsx` (or `assets.xlsx`, with the images its `send.images_manifest` names) as a dry run: the run succeeds, the error rows are exactly `import_errors` (Excel row numbers, `column`, `value`, a `detail` starting with `detail_prefix`), the conversion `warnings` are there, and nothing is written; `products-template.xlsx` and `assets-template.xlsx` imported for real are all unchanged with no change entries |
 | I-IMP-10 | ingest | each workbook of `expected.json` with an `error` (macros, an external link, a zip bomb, too many rows, a renamed CSV, an encrypted file, a `DOCTYPE`, a macro part next to a broken `[Content_Types].xml`, a number out of Excel's range, no products sheet) sent as `products.xlsx`: the run fails with that `workbook_*` code in `ImportRun.error`, its results hold exactly one ImportRowError with `row` and `column` null and that code, and nothing is written. A portal that refuses the upload at once with a problem of that code passes too |
 
-I-IMP-3 now refers to the nine Kestrel products. A portal written for 0.1 or 0.2 fails P-CAT-1, P-CAT-5
+I-IMP-3 now refers to the nine MAISON NOOR products. A portal written for 0.1 or 0.2 fails P-CAT-1, P-CAT-5
 and P-CAT-6 until it returns materials and care as 0.3 terms; P-DISC-1 only notes an `obx_version`
 other than `0.3`.
 
@@ -181,7 +181,7 @@ JSON line per finished test (`{"type":"result",…}`) and then `{"type":"report"
 
 `obx-conformance list` shows per test what the online check needs: `anonymous`, `api_key` (one API
 key; fixture parts are skipped on other data) or `fixtures` (an API key of a test account with the
-Kestrel test data); `-` means not checked online. Without the Kestrel data, P-MEDIA-2 and P-MEDIA-3
+MAISON NOOR test data); `-` means not checked online. Without the MAISON NOOR data, P-MEDIA-2 and P-MEDIA-3
 check the first images of the catalog (web, square and thumb; originals are not downloaded).
 
 `obx-conformance check-server [--addr :8080]` serves the same check over HTTP for the website's
@@ -193,7 +193,7 @@ before the check starts, runs at most `--max-concurrent` checks (default 2) and 
 
 ### The public demo portal
 
-`obx-conformance mock --read-only --client id:secret` serves the mock with the Kestrel data as a
+`obx-conformance mock --read-only --client id:secret` serves the mock with the MAISON NOOR data as a
 public demo: only the protocol's reads are answered (GET, the token request and the GTIN lookup);
 access requests, exports, usage events and webhooks answer 403, the ingest API, the admin API and the
 portal 404. The data lives in memory, so a restart resets it. Its API key is published on purpose: it
@@ -220,7 +220,7 @@ Markdown report in the job summary and fails the job when a required check fails
 
 ## The mock portal
 
-`obx-conformance mock` runs an in-memory portal with the Kestrel fixtures and prints test accounts
+`obx-conformance mock` runs an in-memory portal with the MAISON NOOR fixtures and prints test accounts
 and keys; `--fresh` starts empty with a setup code. It passes every check and is the reference for
 behaviour the spec leaves open (see [NOTES.md](../NOTES.md)). By default it allows webhook and import
 targets on loopback and private addresses (for local receivers); link-local and cloud-metadata

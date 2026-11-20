@@ -38,17 +38,17 @@ func (t *T) matchProducts(exts ...string) {
 }
 
 // testArticleRoundTrip is P-CAT-5: the article data of the suitcase, the
-// laptop bag, the Chelsea boot and KT-2001 (0.1 fibre key) round-trips,
+// laptop bag, the Chelsea boot and NA-2001 (0.1 fibre key) round-trips,
 // with the vocabulary's names for parts, materials, qualifiers and care.
 func testArticleRoundTrip(t *T) {
-	t.matchProducts("KO-1008", "KO-1009", "KO-1010", "KT-2001")
+	t.matchProducts("MN-1008", "MN-1009", "MN-1010", "NA-2001")
 	// Several qualifiers per fibre, in the brand's order (protocol.md
 	// 5.9.1): the fixture has "(recycled) (post_consumer)".
-	res := t.get(t.r.full, "/products/"+t.productID("KO-1009"))
+	res := t.get(t.r.full, "/products/"+t.productID("MN-1009"))
 	var p map[string]any
 	if res.status == http.StatusOK && json.Unmarshal(res.body, &p) == nil {
 		if got, want := materialCodes(p["materials"]), "outer: 100% polyester (recycled) (post_consumer); lining: 100% polyamide"; got != want {
-			t.Errorf("KO-1009/materials: %s, want %s (two qualifiers, in this order)", got, want)
+			t.Errorf("MN-1009/materials: %s, want %s (two qualifiers, in this order)", got, want)
 		}
 	}
 }
@@ -122,50 +122,50 @@ func testArticleShape(t *T) {
 	}
 
 	if t.r.online() && !t.r.fixturesPresent {
-		t.partialf("KO-1003 and KO-1004 (needs the Kestrel test data); the shape of every object was checked")
+		t.partialf("MN-1003 and MN-1004 (needs the MAISON NOOR test data); the shape of every object was checked")
 		return
 	}
-	// KO-1004: three sizes with a second size and the inseam.
-	var ko1004 []map[string]any
+	// MN-1004: three sizes with a second size and the inseam.
+	var mn1004 []map[string]any
 	for pid, ext := range productExt {
-		if ext == "KO-1004" {
-			ko1004 = variants[pid]
+		if ext == "MN-1004" {
+			mn1004 = variants[pid]
 		}
 	}
 	sizes := map[string]bool{}
-	for _, d := range ko1004 {
+	for _, d := range mn1004 {
 		sizes[fmt.Sprint(d["size"])] = true
 		if d["size_length"] != "32" {
-			t.Errorf("KO-1004 variant %v: size_length %s, want \"32\"", d["external_id"], short(d["size_length"]))
+			t.Errorf("MN-1004 variant %v: size_length %s, want \"32\"", d["external_id"], short(d["size_length"]))
 		}
-		for _, p := range matchExpected(d["measurements"], map[string]any{"inseam_cm": 81.0}, fmt.Sprintf("KO-1004 variant %v /measurements", d["external_id"]), nil) {
+		for _, p := range matchExpected(d["measurements"], map[string]any{"inseam_cm": 81.0}, fmt.Sprintf("MN-1004 variant %v /measurements", d["external_id"]), nil) {
 			t.Errorf("%s", p)
 		}
 	}
-	if len(ko1004) != 3 || !sizes["30"] || !sizes["32"] || !sizes["34"] {
-		t.Errorf("KO-1004 has variants with sizes %v, want 30, 32 and 34", sizes)
+	if len(mn1004) != 3 || !sizes["30"] || !sizes["32"] || !sizes["34"] {
+		t.Errorf("MN-1004 has variants with sizes %v, want 30, 32 and 34", sizes)
 	}
 
-	// KO-1003: organic cotton and two certifications in order.
-	ko1003 := products["KO-1003"]
-	if ko1003 == nil {
-		t.Errorf("KO-1003 is not in the snapshot")
+	// MN-1003: organic cotton and two certifications in order.
+	mn1003 := products["MN-1003"]
+	if mn1003 == nil {
+		t.Errorf("MN-1003 is not in the snapshot")
 		return
 	}
-	if got := materialCodes(ko1003["materials"]); got != "main: 100% cotton (organic) (regenerative)" {
-		t.Errorf("KO-1003/materials: %s, want a main fibre with material code cotton, percentage 100 and the qualifier codes organic and regenerative, in that order", got)
+	if got := materialCodes(mn1003["materials"]); got != "main: 100% cotton (organic) (regenerative)" {
+		t.Errorf("MN-1003/materials: %s, want a main fibre with material code cotton, percentage 100 and the qualifier codes organic and regenerative, in that order", got)
 	}
-	// KO-1005: "outer: leather" is a fibre without a percentage (null).
-	if ko1005 := products["KO-1005"]; ko1005 == nil {
-		t.Errorf("KO-1005 is not in the snapshot")
-	} else if !hasFibre(ko1005["materials"], "outer", "leather", true) {
-		t.Errorf("KO-1005/materials: %s, want the part outer with the fibre leather and percentage null", materialCodes(ko1005["materials"]))
+	// MN-1005: "outer: leather" is a fibre without a percentage (null).
+	if mn1005 := products["MN-1005"]; mn1005 == nil {
+		t.Errorf("MN-1005 is not in the snapshot")
+	} else if !hasFibre(mn1005["materials"], "outer", "leather", true) {
+		t.Errorf("MN-1005/materials: %s, want the part outer with the fibre leather and percentage null", materialCodes(mn1005["materials"]))
 	}
 	wantCerts := []any{
 		map[string]any{"scheme": "gots", "licence_number": "CU 200301", "scope": "product"},
-		map[string]any{"scheme": "oeko_tex_standard_100", "licence_number": "26.KST.20003", "scope": "product"},
+		map[string]any{"scheme": "oeko_tex_standard_100", "licence_number": "26.MNR.20003", "scope": "product"},
 	}
-	for _, p := range matchExpected(ko1003["certifications"], wantCerts, "KO-1003/certifications", nil) {
+	for _, p := range matchExpected(mn1003["certifications"], wantCerts, "MN-1003/certifications", nil) {
 		t.Errorf("%s", p)
 	}
 }
@@ -412,7 +412,7 @@ func testImportArticleColumns(t *T) {
 			t.runImport(req)
 		}
 	}
-	// The node must hold exactly the import of fixtures/kestrel.
+	// The node must hold exactly the import of fixtures/maison-noor.
 	restore()
 	defer restore()
 	for _, c := range exp.Cases {
@@ -551,7 +551,7 @@ func testLabelWarnings(t *T) {
 		}
 	}
 	for i := 1; i <= 9; i++ {
-		ext := fmt.Sprintf("KL-800%d", i)
+		ext := fmt.Sprintf("ML-800%d", i)
 		if _, err := t.r.ing.Get(t.ctx, obx.KindProduct, ext); err == nil {
 			t.Errorf("the dry run wrote product %s", ext)
 			_, _ = t.r.ing.Delete(t.ctx, obx.KindProduct, ext)
@@ -563,10 +563,10 @@ func testLabelWarnings(t *T) {
 		}
 	}
 	req, err := t.r.fixtureImport(t.ctx, "files", nil)
-	t.Check(err, "build the import of fixtures/kestrel")
+	t.Check(err, "build the import of fixtures/maison-noor")
 	_, probs = t.runImport(req)
 	if coded := labelCoded(probs, exp.Codes); len(coded) > 0 {
-		t.Errorf("the import of fixtures/kestrel has label warnings: %s", short(coded))
+		t.Errorf("the import of fixtures/maison-noor has label warnings: %s", short(coded))
 	}
 }
 
@@ -589,8 +589,8 @@ func labelCoded(probs []obx.ImportRowError, codes []string) []obx.ImportRowError
 func testImportQualifiers(t *T) {
 	const good, bad = "OBX-CONF-IMP11", "OBX-CONF-IMP11B"
 	csv := "brand,style_number,name:en,item_type,materials,contains_animal_origin\n" +
-		"Kestrel," + good + ",Conformance Qualifier Scarf,scarf,\"outer: 70% recycled_polyester (post_consumer) (recycled), 30% cotton (organic) (regenerative) (organic); lining: 100% cotton\",no\n" +
-		"Kestrel," + bad + ",Conformance Bracket Scarf,scarf,\"main: 100% cotton (organic, recycled)\",no\n"
+		"MAISON NOOR," + good + ",Conformance Qualifier Scarf,scarf,\"outer: 70% recycled_polyester (post_consumer) (recycled), 30% cotton (organic) (regenerative) (organic); lining: 100% cotton\",no\n" +
+		"MAISON NOOR," + bad + ",Conformance Bracket Scarf,scarf,\"main: 100% cotton (organic, recycled)\",no\n"
 	defer func() {
 		_, _ = t.r.ing.Delete(t.ctx, obx.KindProduct, good)
 		_, _ = t.r.ing.Delete(t.ctx, obx.KindProduct, bad)

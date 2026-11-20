@@ -54,13 +54,13 @@ suite creates retailers, API keys and upload keys itself):
   --setup-code        first-run setup code of a fresh node (or OBX_SETUP_CODE)
   --admin-user        admin e-mail            --admin-password   admin password
   --client-id / --client-secret               API key with access to all brands
-  --second-client-id / --second-client-secret API key restricted to brand "kestrel"
+  --second-client-id / --second-client-secret API key restricted to brand "maison-noor"
   --no-original-client-id / --no-original-client-secret   API key without originals
   (each pair also as one flag: --client id:secret, --second-client …, --no-original-client …)
   --token             upload key with ingest:read, ingest:write and ingest:delete
 
 Nodes without the admin or ingest API (only the protocol is the standard):
-load fixtures/kestrel with the node's own import, then let an operator do the
+load fixtures/maison-noor with the node's own import, then let an operator do the
 brand-side steps (create, restrict and revoke API keys, approve an access
 request, change and unpublish a product, and optionally simulate a spec
 upgrade for P-FEED-7):
@@ -68,8 +68,8 @@ upgrade for P-FEED-7):
                       stdin, JSON result on stdout (see docs/conformance.md)
   --operator-prompt   ask on the terminal to do each step by hand
 
-"all" on a fresh node is the reference run: it completes setup (Kestrel
-Outfitters, brand "kestrel", languages nl,en), imports fixtures/kestrel and
+"all" on a fresh node is the reference run: it completes setup (MAISON NOOR
+Outfitters, brand "maison-noor", languages nl,en), imports fixtures/maison-noor and
 runs every profile.
 
 Several profiles in one run: protocol,ingest (P-FEED-5 reads the ingest replay).
@@ -157,8 +157,8 @@ func runSuite(ctx context.Context, profiles []string, args []string, stdout, std
 	fs.StringVar(&cfg.SetupCode, "setup-code", "", "first-run setup code of a fresh node (default OBX_SETUP_CODE)")
 	fs.StringVar(&cfg.ClientID, "client-id", "", "API key (all brands, with originals): client id")
 	fs.StringVar(&cfg.ClientSecret, "client-secret", "", "API key (all brands, with originals): client secret")
-	fs.StringVar(&cfg.SecondClientID, "second-client-id", "", "API key restricted to brand kestrel: client id")
-	fs.StringVar(&cfg.SecondClientSecret, "second-client-secret", "", "API key restricted to brand kestrel: client secret")
+	fs.StringVar(&cfg.SecondClientID, "second-client-id", "", "API key restricted to brand maison-noor: client id")
+	fs.StringVar(&cfg.SecondClientSecret, "second-client-secret", "", "API key restricted to brand maison-noor: client secret")
 	fs.StringVar(&cfg.NoOriginalClientID, "no-original-client-id", "", "API key without originals: client id")
 	fs.StringVar(&cfg.NoOriginalClientSecret, "no-original-client-secret", "", "API key without originals: client secret")
 	fs.StringVar(&cfg.IngestToken, "token", "", "upload key (obxi_…) with all ingest scopes")
@@ -302,17 +302,17 @@ func runMock(ctx context.Context, args []string, stdout, stderr io.Writer, geten
 	fmt.Fprintf(stdout, "OBX mock node listening on %s (discovery: %s/.well-known/obx)\n", base, base)
 	if *readOnly {
 		c := n.Credentials()
-		fmt.Fprintf(stdout, "Read-only demo node with the Kestrel Outfitters fixtures. Public API key (read-only): %s (secret not printed)\n", c.Full.ClientID)
+		fmt.Fprintf(stdout, "Read-only demo node with the MAISON NOOR Group fixtures. Public API key (read-only): %s (secret not printed)\n", c.Full.ClientID)
 	} else if *fresh {
 		fmt.Fprintf(stdout, "Fresh node. Setup code: %s\n  obx-conformance all --url %s --setup-code %s\n", n.SetupCode(), base, n.SetupCode())
 	} else {
 		c := n.Credentials()
-		fmt.Fprintf(stdout, `Fixtures loaded (Kestrel Outfitters). Test accounts:
+		fmt.Fprintf(stdout, `Fixtures loaded (MAISON NOOR Group). Test accounts:
   admin login:            %s / %s
   portal login (retailer): %s / %s
   upload key:             %s
   API key, all brands:    %s / %s
-  API key, kestrel only:  %s / %s
+  API key, maison-noor only:  %s / %s
   API key, no originals:  %s / %s
 Try:
   obx-conformance protocol --url %s --admin-user %s --admin-password %s

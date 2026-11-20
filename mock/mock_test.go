@@ -33,12 +33,12 @@ func TestRightsExpiryWritesTombstone(t *testing.T) {
 	creds := n.Credentials()
 	ctx := context.Background()
 	ing, _ := ingest.New(srv.URL, creds.IngestToken)
-	rec, err := ing.Get(ctx, obx.KindAsset, "KO-1004_IND_3")
+	rec, err := ing.Get(ctx, obx.KindAsset, "MN-1004_IND_3")
 	if err != nil {
 		t.Fatal(err)
 	}
 	exp := ck.now().Add(2 * time.Hour).UTC().Truncate(time.Second)
-	if _, err := ing.Patch(ctx, obx.KindAsset, "KO-1004_IND_3", map[string]any{"rights": map[string]any{"expires_at": exp}}, nil); err != nil {
+	if _, err := ing.Patch(ctx, obx.KindAsset, "MN-1004_IND_3", map[string]any{"rights": map[string]any{"expires_at": exp}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	c, _ := client.New(client.Config{BaseURL: srv.URL, ClientID: creds.Full.ClientID, ClientSecret: creds.Full.ClientSecret})
@@ -63,7 +63,7 @@ func TestRightsExpiryWritesTombstone(t *testing.T) {
 	got = nil
 	ck.add(3 * time.Hour)
 	read()
-	if len(got) != 1 || got[0].Op != obx.OpDelete || got[0].ExternalIDValue() != "KO-1004_IND_3" {
+	if len(got) != 1 || got[0].Op != obx.OpDelete || got[0].ExternalIDValue() != "MN-1004_IND_3" {
 		t.Fatalf("after expiry: %+v", got)
 	}
 	if _, err := c.Asset(ctx, rec.ID); !obx.IsCode(err, obx.ErrNotFound) {
@@ -123,7 +123,7 @@ func TestIngestRecordShape(t *testing.T) {
 		}
 		return m
 	}
-	a := get("/assets/KO-1001_NVY_1")
+	a := get("/assets/MN-1001_NVY_1")
 	data := a["data"].(map[string]any)
 	if r, _ := data["rights"].(map[string]any); r == nil || r["license"] == nil {
 		t.Errorf("rights with defaults applied: %v", data["rights"])
@@ -138,7 +138,7 @@ func TestIngestRecordShape(t *testing.T) {
 	if mf, ok := a["missing_files"].([]any); !ok || len(mf) != 0 {
 		t.Errorf("missing_files of a complete asset: %#v", a["missing_files"])
 	}
-	p := get("/products/KO-1001")
+	p := get("/products/MN-1001")
 	if _, ok := p["missing_files"]; ok {
 		t.Error("missing_files is for assets only")
 	}

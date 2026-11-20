@@ -21,8 +21,8 @@ func TestFixtureSizes(t *testing.T) {
 		file               string
 		web, square, thumb [2]int
 	}{
-		{"kestrel/images/KO-1005_COG_1_front.png", [2]int{1200, 1500}, [2]int{1500, 1500}, [2]int{480, 600}},
-		{"kestrel/images/KO-1002_OLV_1_front.png", [2]int{1600, 2000}, [2]int{2000, 2000}, [2]int{480, 600}},
+		{"maison-noor/images/MN-1005_COG_1_front.png", [2]int{1200, 1500}, [2]int{1500, 1500}, [2]int{480, 600}},
+		{"maison-noor/images/MN-1002_OLV_1_front.png", [2]int{1600, 2000}, [2]int{2000, 2000}, [2]int{480, 600}},
 	}
 	for _, c := range cases {
 		data, err := fs.ReadFile(specdata.Fixtures(), c.file)

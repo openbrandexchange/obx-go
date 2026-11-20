@@ -11,7 +11,7 @@ costs nothing when nothing changed.
    New access key**. Give it a name such as "GitHub export".
 2. In your GitHub repository: **Settings → Secrets and variables → Actions**,
    add two repository secrets:
-   - `OBX_URL`: the address of your portal, for example `https://brands.kestrel.example`
+   - `OBX_URL`: the address of your portal, for example `https://brands.maison-noor.example`
    - `OBX_TOKEN`: the access key (starts with `obxi_`)
 
 ## Examples

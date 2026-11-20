@@ -43,8 +43,8 @@ func TestNormalizeLookupGTIN(t *testing.T) {
 
 func TestSlug(t *testing.T) {
 	cases := map[string]string{
-		"Kestrel Trail":  "kestrel-trail",
-		"Kestrel":        "kestrel",
+		"NOOR ATELIER":   "noor-atelier",
+		"MAISON NOOR":    "maison-noor",
 		"Élan  & Co.":    "elan-co",
 		"--Straße 9--":   "strasse-9",
 		"Café Noir/Lab ": "cafe-noir-lab",
@@ -57,7 +57,7 @@ func TestSlug(t *testing.T) {
 }
 
 func TestValidExternalID(t *testing.T) {
-	if !ValidExternalID("KO-1001_NVY_1") || ValidExternalID("a/b") || ValidExternalID("") || ValidExternalID("a\nb") {
+	if !ValidExternalID("MN-1001_NVY_1") || ValidExternalID("a/b") || ValidExternalID("") || ValidExternalID("a\nb") {
 		t.Fatal("ValidExternalID wrong")
 	}
 }

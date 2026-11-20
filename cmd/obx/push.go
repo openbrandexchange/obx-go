@@ -707,7 +707,7 @@ func (f *fileUploadState) Delete(sha string) {
 }
 
 var _ = register(map[string]string{
-	"cmd.push.about": "Publishes product data and images to your portal. Give a folder with products.csv (one row per size and colour, with the EAN), an optional assets.csv and images named {style}_{colour}_{position}.jpg (for example KO-1001_NVY_1.jpg; {style}_ALL_{position}.jpg for an image of every colour), or the files separately, or one zip.\n" +
+	"cmd.push.about": "Publishes product data and images to your portal. Give a folder with products.csv (one row per size and colour, with the EAN), an optional assets.csv and images named {style}_{colour}_{position}.jpg (for example MN-1001_NVY_1.jpg; {style}_ALL_{position}.jpg for an image of every colour), or the files separately, or one zip.\n" +
 		"obx checks every image, uploads only what is new or changed (large images in parts that continue where they stopped), makes the web and thumbnail versions when your portal needs that, and prints a summary with the rows that need attention. Running it again costs nothing when nothing changed. With --dry-run nothing is uploaded or changed: you see what would happen.",
 	"push.flag_csv":           "products.csv: one row per size and colour, with the EAN",
 	"push.flag_assets":        "optional assets.csv with rights, AI information or alt text per image",

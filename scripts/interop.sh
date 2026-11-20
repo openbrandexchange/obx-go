@@ -5,7 +5,7 @@
 #   scripts/interop.sh [workspace]     workspace = folder with the sibling checkouts
 #                                      (default: the parent of this repository)
 #
-# Per node: fresh start, first-run setup, `obx push` of spec/fixtures/kestrel,
+# Per node: fresh start, first-run setup, `obx push` of spec/fixtures/maison-noor,
 # `obx pull` (all four image versions), then obx-interop trace (records the
 # change feed, every product and every file hash, replays
 # spec/fixtures/ingest/script.ndjson step by step), then an incremental and a
@@ -86,7 +86,7 @@ for n in "${list[@]}"; do
   url="http://localhost:$(port_of "$n")"
   "$work/obx-interop" setup --url "$url" --setup-code $code --out "$work/creds-$n.json"
   echo "== $n: obx push"
-  OBX_URL=$url OBX_TOKEN=$(cred "$work/creds-$n.json" ingest_token) HOME="$work/home-$n" "$work/obx" push "$spec/fixtures/kestrel" | tail -1
+  OBX_URL=$url OBX_TOKEN=$(cred "$work/creds-$n.json" ingest_token) HOME="$work/home-$n" "$work/obx" push "$spec/fixtures/maison-noor" | tail -1
   echo "== $n: obx pull"
   pull "$n" "$work/mirror-$n"
   "$work/obx-interop" mirror --dir "$work/mirror-$n" --out "$work/pushed-$n.json"

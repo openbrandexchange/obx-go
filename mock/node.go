@@ -34,8 +34,8 @@ import (
 
 // Options configure a mock node.
 type Options struct {
-	// Fixtures completes setup and imports the Kestrel Outfitters fixtures
-	// (spec fixtures/kestrel) and creates the credentials returned by
+	// Fixtures completes setup and imports the MAISON NOOR Group fixtures
+	// (spec fixtures/maison-noor) and creates the credentials returned by
 	// Credentials. Without it the node starts fresh and needs setup.
 	Fixtures bool
 	// SetupCode is the one-time setup code (default "obx-setup-code").

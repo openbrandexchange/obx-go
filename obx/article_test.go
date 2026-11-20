@@ -262,16 +262,16 @@ func TestMaterialUnknownWarnings(t *testing.T) {
 // Extension members survive a decode and encode at every level that allows
 // them; a percentage that is not stated is null.
 func TestExtensionsRoundTrip(t *testing.T) {
-	in := `{"style_number":"KO-1007","name":{"en":"Linen Shirt"},"materials":[{"part":{"code":"main"},"fibers":[{"material":{"code":"linen","x-kestrel-mill":"Mill 7"},"percentage":null,"qualifiers":[],"x-kestrel-a":[1,2]}]}],"x-kestrel-care-note":{"en":"Wrinkles"},"x-kestrel-fabric-weight-gsm":180}`
+	in := `{"style_number":"MN-1007","name":{"en":"Linen Shirt"},"materials":[{"part":{"code":"main"},"fibers":[{"material":{"code":"linen","x-noor-mill":"Mill 7"},"percentage":null,"qualifiers":[],"x-noor-a":[1,2]}]}],"x-noor-care-note":{"en":"Wrinkles"},"x-noor-fabric-weight-gsm":180}`
 	var p obx.ProductInput
 	if err := json.Unmarshal([]byte(in), &p); err != nil {
 		t.Fatal(err)
 	}
-	if string(p.X["x-kestrel-fabric-weight-gsm"]) != "180" || string(p.Materials[0].Fibers[0].Material.X["x-kestrel-mill"]) != `"Mill 7"` || p.Materials[0].Fibers[0].Percentage != nil {
+	if string(p.X["x-noor-fabric-weight-gsm"]) != "180" || string(p.Materials[0].Fibers[0].Material.X["x-noor-mill"]) != `"Mill 7"` || p.Materials[0].Fibers[0].Percentage != nil {
 		t.Fatalf("decoded %+v", p)
 	}
 	b, _ := json.Marshal(p)
-	if string(b) != `{"style_number":"KO-1007","name":{"en":"Linen Shirt"},"materials":[{"part":{"code":"main","name":null},"fibers":[{"material":{"code":"linen","name":null,"x-kestrel-mill":"Mill 7"},"percentage":null,"qualifiers":[],"x-kestrel-a":[1,2]}]}],"x-kestrel-care-note":{"en":"Wrinkles"},"x-kestrel-fabric-weight-gsm":180}` {
+	if string(b) != `{"style_number":"MN-1007","name":{"en":"Linen Shirt"},"materials":[{"part":{"code":"main","name":null},"fibers":[{"material":{"code":"linen","name":null,"x-noor-mill":"Mill 7"},"percentage":null,"qualifiers":[],"x-noor-a":[1,2]}]}],"x-noor-care-note":{"en":"Wrinkles"},"x-noor-fabric-weight-gsm":180}` {
 		t.Fatalf("encoded %s", b)
 	}
 	var d obx.ProductDetail

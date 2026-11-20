@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests push-action the way GitHub runs it: install.sh downloads a release
 # archive from a local HTTP server and checks it against checksums.txt, then
-# push.sh publishes the Kestrel fixtures to the mock portal (dry run and real
+# push.sh publishes the MAISON NOOR fixtures to the mock portal (dry run and real
 # run), writing step outputs and a job summary. A tampered archive must be
 # refused. Needs Go, Python 3 and curl.
 set -euo pipefail
@@ -31,7 +31,7 @@ python3 -m http.server "$web" --bind 127.0.0.1 --directory "$work/release" >/dev
 pids+=($!)
 wait_http "http://127.0.0.1:$web/checksums.txt"
 
-# The mock portal with the Kestrel fixtures.
+# The mock portal with the MAISON NOOR fixtures.
 mp=$(free_port)
 "$work/bin/obx-conformance" mock --addr "127.0.0.1:$mp" > "$work/mock.txt" 2>&1 &
 pids+=($!)
@@ -52,8 +52,8 @@ bin=$(cat "$GITHUB_PATH")
 [ -x "$bin/obx" ]
 
 echo "== push.sh: dry run, then a real run"
-fixtures="$work/kestrel"
-cp -R "$root/specdata/fixtures/kestrel" "$fixtures"
+fixtures="$work/maison-noor"
+cp -R "$root/specdata/fixtures/maison-noor" "$fixtures"
 rm -f "$fixtures/images.json"
 for dry in true false; do
   : > "$GITHUB_OUTPUT"; : > "$GITHUB_STEP_SUMMARY"

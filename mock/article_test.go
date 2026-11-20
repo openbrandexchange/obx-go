@@ -27,7 +27,7 @@ func TestIngestArticleData(t *testing.T) {
 	// vocabulary's names (unknown codes keep what was sent), {} is null, an
 	// unknown feature key is kept as sent, and label warnings come with codes.
 	body := map[string]any{
-		"brand_external_id": "kestrel", "style_number": "KX-1", "name": map[string]string{"en": "Test scarf"}, "item_type": "scarf",
+		"brand_external_id": "maison-noor", "style_number": "MX-1", "name": map[string]string{"en": "Test scarf"}, "item_type": "scarf",
 		"materials": []any{map[string]any{"part": map[string]any{"code": "main"}, "fibers": []any{
 			map[string]any{"material": map[string]any{"code": "organic_cotton"}, "percentage": 60, "qualifiers": []any{map[string]any{"code": "regenerative"}, map[string]any{"code": "organic"}}},
 			map[string]any{"material": map[string]any{"code": "wool", "name": map[string]any{"en": "Mine"}}, "percentage": 30, "qualifiers": []any{}},
@@ -37,7 +37,7 @@ func TestIngestArticleData(t *testing.T) {
 		"features":       map[string]any{"fit": "regular", "fringe_cm": 5},
 		"certifications": []any{},
 	}
-	res, err := ing.Put(ctx, obx.KindProduct, "KX-1", body, nil)
+	res, err := ing.Put(ctx, obx.KindProduct, "MX-1", body, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func TestIngestArticleData(t *testing.T) {
 	if strings.Join(codes, ", ") != "animal_origin_unknown /contains_animal_origin, fibre_percentages_not_100 /materials/0, material_unknown /materials/0/fibers/2/material/code" || len(res.Warnings) < 3 || res.Result != obx.ResultCreated {
 		t.Fatalf("warnings %s / %v (%s)", codes, res.Warnings, res.Result)
 	}
-	rec, _ := ing.Get(ctx, obx.KindProduct, "KX-1")
+	rec, _ := ing.Get(ctx, obx.KindProduct, "MX-1")
 	var data map[string]any
 	_ = json.Unmarshal(rec.Data, &data)
 	if b, _ := json.Marshal(data["materials"]); string(b) != `[{"fibers":[{"material":{"code":"cotton","name":{"de":"Baumwolle","en":"Cotton","fr":"Coton","nl":"Katoen"}},"percentage":60,"qualifiers":[{"code":"organic","name":{"de":"Bio","en":"Organic","fr":"Biologique","nl":"Biologisch"}},{"code":"regenerative","name":{"de":"Regenerativ","en":"Regenerative","fr":"Régénératif","nl":"Regeneratief"}}]},`+
@@ -67,7 +67,7 @@ func TestIngestArticleData(t *testing.T) {
 		t.Fatalf("an empty certifications list must be stored as null: %v", data["certifications"])
 	}
 	// PUTting back the data of a GET is unchanged.
-	again, err := ing.Put(ctx, obx.KindProduct, "KX-1", rec.Data, nil)
+	again, err := ing.Put(ctx, obx.KindProduct, "MX-1", rec.Data, nil)
 	if err != nil || again.Result != obx.ResultUnchanged {
 		t.Fatalf("round trip: %v %+v", err, again)
 	}
@@ -77,7 +77,7 @@ func TestIngestArticleData(t *testing.T) {
 		map[string]any{"material": map[string]any{"code": "wool"}, "percentage": 30},
 		map[string]any{"material": map[string]any{"code": "seacell", "name": map[string]any{"en": "SeaCell"}}, "percentage": 5, "qualifiers": []any{map[string]any{"code": "upcycled"}}},
 	}}}
-	if r, err := ing.Put(ctx, obx.KindProduct, "KX-1", body, nil); err != nil || r.Result != obx.ResultUnchanged {
+	if r, err := ing.Put(ctx, obx.KindProduct, "MX-1", body, nil); err != nil || r.Result != obx.ResultUnchanged {
 		t.Fatalf("qualifier form after 0.1 key: %v %+v", err, r)
 	}
 	// The protocol object carries the same names.
@@ -92,23 +92,23 @@ func TestIngestArticleData(t *testing.T) {
 	// Registry values outside the registry are validation_failed.
 	for _, bad := range []map[string]any{{"wheels": 3}, {"shell": "glass"}, {"detachable_parts": []string{"hood", "hood"}}} {
 		body["features"] = bad
-		if _, err := ing.Put(ctx, obx.KindProduct, "KX-1", body, nil); !obx.IsCode(err, obx.ErrValidationFailed) {
+		if _, err := ing.Put(ctx, obx.KindProduct, "MX-1", body, nil); !obx.IsCode(err, obx.ErrValidationFailed) {
 			t.Errorf("features %v: want validation_failed, got %v", bad, err)
 		}
 	}
 	body["features"] = map[string]any{}
 	body["footwear_materials"] = map[string]any{"upper": "plastic"}
-	if _, err := ing.Put(ctx, obx.KindProduct, "KX-1", body, nil); !obx.IsCode(err, obx.ErrValidationFailed) {
+	if _, err := ing.Put(ctx, obx.KindProduct, "MX-1", body, nil); !obx.IsCode(err, obx.ErrValidationFailed) {
 		t.Errorf("footwear material plastic: want validation_failed, got %v", err)
 	}
 	delete(body, "footwear_materials")
-	if _, err := ing.Put(ctx, obx.KindProduct, "KX-1", body, nil); err != nil {
+	if _, err := ing.Put(ctx, obx.KindProduct, "MX-1", body, nil); err != nil {
 		t.Fatalf("features {}: %v", err)
 	}
 
 	// Variant: measurements {} is null; a measurement of 0 and an unknown
 	// colour family are refused.
-	v := map[string]any{"product_external_id": "KX-1", "gtin": "2000199901018", "color": map[string]any{"code": "RED", "family": "red"}, "measurements": map[string]any{}}
+	v := map[string]any{"product_external_id": "MX-1", "gtin": "2000199901018", "color": map[string]any{"code": "RED", "family": "red"}, "measurements": map[string]any{}}
 	if _, err := ing.Put(ctx, obx.KindVariant, "2000199901018", v, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +130,7 @@ func TestIngestArticleData(t *testing.T) {
 	// the unknown feature as sent.
 	var id string
 	if err := c.EachProduct(ctx, client.ProductsQuery{Limit: 100}, func(p *obx.ProductDetail) error {
-		if p.ExternalID == "KX-1" {
+		if p.ExternalID == "MX-1" {
 			id = p.ID
 		}
 		return nil

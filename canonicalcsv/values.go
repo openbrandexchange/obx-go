@@ -364,12 +364,12 @@ func ParseImageName(name string) (ImageName, error) {
 	}
 	role, view := roleAndView(quals)
 	if len(parts) < 3 {
-		return ImageName{}, fmt.Errorf("%q does not follow {style}_{colour}_{position}.jpg (for example KO-1001_NVY_1.jpg)", base)
+		return ImageName{}, fmt.Errorf("%q does not follow {style}_{colour}_{position}.jpg (for example MN-1001_NVY_1.jpg)", base)
 	}
 	posText := parts[len(parts)-1]
 	pos, err := strconv.Atoi(posText)
 	if err != nil || pos < 1 || pos > 999 || strings.HasPrefix(posText, "0") || strings.HasPrefix(posText, "+") {
-		return ImageName{}, fmt.Errorf("%q has no position (a number 1-999 after the colour code, for example KO-1001_NVY_1.jpg)", base)
+		return ImageName{}, fmt.Errorf("%q has no position (a number 1-999 after the colour code, for example MN-1001_NVY_1.jpg)", base)
 	}
 	n.Position = pos
 	n.Color = parts[len(parts)-2]

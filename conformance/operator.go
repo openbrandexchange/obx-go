@@ -25,7 +25,7 @@ import (
 // function in the node's tests, a script (HookOperator) or a person
 // (PromptOperator).
 //
-// The node must hold the fixtures/kestrel catalog (loaded through its own
+// The node must hold the fixtures/maison-noor catalog (loaded through its own
 // import) before the run.
 type Operator interface {
 	Do(ctx context.Context, a Action) (map[string]string, error)
@@ -37,8 +37,8 @@ type OperatorFunc func(ctx context.Context, a Action) (map[string]string, error)
 // Do calls f.
 func (f OperatorFunc) Do(ctx context.Context, a Action) (map[string]string, error) { return f(ctx, a) }
 
-// Action names and their parameters. Brands are external ids ("kestrel",
-// "kestrel-trail") or "all"; products are external ids from fixtures/kestrel.
+// Action names and their parameters. Brands are external ids ("maison-noor",
+// "noor-atelier") or "all"; products are external ids from fixtures/maison-noor.
 const (
 	// ActCreateAPIKey: a new retailer with one API key. Params name, brands,
 	// originals ("true" or "false"). Result client_id and client_secret.

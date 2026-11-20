@@ -24,7 +24,7 @@ func TestIncrementalCommitEqualsFullCommit(t *testing.T) {
 		defer srv.Close()
 		ctx := context.Background()
 		ic, _ := ingest.New(srv.URL, n.Credentials().IngestToken)
-		csv, err := fs.ReadFile(specdata.Fixtures(), "kestrel/products.csv")
+		csv, err := fs.ReadFile(specdata.Fixtures(), "maison-noor/products.csv")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -35,23 +35,23 @@ func TestIncrementalCommitEqualsFullCommit(t *testing.T) {
 			}
 		}
 		// Re-import unchanged, then with an extra variant and a renamed product.
-		for _, data := range [][]byte{csv, append(append([]byte(nil), csv...), []byte("Kestrel,KO-1001,Merino Crew Sweater (new),Merino trui,,,sweater,unisex,AW26,Highland,main: 100% merino_wool,,PT,,2000100109997,,NVY,Navy,Marineblauw,,XXL,INT\n")...)} {
+		for _, data := range [][]byte{csv, append(append([]byte(nil), csv...), []byte("MAISON NOOR,MN-1001,Fine Merino Crew-Neck Sweater (new),Fijne merino trui met ronde hals,,,sweater,women,AW26,Nocturne,main: 100% merino_wool,,PT,,2000100109997,,NVY,Navy,Marineblauw,,XXL,INT\n")...)} {
 			job, err := ic.Import(ctx, ingest.ImportRequest{CSV: &ingest.File{Name: "products.csv", Data: data}})
 			must("import", err)
 			_, err = ic.WaitJob(ctx, job.ID, 0)
 			must("wait", err)
 		}
-		_, err = ic.Unpublish(ctx, obx.KindProduct, "KO-1002")
+		_, err = ic.Unpublish(ctx, obx.KindProduct, "MN-1002")
 		must("unpublish", err)
-		_, err = ic.Patch(ctx, obx.KindAsset, "KO-1001_NVY_1", map[string]any{"alt_text": map[string]string{"en": "Front"}}, nil)
+		_, err = ic.Patch(ctx, obx.KindAsset, "MN-1001_NVY_1", map[string]any{"alt_text": map[string]string{"en": "Front"}}, nil)
 		must("patch asset", err)
-		_, err = ic.Publish(ctx, obx.KindProduct, "KO-1002")
+		_, err = ic.Publish(ctx, obx.KindProduct, "MN-1002")
 		must("publish", err)
-		_, err = ic.SetAssetOrder(ctx, "KO-1001", obx.AssetOrder{ColorCode: obx.Ptr("NVY"), AssetExternalIDs: []string{"KO-1001_NVY_2", "KO-1001_NVY_1"}})
+		_, err = ic.SetAssetOrder(ctx, "MN-1001", obx.AssetOrder{ColorCode: obx.Ptr("NVY"), AssetExternalIDs: []string{"MN-1001_NVY_2", "MN-1001_NVY_1"}})
 		must("asset order", err)
 		_, err = ic.Delete(ctx, obx.KindVariant, "2000100109997")
 		must("delete variant", err)
-		_, err = ic.Delete(ctx, obx.KindProduct, "KO-1006")
+		_, err = ic.Delete(ctx, obx.KindProduct, "MN-1006")
 		must("delete product", err)
 
 		n.mu.Lock()

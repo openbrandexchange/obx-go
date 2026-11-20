@@ -37,14 +37,14 @@ func (c fakeCatalog) FindProduct(s string) (canonicalcsv.CatalogProduct, bool) {
 	return canonicalcsv.CatalogProduct{}, false
 }
 
-func kestrelImages(t *testing.T) []canonicalcsv.Image {
+func fixtureImages(t *testing.T) []canonicalcsv.Image {
 	var info map[string]struct {
 		Bytes  int64  `json:"bytes"`
 		SHA256 string `json:"sha256"`
 		Width  int    `json:"width"`
 		Height int    `json:"height"`
 	}
-	if err := json.Unmarshal(fixture(t, "kestrel/images.json"), &info); err != nil {
+	if err := json.Unmarshal(fixture(t, "maison-noor/images.json"), &info); err != nil {
 		t.Fatal(err)
 	}
 	var out []canonicalcsv.Image
@@ -54,8 +54,8 @@ func kestrelImages(t *testing.T) []canonicalcsv.Image {
 	return out
 }
 
-func TestKestrelFixture(t *testing.T) {
-	pf, err := canonicalcsv.ParseProducts(bytes.NewReader(fixture(t, "kestrel/products.csv")), "products.csv", canonicalcsv.Options{DefaultLanguage: "nl"})
+func TestMaisonNoorFixture(t *testing.T) {
+	pf, err := canonicalcsv.ParseProducts(bytes.NewReader(fixture(t, "maison-noor/products.csv")), "products.csv", canonicalcsv.Options{DefaultLanguage: "nl"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,31 +69,31 @@ func TestKestrelFixture(t *testing.T) {
 	if len(pf.Products) != 11 || variants != 46 || pf.Rows != 46 {
 		t.Fatalf("got %d products, %d variants, %d rows", len(pf.Products), variants, pf.Rows)
 	}
-	ko1005 := pf.Products[4]
-	if ko1005.ExternalID != "KO-1005" || obx.Str(ko1005.Input.ItemType) != "bag" || ko1005.Input.Name["nl"] != "Leren weekendtas" {
-		t.Fatalf("KO-1005 parsed wrong: %+v", ko1005.Input)
+	mn1005 := pf.Products[4]
+	if mn1005.ExternalID != "MN-1005" || obx.Str(mn1005.Input.ItemType) != "bag" || mn1005.Input.Name["nl"] != "Weekendtas van volnerf leer" {
+		t.Fatalf("MN-1005 parsed wrong: %+v", mn1005.Input)
 	}
-	if got := canonicalcsv.FormatMaterials(ko1005.Input.Materials); got != "outer: leather; lining: 100% cotton" {
+	if got := canonicalcsv.FormatMaterials(mn1005.Input.Materials); got != "outer: leather; lining: 100% cotton" {
 		t.Fatalf("materials %q", got)
 	}
-	v := ko1005.Variants[0]
-	if v.ExternalID != "KO-1005-COG-ONE SIZE" || v.IDGiven || obx.Str(v.Input.GTIN) != "2000100501016" || v.Input.SizeSystem != nil || obx.Str(v.Input.Size) != "ONE SIZE" {
-		t.Fatalf("KO-1005 variant parsed wrong: %+v", v)
+	v := mn1005.Variants[0]
+	if v.ExternalID != "MN-1005-COG-ONE SIZE" || v.IDGiven || obx.Str(v.Input.GTIN) != "2000100501016" || v.Input.SizeSystem != nil || obx.Str(v.Input.Size) != "ONE SIZE" {
+		t.Fatalf("MN-1005 variant parsed wrong: %+v", v)
 	}
-	af, err := canonicalcsv.ParseAssets(bytes.NewReader(fixture(t, "kestrel/assets.csv")), "assets.csv", canonicalcsv.Options{})
+	af, err := canonicalcsv.ParseAssets(bytes.NewReader(fixture(t, "maison-noor/assets.csv")), "assets.csv", canonicalcsv.Options{})
 	if err != nil || len(af.Problems) != 0 || len(af.Rows) != 2 {
 		t.Fatalf("assets.csv: %v %+v", err, af)
 	}
 
-	cat := fakeCatalog{brands: []canonicalcsv.CatalogBrand{{ExternalID: "kestrel", Name: "Kestrel"}}}
-	plan := canonicalcsv.BuildPlan(pf, af, kestrelImages(t), cat)
+	cat := fakeCatalog{brands: []canonicalcsv.CatalogBrand{{ExternalID: "maison-noor", Name: "MAISON NOOR"}}}
+	plan := canonicalcsv.BuildPlan(pf, af, fixtureImages(t), cat)
 	if plan.Errors() != 0 {
 		t.Fatalf("plan problems: %+v", plan.Problems)
 	}
-	if len(plan.Brands) != 1 || plan.Brands[0].ExternalID != "kestrel-trail" || plan.Brands[0].Name != "Kestrel Trail" {
+	if len(plan.Brands) != 1 || plan.Brands[0].ExternalID != "noor-atelier" || plan.Brands[0].Name != "NOOR ATELIER" {
 		t.Fatalf("new brands %+v", plan.Brands)
 	}
-	if strings.Join(plan.MirrorBrands, ",") != "kestrel,kestrel-trail" {
+	if strings.Join(plan.MirrorBrands, ",") != "maison-noor,noor-atelier" {
 		t.Fatalf("mirror brands %v", plan.MirrorBrands)
 	}
 	assets := map[string]canonicalcsv.PlannedAsset{}
@@ -105,19 +105,19 @@ func TestKestrelFixture(t *testing.T) {
 	if len(assets) != 35 {
 		t.Fatalf("want 35 assets, got %d", len(assets))
 	}
-	model := assets["KO-1003_RST_3"].Input
+	model := assets["MN-1003_RST_3"].Input
 	if model.Role != "model" || model.View != nil || model.Provenance == nil || !*model.Provenance.AIGenerated || obx.Str(model.Provenance.Generator) != "fictional-image-model 1.0" || model.AltText["nl"] == "" {
 		t.Fatalf("model asset: %+v", model)
 	}
-	detail := assets["KO-1004_IND_3"].Input
+	detail := assets["MN-1004_IND_3"].Input
 	if detail.Role != "detail" || obx.Str(detail.View) != "detail" {
 		t.Fatalf("detail asset: %+v", detail)
 	}
-	emb := assets["KO-1002_BLK_2"].Input
-	if emb.Rights == nil || emb.Rights.EmbargoUntil == nil || emb.Rights.EmbargoUntil.Year() != 2030 || obx.Str(emb.Rights.Credit) != "Photo: Kestrel Studio" || obx.Str(emb.View) != "back" {
+	emb := assets["MN-1002_BLK_2"].Input
+	if emb.Rights == nil || emb.Rights.EmbargoUntil == nil || emb.Rights.EmbargoUntil.Year() != 2030 || obx.Str(emb.Rights.Credit) != "Photo: MAISON NOOR Studio" || obx.Str(emb.View) != "back" {
 		t.Fatalf("embargoed asset: %+v", emb)
 	}
-	if obx.Str(assets["KO-1001_NVY_1"].Input.Filename) != "KO-1001_NVY_1_front.png" {
+	if obx.Str(assets["MN-1001_NVY_1"].Input.Filename) != "MN-1001_NVY_1_front.png" {
 		t.Fatal("filename not kept")
 	}
 }
@@ -129,18 +129,18 @@ func TestImageNames(t *testing.T) {
 		role, view         string
 		fail               bool
 	}{
-		{name: "KO-1001_NVY_1.jpg", style: "KO-1001", color: "NVY", pos: 1, role: "packshot"},
-		{name: "KO-1001_NVY_2_back.jpg", style: "KO-1001", color: "NVY", pos: 2, role: "packshot", view: "back"},
-		{name: "KO-1003_RST_3_model.png", style: "KO-1003", color: "RST", pos: 3, role: "model"},
+		{name: "MN-1001_NVY_1.jpg", style: "MN-1001", color: "NVY", pos: 1, role: "packshot"},
+		{name: "MN-1001_NVY_2_back.jpg", style: "MN-1001", color: "NVY", pos: 2, role: "packshot", view: "back"},
+		{name: "MN-1003_RST_3_model.png", style: "MN-1003", color: "RST", pos: 3, role: "model"},
 		{name: "AB_12_34_BLK_2_packshot_back.JPG", style: "AB_12_34", color: "BLK", pos: 2, role: "packshot", view: "back"},
-		{name: "KO-1004_IND_3_detail.jpg", style: "KO-1004", color: "IND", pos: 3, role: "detail", view: "detail"},
-		{name: "folder/KO-1001_NVY_12.webp", style: "KO-1001", color: "NVY", pos: 12, role: "packshot"},
-		{name: "KO-1001_ALL_4_detail.jpg", style: "KO-1001", color: "", pos: 4, role: "detail", view: "detail"},
-		{name: "KO-1001_all_5.jpg", style: "KO-1001", color: "", pos: 5, role: "packshot"},
-		{name: "KO-1001_NVY_front.jpg", fail: true},
-		{name: "KO-1001_NVY_01.jpg", fail: true},
-		{name: "KO-1001_NVY_1000.jpg", fail: true},
-		{name: "KO-1001_NVY_1.gif", fail: true},
+		{name: "MN-1004_IND_3_detail.jpg", style: "MN-1004", color: "IND", pos: 3, role: "detail", view: "detail"},
+		{name: "folder/MN-1001_NVY_12.webp", style: "MN-1001", color: "NVY", pos: 12, role: "packshot"},
+		{name: "MN-1001_ALL_4_detail.jpg", style: "MN-1001", color: "", pos: 4, role: "detail", view: "detail"},
+		{name: "MN-1001_all_5.jpg", style: "MN-1001", color: "", pos: 5, role: "packshot"},
+		{name: "MN-1001_NVY_front.jpg", fail: true},
+		{name: "MN-1001_NVY_01.jpg", fail: true},
+		{name: "MN-1001_NVY_1000.jpg", fail: true},
+		{name: "MN-1001_NVY_1.gif", fail: true},
 		{name: "photo.jpg", fail: true},
 	}
 	for _, c := range cases {
@@ -228,7 +228,7 @@ func TestUnreadable(t *testing.T) {
 }
 
 func TestExportRoundTrip(t *testing.T) {
-	pf, _ := canonicalcsv.ParseProducts(bytes.NewReader(fixture(t, "kestrel/products.csv")), "products.csv", canonicalcsv.Options{})
+	pf, _ := canonicalcsv.ParseProducts(bytes.NewReader(fixture(t, "maison-noor/products.csv")), "products.csv", canonicalcsv.Options{})
 	var details []obx.ProductDetail
 	for _, p := range pf.Products {
 		d := obx.ProductDetail{Product: obx.Product{ExternalID: p.ExternalID, BrandID: "b1", StyleNumber: p.Input.StyleNumber, Name: p.Input.Name,
@@ -245,7 +245,7 @@ func TestExportRoundTrip(t *testing.T) {
 	}
 	details[0].Name["en"] = "=HYPERLINK(\"http://x\")"
 	var buf bytes.Buffer
-	if err := canonicalcsv.WriteExport(&buf, details, canonicalcsv.ExportOptions{Languages: []string{"nl", "en"}, Delimiter: ';', BrandNames: map[string]string{"b1": "Kestrel"}, BOM: true}); err != nil {
+	if err := canonicalcsv.WriteExport(&buf, details, canonicalcsv.ExportOptions{Languages: []string{"nl", "en"}, Delimiter: ';', BrandNames: map[string]string{"b1": "MAISON NOOR"}, BOM: true}); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(buf.String(), "'=HYPERLINK") {
@@ -392,11 +392,11 @@ func TestWriteDownloadAssets(t *testing.T) {
 	view := "back"
 	nvy := "NVY"
 	images := []canonicalcsv.DownloadImage{
-		{File: "KO-1002_BLK_2_back_web.jpg", StyleNumber: "KO-1002", Asset: obx.Asset{ColorCode: &nvy, Position: 2, Role: "packshot", View: &view,
+		{File: "MN-1002_BLK_2_back_web.jpg", StyleNumber: "MN-1002", Asset: obx.Asset{ColorCode: &nvy, Position: 2, Role: "packshot", View: &view,
 			AltText:    obx.LocalizedText{"nl": "Achterkant", "en": "Back"},
 			Rights:     obx.Rights{License: "retailer-use", Channels: []string{"webshop", "social"}, EmbargoUntil: &embargo, Credit: &credit},
 			Provenance: obx.Provenance{AIGenerated: true, Source: "generated", C2PA: "none"}}},
-		{File: "KO-1005_ALL_4_size_chart_web.jpg", StyleNumber: "KO-1005", Asset: obx.Asset{Position: 4, Role: "size_chart", Rights: obx.DefaultRights(), Provenance: obx.DefaultProvenance()}},
+		{File: "MN-1005_ALL_4_size_chart_web.jpg", StyleNumber: "MN-1005", Asset: obx.Asset{Position: 4, Role: "size_chart", Rights: obx.DefaultRights(), Provenance: obx.DefaultProvenance()}},
 	}
 	var buf bytes.Buffer
 	if err := canonicalcsv.WriteDownloadAssets(&buf, images); err != nil {

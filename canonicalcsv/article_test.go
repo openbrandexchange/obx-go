@@ -36,68 +36,68 @@ func js(v any) string {
 	return string(b)
 }
 
-// The article data of the Kestrel fixture parses to what the expected
+// The article data of the MAISON NOOR fixture parses to what the expected
 // protocol objects hold (fixtures/expected/product-*.json).
-func TestKestrelArticleData(t *testing.T) {
-	pf, err := canonicalcsv.ParseProducts(bytes.NewReader(fixture(t, "kestrel/products.csv")), "products.csv", canonicalcsv.Options{})
+func TestMaisonNoorArticleData(t *testing.T) {
+	pf, err := canonicalcsv.ParseProducts(bytes.NewReader(fixture(t, "maison-noor/products.csv")), "products.csv", canonicalcsv.Options{})
 	if err != nil || len(pf.Problems) != 0 {
 		t.Fatalf("%v %+v", err, pf.Problems)
 	}
-	ko1008 := product(t, pf, "KO-1008")
-	in := ko1008.Input
+	mn1008 := product(t, pf, "MN-1008")
+	in := mn1008.Input
 	if obx.Str(in.ItemType) != "luggage" || obx.Str(in.ItemSubtype) != "cabin" || in.ContainsAnimalOrigin != nil {
-		t.Errorf("KO-1008: %s", js(in))
+		t.Errorf("MN-1008: %s", js(in))
 	}
 	if got := js(in.Features); got != `{"shell":"hard","wheels":4,"lock":"tsa_combination","expandable":true,"closure":"zip"}` {
-		t.Errorf("KO-1008 features %s", got)
+		t.Errorf("MN-1008 features %s", got)
 	}
 	if got := js(in.Materials); got != `[{"part":{"code":"shell","name":null},"fibers":[{"material":{"code":"polypropylene","name":null},"percentage":100,"qualifiers":[]}]},{"part":{"code":"lining","name":null},"fibers":[{"material":{"code":"polyester","name":null},"percentage":100,"qualifiers":[{"code":"recycled","name":null}]}]}]` {
-		t.Errorf("KO-1008 materials %s", got)
+		t.Errorf("MN-1008 materials %s", got)
 	}
-	if got := js(ko1008.Variants[1].Input.Measurements); got != `{"height_cm":55,"width_cm":40,"depth_cm":23,"weight_kg":2.8,"volume_l":42,"volume_expanded_l":48}` {
-		t.Errorf("KO-1008 CABIN PLUS measurements %s", got)
+	if got := js(mn1008.Variants[1].Input.Measurements); got != `{"height_cm":55,"width_cm":40,"depth_cm":23,"weight_kg":2.8,"volume_l":42,"volume_expanded_l":48}` {
+		t.Errorf("MN-1008 CABIN PLUS measurements %s", got)
 	}
-	if obx.Str(ko1008.Variants[0].Input.Color.Family) != "black" {
-		t.Errorf("KO-1008 colour family %s", js(ko1008.Variants[0].Input.Color))
+	if obx.Str(mn1008.Variants[0].Input.Color.Family) != "black" {
+		t.Errorf("MN-1008 colour family %s", js(mn1008.Variants[0].Input.Color))
 	}
-	ko1009 := product(t, pf, "KO-1009")
-	if got := js(ko1009.Input.Certifications); got != `[{"scheme":"grs","licence_number":"CU 200901","scope":"material"}]` {
-		t.Errorf("KO-1009 certifications %s", got)
+	mn1009 := product(t, pf, "MN-1009")
+	if got := js(mn1009.Input.Certifications); got != `[{"scheme":"grs","licence_number":"CU 200901","scope":"material"}]` {
+		t.Errorf("MN-1009 certifications %s", got)
 	}
-	if got := js(ko1009.Variants[0].Input.Measurements); got != `{"height_cm":30,"width_cm":40,"depth_cm":12,"weight_kg":0.9,"volume_l":14,"handle_drop_cm":10,"strap_length_cm":{"min":85,"max":140},"laptop_max_inch":15.6}` {
-		t.Errorf("KO-1009 measurements %s", got)
+	if got := js(mn1009.Variants[0].Input.Measurements); got != `{"height_cm":30,"width_cm":40,"depth_cm":12,"weight_kg":0.9,"volume_l":14,"handle_drop_cm":10,"strap_length_cm":{"min":85,"max":140},"laptop_max_inch":15.6}` {
+		t.Errorf("MN-1009 measurements %s", got)
 	}
-	if got := js(ko1009.Input.Features); got != `{"closure":"flap","laptop_compartment":true,"water_resistance":"water_repellent","detachable_parts":["shoulder_strap"],"adjustable_parts":["shoulder_strap"]}` {
-		t.Errorf("KO-1009 features %s", got)
+	if got := js(mn1009.Input.Features); got != `{"closure":"flap","laptop_compartment":true,"water_resistance":"water_repellent","detachable_parts":["shoulder_strap"],"adjustable_parts":["shoulder_strap"]}` {
+		t.Errorf("MN-1009 features %s", got)
 	}
-	ko1010 := product(t, pf, "KO-1010")
-	if got := js(ko1010.Input.FootwearMaterials); got != `{"upper":"leather","lining_and_sock":"leather","outer_sole":"other"}` {
-		t.Errorf("KO-1010 footwear %s", got)
+	mn1010 := product(t, pf, "MN-1010")
+	if got := js(mn1010.Input.FootwearMaterials); got != `{"upper":"leather","lining_and_sock":"leather","outer_sole":"other"}` {
+		t.Errorf("MN-1010 footwear %s", got)
 	}
-	if got := js(ko1010.Variants[2].Input.Measurements); got != `{"heel_height_cm":3.5,"shaft_height_cm":15}` {
-		t.Errorf("KO-1010 43 measurements %s", got)
+	if got := js(mn1010.Variants[2].Input.Measurements); got != `{"heel_height_cm":3.5,"shaft_height_cm":15}` {
+		t.Errorf("MN-1010 43 measurements %s", got)
 	}
-	ko1003 := product(t, pf, "KO-1003")
-	if got := js(ko1003.Input.Certifications); got != `[{"scheme":"gots","licence_number":"CU 200301","scope":"product"},{"scheme":"oeko_tex_standard_100","licence_number":"26.KST.20003","scope":"product"}]` {
-		t.Errorf("KO-1003 certifications %s", got)
+	mn1003 := product(t, pf, "MN-1003")
+	if got := js(mn1003.Input.Certifications); got != `[{"scheme":"gots","licence_number":"CU 200301","scope":"product"},{"scheme":"oeko_tex_standard_100","licence_number":"26.MNR.20003","scope":"product"}]` {
+		t.Errorf("MN-1003 certifications %s", got)
 	}
-	if got := js(ko1003.Input.Materials); got != `[{"part":{"code":"main","name":null},"fibers":[{"material":{"code":"cotton","name":null},"percentage":100,"qualifiers":[{"code":"organic","name":null},{"code":"regenerative","name":null}]}]}]` {
-		t.Errorf("KO-1003 materials %s", got)
+	if got := js(mn1003.Input.Materials); got != `[{"part":{"code":"main","name":null},"fibers":[{"material":{"code":"cotton","name":null},"percentage":100,"qualifiers":[{"code":"organic","name":null},{"code":"regenerative","name":null}]}]}]` {
+		t.Errorf("MN-1003 materials %s", got)
 	}
-	ko1004 := product(t, pf, "KO-1004").Variants[0].Input
-	if obx.Str(ko1004.Size) != "30" || obx.Str(ko1004.SizeLength) != "32" || js(ko1004.Measurements) != `{"inseam_cm":81}` {
-		t.Errorf("KO-1004 %s", js(ko1004))
+	mn1004 := product(t, pf, "MN-1004").Variants[0].Input
+	if obx.Str(mn1004.Size) != "30" || obx.Str(mn1004.SizeLength) != "32" || js(mn1004.Measurements) != `{"inseam_cm":81}` {
+		t.Errorf("MN-1004 %s", js(mn1004))
 	}
-	kt2001 := product(t, pf, "KT-2001")
-	if got := js(kt2001.Input.Materials[0]); got != `{"part":{"code":"outer","name":null},"fibers":[{"material":{"code":"polyester","name":null},"percentage":100,"qualifiers":[{"code":"recycled","name":null}]}]}` {
-		t.Errorf("KT-2001 0.1 key not normalised: %s", got)
+	na2001 := product(t, pf, "NA-2001")
+	if got := js(na2001.Input.Materials[0]); got != `{"part":{"code":"outer","name":null},"fibers":[{"material":{"code":"polyester","name":null},"percentage":100,"qualifiers":[{"code":"recycled","name":null}]}]}` {
+		t.Errorf("NA-2001 0.1 key not normalised: %s", got)
 	}
-	ko1001 := product(t, pf, "KO-1001")
-	if ko1001.Input.ContainsAnimalOrigin == nil || *ko1001.Input.ContainsAnimalOrigin || ko1001.Input.FootwearMaterials != nil || ko1001.Variants[0].Input.Measurements != nil {
-		t.Errorf("KO-1001 %s", js(ko1001.Input))
+	mn1001 := product(t, pf, "MN-1001")
+	if mn1001.Input.ContainsAnimalOrigin == nil || *mn1001.Input.ContainsAnimalOrigin || mn1001.Input.FootwearMaterials != nil || mn1001.Variants[0].Input.Measurements != nil {
+		t.Errorf("MN-1001 %s", js(mn1001.Input))
 	}
-	if ko1006 := product(t, pf, "KO-1006"); ko1006.Input.Features != nil {
-		t.Errorf("KO-1006 without feature cells must have features null: %s", js(ko1006.Input.Features))
+	if mn1006 := product(t, pf, "MN-1006"); mn1006.Input.Features != nil {
+		t.Errorf("MN-1006 without feature cells must have features null: %s", js(mn1006.Input.Features))
 	}
 	// The fixture is complete: no label completeness warning.
 	for _, p := range pf.Products {
@@ -295,11 +295,11 @@ func TestCodesMatchVocabulary(t *testing.T) {
 // fibres without a percentage and the decimal comma.
 func TestDefaultVariantIDAndPercentages(t *testing.T) {
 	for _, c := range [][5]string{
-		{"KO-1004", "IND", "30", "32", "KO-1004-IND-30-32"},
-		{"KO-1004", "IND", "32/34", "", "KO-1004-IND-32_34"},
-		{"KO-1005", "COG", "ONE SIZE", "", "KO-1005-COG-ONE SIZE"},
-		{"KO-1005", "COG", "", "", "KO-1005-COG"},
-		{"KO-1005", "COG", "", "32", "KO-1005-COG-32"},
+		{"MN-1004", "IND", "30", "32", "MN-1004-IND-30-32"},
+		{"MN-1004", "IND", "32/34", "", "MN-1004-IND-32_34"},
+		{"MN-1005", "COG", "ONE SIZE", "", "MN-1005-COG-ONE SIZE"},
+		{"MN-1005", "COG", "", "", "MN-1005-COG"},
+		{"MN-1005", "COG", "", "32", "MN-1005-COG-32"},
 		{" A ", "B\tC", "S\x7f", "", "A-B_C-S_"},
 	} {
 		if got := canonicalcsv.DefaultVariantID(c[0], c[1], c[2], c[3]); got != c[4] {

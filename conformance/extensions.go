@@ -226,7 +226,7 @@ func (t *T) expectResult(what string, res *obx.IngestResult, err error, want str
 // stored and returned everywhere, every other unknown member is ignored
 // with a warning, never a 422.
 func testExtensions(t *T) {
-	const pext, vext, aext = "KO-1007", "KO-1007-SND-M", "KO-1007_SND_1"
+	const pext, vext, aext = "MN-1007", "MN-1007-SND-M", "MN-1007_SND_1"
 	raw, err := t.r.fixture("examples/ProductInput.extension.json")
 	t.Check(err, "read fixtures/examples/ProductInput.extension.json")
 	product := decodeMap(raw)
@@ -234,7 +234,7 @@ func testExtensions(t *T) {
 		t.Fatalf("ProductInput.extension.json is not an object")
 	}
 	if _, ok := product["brand_external_id"]; !ok {
-		product["brand_external_id"] = "kestrel"
+		product["brand_external_id"] = "maison-noor"
 	}
 	cleanup := func() {
 		_, _ = t.r.ing.Delete(t.ctx, obx.KindAsset, aext)
@@ -243,9 +243,9 @@ func testExtensions(t *T) {
 	}
 	cleanup()
 	defer cleanup()
-	careNote := product["x-kestrel-care-note"]
-	mill, _ := lookup(product, jsonPath{"materials", 0, "fibers", 0, "material", "x-kestrel-mill"})
-	if careNote == nil || mill == nil || product["x-kestrel-fabric-weight-gsm"] == nil {
+	careNote := product["x-noor-care-note"]
+	mill, _ := lookup(product, jsonPath{"materials", 0, "fibers", 0, "material", "x-noor-mill"})
+	if careNote == nil || mill == nil || product["x-noor-fabric-weight-gsm"] == nil {
 		t.Fatalf("ProductInput.extension.json lacks the extension members this test checks")
 	}
 	sent := toAny(product).(map[string]any)
@@ -267,9 +267,9 @@ func testExtensions(t *T) {
 		}
 	}
 	all := []extCheck{
-		{jsonPath{"x-kestrel-fabric-weight-gsm"}, product["x-kestrel-fabric-weight-gsm"]},
-		{jsonPath{"x-kestrel-care-note"}, careNote},
-		{jsonPath{"materials", 0, "fibers", 0, "material", "x-kestrel-mill"}, mill},
+		{jsonPath{"x-noor-fabric-weight-gsm"}, product["x-noor-fabric-weight-gsm"]},
+		{jsonPath{"x-noor-care-note"}, careNote},
+		{jsonPath{"materials", 0, "fibers", 0, "material", "x-noor-mill"}, mill},
 	}
 	cs, cursor, _ := t.carriers(obx.KindProduct, pext, cursor, t.protocolProduct)
 	for _, c := range cs {
@@ -280,8 +280,8 @@ func testExtensions(t *T) {
 	if t.r.full != nil {
 		_, cursor = t.newEntries(t.r.full, cursor)
 	}
-	res, err = t.r.ing.Patch(t.ctx, obx.KindProduct, pext, map[string]any{"x-kestrel-fabric-weight-gsm": nil}, nil)
-	t.expectResult("PATCH "+pext+" {\"x-kestrel-fabric-weight-gsm\": null}", res, err, obx.ResultUpdated)
+	res, err = t.r.ing.Patch(t.ctx, obx.KindProduct, pext, map[string]any{"x-noor-fabric-weight-gsm": nil}, nil)
+	t.expectResult("PATCH "+pext+" {\"x-noor-fabric-weight-gsm\": null}", res, err, obx.ResultUpdated)
 	all[0].want = nil
 	cs, cursor, live := t.carriers(obx.KindProduct, pext, cursor, t.protocolProduct)
 	for _, c := range cs {
@@ -293,20 +293,20 @@ func testExtensions(t *T) {
 		}
 	}
 
-	// A variant: x-kestrel-bin on the variant, x-kestrel-pantone in color.
+	// A variant: x-noor-bin on the variant, x-noor-pantone in color.
 	raw, err = t.r.fixture("examples/VariantInput.example.json")
 	t.Check(err, "read fixtures/examples/VariantInput.example.json")
 	variant := decodeMap(raw)
 	variant["product_external_id"] = pext
-	variant["x-kestrel-bin"] = "A-12-3"
+	variant["x-noor-bin"] = "A-12-3"
 	if c, ok := variant["color"].(map[string]any); ok {
-		c["x-kestrel-pantone"] = "13-1008 TCX"
+		c["x-noor-pantone"] = "13-1008 TCX"
 	}
 	variant["unknown_member"] = "not stored"
-	vchecks := []extCheck{{jsonPath{"x-kestrel-bin"}, "A-12-3"}, {jsonPath{"color", "x-kestrel-pantone"}, "13-1008 TCX"}}
+	vchecks := []extCheck{{jsonPath{"x-noor-bin"}, "A-12-3"}, {jsonPath{"color", "x-noor-pantone"}, "13-1008 TCX"}}
 	t.extensionRoundTrip(obx.KindVariant, vext, variant, vchecks, cursor, t.protocolVariant)
 
-	// An asset: x-kestrel-shoot.
+	// An asset: x-noor-shoot.
 	if t.r.full != nil {
 		cursor = t.liveCursor(t.r.full)
 	}
@@ -322,8 +322,8 @@ func testExtensions(t *T) {
 		}
 	}
 	asset := map[string]any{"product_external_id": pext, "color_code": "SND", "role": obx.RolePackshot, "position": 1, "files": files,
-		"x-kestrel-shoot": "SS27 studio 4", "unknown_member": "not stored"}
-	t.extensionRoundTrip(obx.KindAsset, aext, asset, []extCheck{{jsonPath{"x-kestrel-shoot"}, "SS27 studio 4"}}, cursor, t.protocolAsset)
+		"x-noor-shoot": "SS27 studio 4", "unknown_member": "not stored"}
+	t.extensionRoundTrip(obx.KindAsset, aext, asset, []extCheck{{jsonPath{"x-noor-shoot"}, "SS27 studio 4"}}, cursor, t.protocolAsset)
 }
 
 // extensionRoundTrip PUTs body (with extensions and unknown_member), checks
@@ -383,7 +383,7 @@ func testDraftQualifier(t *T) {
 		}
 	}
 	body := func(draft bool) map[string]any {
-		return map[string]any{"brand_external_id": "kestrel", "style_number": ext, "name": map[string]any{"en": "Conformance Draft Qualifier Tee"},
+		return map[string]any{"brand_external_id": "maison-noor", "style_number": ext, "name": map[string]any{"en": "Conformance Draft Qualifier Tee"},
 			"materials": []any{map[string]any{"part": map[string]any{"code": "main"}, "fibers": fibres(draft)}}}
 	}
 	_, _ = t.r.ing.Delete(t.ctx, obx.KindProduct, ext)
@@ -442,7 +442,7 @@ func testDraftQualifier(t *T) {
 
 // testVariantIdentity is I-IMP-12 (import-format.md 1.2.1): the files of
 // fixtures/imports/variant-identity.expected.json in order, and the default
-// external ids of the Kestrel variants.
+// external ids of the MAISON NOOR variants.
 func testVariantIdentity(t *T) {
 	raw, err := t.r.fixture("imports/variant-identity.expected.json")
 	t.Check(err, "read fixtures/imports/variant-identity.expected.json")
@@ -450,7 +450,7 @@ func testVariantIdentity(t *T) {
 		Cases []importCase `json:"cases"`
 	}
 	t.Check(json.Unmarshal(raw, &exp), "parse variant-identity.expected.json")
-	const ext = "KL-8101"
+	const ext = "ML-8101"
 	_, _ = t.r.ing.Delete(t.ctx, obx.KindProduct, ext)
 	defer func() { _, _ = t.r.ing.Delete(t.ctx, obx.KindProduct, ext) }()
 	ids := map[string]string{} // variant external id → protocol id after the first file
@@ -508,7 +508,7 @@ func testVariantIdentity(t *T) {
 		}
 	}
 	if t.r.full != nil {
-		t.checkKestrelVariantIDs()
+		t.checkFixtureVariantIDs()
 	}
 }
 
@@ -551,14 +551,14 @@ func (t *T) matchSubset(where string, actual, want any) {
 	}
 }
 
-// checkKestrelVariantIDs: the variants imported from fixtures/kestrel have
+// checkFixtureVariantIDs: the variants imported from fixtures/maison-noor have
 // the default external ids <style>-<color>-<size>[-<size_length>]
 // (import-format.md 1.2.1), although products.csv has their GTINs.
-func (t *T) checkKestrelVariantIDs() {
-	data, err := t.r.fixture("kestrel/products.csv")
-	t.Check(err, "read kestrel/products.csv")
+func (t *T) checkFixtureVariantIDs() {
+	data, err := t.r.fixture("maison-noor/products.csv")
+	t.Check(err, "read maison-noor/products.csv")
 	rows, err := csv.NewReader(bytes.NewReader(data)).ReadAll()
-	t.Check(err, "parse kestrel/products.csv")
+	t.Check(err, "parse maison-noor/products.csv")
 	col := map[string]int{}
 	for i, h := range rows[0] {
 		col[h] = i
@@ -603,6 +603,6 @@ func (t *T) checkKestrelVariantIDs() {
 	sort.Strings(missing)
 	sort.Strings(extra)
 	if len(missing) > 0 || len(extra) > 0 {
-		t.Errorf("the Kestrel variants must have the external ids <style>-<color>-<size>[-<size_length>] (import-format.md 1.2.1): missing %v, unexpected %v", missing, extra)
+		t.Errorf("the MAISON NOOR variants must have the external ids <style>-<color>-<size>[-<size_length>] (import-format.md 1.2.1): missing %v, unexpected %v", missing, extra)
 	}
 }

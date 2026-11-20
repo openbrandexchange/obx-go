@@ -50,7 +50,7 @@ type Config struct {
 	// SetupCode completes first-run setup on a fresh node.
 	SetupCode string
 	// API keys: an unrestricted one (with originals), one restricted to brand
-	// "kestrel", and one without originals. Created via the admin API when
+	// "maison-noor", and one without originals. Created via the admin API when
 	// empty and admin credentials are given.
 	ClientID, ClientSecret                     string
 	SecondClientID, SecondClientSecret         string

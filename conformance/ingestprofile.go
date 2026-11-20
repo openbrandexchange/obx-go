@@ -34,14 +34,14 @@ func init() {
 	register(p, "I-VAL-1", "invalid GTIN, duplicate GTIN, position conflict, unknown parent", true, testValidation)
 	register(p, "I-EXT-1", "x-<vendor>-<name> extensions are stored and returned everywhere, PATCH null removes them; other unknown members are ignored with a warning, never 422", true, testExtensions)
 	register(p, "I-MAT-1", "the draft single qualifier is read as a list of one (qualifiers wins, null is none) with one qualifier_deprecated warning; only qualifiers is stored and returned", true, testDraftQualifier)
-	register(p, "I-IMP-1", "re-importing fixtures/kestrel as package and as files is unchanged with no entries", true, testReimport)
+	register(p, "I-IMP-1", "re-importing fixtures/maison-noor as package and as files is unchanged with no entries", true, testReimport)
 	register(p, "I-IMP-2", "import with an images_manifest gives the same result", true, testManifestImport)
-	register(p, "I-IMP-3", "mirror import unpublishes exactly what is missing; one of the nine Kestrel products → mass_unpublish_refused; zip slip refused", true, testMirror)
+	register(p, "I-IMP-3", "mirror import unpublishes exactly what is missing; one of the nine MAISON NOOR products → mass_unpublish_refused; zip slip refused", true, testMirror)
 	register(p, "I-IMP-4", "row problems carry file, row, column and code; the job still succeeds", true, testRowErrors)
 	register(p, "I-IMP-5", "an import without assets.csv keeps the images' embargo, credit, alt text and AI label", true, testImportKeepsImageFacts)
 	register(p, "I-IMP-6", "a column the file does not have keeps the field; an empty cell removes it", true, testImportKeepsAbsentColumns)
 	register(p, "I-IMP-7", "the article data columns: fixtures/imports 1 to 6 give the expected counts, errors, change entries and fields (rule 9 per key)", true, testImportArticleColumns)
-	register(p, "I-IMP-8", "label completeness and material_unknown warnings: label-warnings.csv as a dry run gives exactly the expected codes; fixtures/kestrel none", true, testLabelWarnings)
+	register(p, "I-IMP-8", "label completeness and material_unknown warnings: label-warnings.csv as a dry run gives exactly the expected codes; fixtures/maison-noor none", true, testLabelWarnings)
 	register(p, "I-IMP-11", "materials qualifiers in the import: each code in its own brackets, order kept, repeats once, 0.1 key first; \"(organic, recycled)\" is a validation_failed row", true, testImportQualifiers)
 	register(p, "I-IMP-12", "variant identity in imports: default id <style>-<color>-<size>[-<size_length>], a later GTIN finds the variant and keeps its ids, a GTIN of another product → gtin_conflict", true, testVariantIdentity)
 }
@@ -92,26 +92,26 @@ func testIngestAuth(t *T) {
 	ro, err := t.r.admin.CreateIngestToken(t.ctx, nodeadmin.IngestTokenInput{Name: "OBX conformance: read only", Scopes: []string{obx.IngestScopeRead}})
 	t.Check(err, "create read-only key")
 	c := t.r.newIngest(ro.Secret)
-	_, err = c.PutBrand(t.ctx, "kestrel", obx.BrandInput{Name: "Kestrel"}, nil)
+	_, err = c.PutBrand(t.ctx, "maison-noor", obx.BrandInput{Name: "MAISON NOOR"}, nil)
 	if !obx.IsCode(err, obx.ErrInsufficientScope) {
 		t.Errorf("write with an ingest:read key: want 403 insufficient_scope, got %v", err)
 	}
-	_, err = c.Delete(t.ctx, obx.KindProduct, "KO-1001")
+	_, err = c.Delete(t.ctx, obx.KindProduct, "MN-1001")
 	if !obx.IsCode(err, obx.ErrInsufficientScope) {
 		t.Errorf("delete with an ingest:read key: want 403 insufficient_scope, got %v", err)
 	}
-	rs, err := t.r.admin.CreateIngestToken(t.ctx, nodeadmin.IngestTokenInput{Name: "OBX conformance: kestrel only", Scopes: []string{obx.IngestScopeRead, obx.IngestScopeWrite}, BrandExternalIDs: []string{"kestrel"}})
+	rs, err := t.r.admin.CreateIngestToken(t.ctx, nodeadmin.IngestTokenInput{Name: "OBX conformance: maison-noor only", Scopes: []string{obx.IngestScopeRead, obx.IngestScopeWrite}, BrandExternalIDs: []string{"maison-noor"}})
 	t.Check(err, "create restricted key")
 	c = t.r.newIngest(rs.Secret)
-	cur, err := t.r.ing.Get(t.ctx, obx.KindProduct, "KT-2001")
-	t.Check(err, "read KT-2001")
-	_, err = c.Put(t.ctx, obx.KindProduct, "KT-2001", cur.Data, nil)
+	cur, err := t.r.ing.Get(t.ctx, obx.KindProduct, "NA-2001")
+	t.Check(err, "read NA-2001")
+	_, err = c.Put(t.ctx, obx.KindProduct, "NA-2001", cur.Data, nil)
 	if !obx.IsCode(err, obx.ErrForbidden) {
-		t.Errorf("restricted key writing brand kestrel-trail: want 403 forbidden, got %v", err)
+		t.Errorf("restricted key writing brand noor-atelier: want 403 forbidden, got %v", err)
 	}
-	own, err := t.r.ing.Get(t.ctx, obx.KindProduct, "KO-1001")
-	t.Check(err, "read KO-1001")
-	if res, err := c.Put(t.ctx, obx.KindProduct, "KO-1001", own.Data, nil); err != nil || res.Result != obx.ResultUnchanged {
+	own, err := t.r.ing.Get(t.ctx, obx.KindProduct, "MN-1001")
+	t.Check(err, "read MN-1001")
+	if res, err := c.Put(t.ctx, obx.KindProduct, "MN-1001", own.Data, nil); err != nil || res.Result != obx.ResultUnchanged {
 		t.Errorf("restricted key writing its own brand: want unchanged, got %v %v", res, err)
 	}
 	t.Check(t.r.admin.RevokeIngestToken(t.ctx, ro.Token.ID), "revoke")
@@ -322,7 +322,7 @@ func testReplay(t *T) {
 	}
 	t.r.replayChanges = feedProblems
 	t.r.replayRan = true
-	t.cleanupBrand("kestrel-lab")
+	t.cleanupBrand("maison-noor-lab")
 }
 
 func testReplayFeed(t *T) {
@@ -404,25 +404,25 @@ func testReplayBatch(t *T) {
 		if got != exp2 {
 			t.Errorf("batch %s: /changes gave [%s], want [%s]", variant.sfx, got, exp2)
 		}
-		t.cleanupBrand("kestrel-lab" + variant.sfx)
+		t.cleanupBrand("maison-noor-lab" + variant.sfx)
 	}
 }
 
 func testIdempotency(t *T) {
-	rec, err := t.r.ing.Get(t.ctx, obx.KindProduct, "KO-1001")
-	t.Check(err, "GET KO-1001")
+	rec, err := t.r.ing.Get(t.ctx, obx.KindProduct, "MN-1001")
+	t.Check(err, "GET MN-1001")
 	var cursor string
 	if t.r.full != nil {
 		cursor = t.liveCursor(t.r.full)
 	}
-	res, err := t.r.ing.Put(t.ctx, obx.KindProduct, "KO-1001", rec.Data, nil)
-	t.Check(err, "PUT KO-1001 again")
+	res, err := t.r.ing.Put(t.ctx, obx.KindProduct, "MN-1001", rec.Data, nil)
+	t.Check(err, "PUT MN-1001 again")
 	if res.Result != obx.ResultUnchanged {
 		t.Errorf("repeating an upsert: want unchanged, got %s", res.Result)
 	}
-	asset, err := t.r.ing.Get(t.ctx, obx.KindAsset, "KO-1001_NVY_1")
+	asset, err := t.r.ing.Get(t.ctx, obx.KindAsset, "MN-1001_NVY_1")
 	t.Check(err, "GET asset")
-	res, err = t.r.ing.Put(t.ctx, obx.KindAsset, "KO-1001_NVY_1", asset.Data, nil)
+	res, err = t.r.ing.Put(t.ctx, obx.KindAsset, "MN-1001_NVY_1", asset.Data, nil)
 	t.Check(err, "PUT asset again")
 	if res.Result != obx.ResultUnchanged {
 		t.Errorf("repeating an asset upsert: want unchanged, got %s", res.Result)
@@ -433,7 +433,7 @@ func testIdempotency(t *T) {
 		}
 	}
 	key := "conformance-" + randomSuffix()
-	ops := []obx.IngestOperation{{Op: obx.IngestOpUpsert, Kind: obx.KindProduct, ExternalID: "KO-1001", Data: rec.Data}}
+	ops := []obx.IngestOperation{{Op: obx.IngestOpUpsert, Kind: obx.KindProduct, ExternalID: "MN-1001", Data: rec.Data}}
 	a, err := t.r.ing.Batch(t.ctx, ops, ingest.BatchOptions{IdempotencyKey: key, NoWait: true})
 	t.Check(err, "batch")
 	b, err := t.r.ing.Batch(t.ctx, ops, ingest.BatchOptions{IdempotencyKey: key, NoWait: true})
@@ -465,7 +465,7 @@ func testIdempotency(t *T) {
 	const probe = "OBX-CONF-IDEM"
 	_, _ = t.r.ing.Delete(t.ctx, obx.KindProduct, probe)
 	defer func() { _, _ = t.r.ing.Delete(t.ctx, obx.KindProduct, probe) }()
-	probeData, _ := json.Marshal(obx.ProductInput{BrandExternalID: obx.Ptr("kestrel"), StyleNumber: probe, Name: obx.LocalizedText{"en": "Conformance Idempotency Probe"}})
+	probeData, _ := json.Marshal(obx.ProductInput{BrandExternalID: obx.Ptr("maison-noor"), StyleNumber: probe, Name: obx.LocalizedText{"en": "Conformance Idempotency Probe"}})
 	otherOps := []obx.IngestOperation{{Op: obx.IngestOpUpsert, Kind: obx.KindProduct, ExternalID: probe, Data: probeData}}
 	_, err = t.r.ing.Batch(t.ctx, otherOps, ingest.BatchOptions{IdempotencyKey: key, NoWait: true})
 	if !obx.IsCode(err, obx.ErrIdempotencyKeyReused) {
@@ -478,7 +478,7 @@ func testIdempotency(t *T) {
 	// Imports: the same key and the same parts → the same job; another
 	// part → 409 idempotency_key_reused and nothing written.
 	csvOf := func(name string) []byte {
-		return []byte("brand,style_number,name:en\nKestrel," + probe + "," + name + "\n")
+		return []byte("brand,style_number,name:en\nMAISON NOOR," + probe + "," + name + "\n")
 	}
 	ikey := "conformance-import-" + randomSuffix()
 	dry := ingest.ImportRequest{CSV: &ingest.File{Name: "products.csv", Data: csvOf("Conformance Idempotency Probe")}, Options: obx.ImportOptions{Mode: obx.ImportModeUpsert, DryRun: true}, IdempotencyKey: ikey}
@@ -562,11 +562,11 @@ func testBlobs(t *T) {
 	res, err = t.r.do(t.ctx, http.MethodPut, t.r.cfg.BaseURL+obx.PathIngest+"/blobs/"+sha, other, mergeHeader(bearerHeader(t.r.cfg.IngestToken), "Content-Type", "image/png"))
 	t.Check(err, "PUT wrong bytes")
 	t.expectStatus(res, http.StatusUnprocessableEntity, obx.ErrChecksumMismatch, "PUT with bytes that do not match the sha256")
-	_, err = t.r.ing.PutAsset(t.ctx, "KO-1001_NVY_98", obx.AssetInput{ProductExternalID: "KO-1001", ColorCode: obx.Ptr("NVY"), Role: obx.RolePackshot, Position: 98,
+	_, err = t.r.ing.PutAsset(t.ctx, "MN-1001_NVY_98", obx.AssetInput{ProductExternalID: "MN-1001", ColorCode: obx.Ptr("NVY"), Role: obx.RolePackshot, Position: 98,
 		Files: &obx.AssetFiles{Original: &obx.FileRef{SHA256: strings.Repeat("0", 64)}}}, nil)
 	if !obx.IsCode(err, obx.ErrBlobMissing) {
 		t.Errorf("asset with an unknown sha256: want 422 blob_missing, got %v", err)
-		t.r.ing.Delete(t.ctx, obx.KindAsset, "KO-1001_NVY_98")
+		t.r.ing.Delete(t.ctx, obx.KindAsset, "MN-1001_NVY_98")
 	}
 }
 
@@ -621,24 +621,24 @@ func intsToStrings(in []int) []string {
 }
 
 func testValidation(t *T) {
-	_, err := t.r.ing.PutVariant(t.ctx, "OBX-CONF-BAD", obx.VariantInput{ProductExternalID: "KO-1001", GTIN: obx.Ptr("2000100101019"), Color: obx.Color{Code: "NVY"}, Size: obx.Ptr("XXL")}, nil)
+	_, err := t.r.ing.PutVariant(t.ctx, "OBX-CONF-BAD", obx.VariantInput{ProductExternalID: "MN-1001", GTIN: obx.Ptr("2000100101019"), Color: obx.Color{Code: "NVY"}, Size: obx.Ptr("XXL")}, nil)
 	if !obx.IsCode(err, obx.ErrInvalidGTIN) {
 		t.Errorf("wrong check digit: want 422 invalid_gtin, got %v", err)
 	}
-	_, err = t.r.ing.PutVariant(t.ctx, "OBX-CONF-DUP", obx.VariantInput{ProductExternalID: "KO-1001", GTIN: obx.Ptr("2000100101018"), Color: obx.Color{Code: "NVY"}, Size: obx.Ptr("XXL")}, nil)
+	_, err = t.r.ing.PutVariant(t.ctx, "OBX-CONF-DUP", obx.VariantInput{ProductExternalID: "MN-1001", GTIN: obx.Ptr("2000100101018"), Color: obx.Color{Code: "NVY"}, Size: obx.Ptr("XXL")}, nil)
 	if !obx.IsCode(err, obx.ErrGTINConflict) {
 		t.Errorf("duplicate GTIN: want 409 gtin_conflict, got %v", err)
 		t.r.ing.Delete(t.ctx, obx.KindVariant, "OBX-CONF-DUP")
 	}
-	existing, err := t.r.ing.Get(t.ctx, obx.KindAsset, "KO-1001_NVY_1")
+	existing, err := t.r.ing.Get(t.ctx, obx.KindAsset, "MN-1001_NVY_1")
 	t.Check(err, "GET asset")
 	var in obx.AssetInput
 	json.Unmarshal(existing.Data, &in)
 	in.Status = nil
-	_, err = t.r.ing.PutAsset(t.ctx, "KO-1001_NVY_1b", in, nil)
+	_, err = t.r.ing.PutAsset(t.ctx, "MN-1001_NVY_1b", in, nil)
 	if !obx.IsCode(err, obx.ErrPositionConflict) {
 		t.Errorf("second image at position 1: want 409 position_conflict, got %v", err)
-		t.r.ing.Delete(t.ctx, obx.KindAsset, "KO-1001_NVY_1b")
+		t.r.ing.Delete(t.ctx, obx.KindAsset, "MN-1001_NVY_1b")
 	}
 	_, err = t.r.ing.PutVariant(t.ctx, "OBX-CONF-ORPHAN", obx.VariantInput{ProductExternalID: "NO-SUCH-PRODUCT", Color: obx.Color{Code: "NVY"}}, nil)
 	if !obx.IsCode(err, obx.ErrUnknownParent) {
@@ -702,25 +702,25 @@ func testReimport(t *T) {
 		t.Check(err, "build import")
 		t.expectUnchangedImport("import as "+how, req)
 	}
-	rec, err := t.r.ing.Get(t.ctx, obx.KindAsset, "KO-1003_RST_3")
+	rec, err := t.r.ing.Get(t.ctx, obx.KindAsset, "MN-1003_RST_3")
 	t.Check(err, "GET imported asset")
 	if rec.Visibility != obx.VisibilityVisible {
-		t.Errorf("imported asset KO-1003_RST_3 is %s", rec.Visibility)
+		t.Errorf("imported asset MN-1003_RST_3 is %s", rec.Visibility)
 	}
 }
 
 // testImportKeepsImageFacts: import-format.md rule 8. An import of products.csv
 // and the images without assets.csv must not take away what the images have:
-// the embargo and credit of KO-1002_BLK_2 and the alt text and AI label of
-// KO-1003_RST_3 (both from the fixture's assets.csv), and a credit set on
-// KO-1001_NVY_1 through the Ingest API, as the admin would.
+// the embargo and credit of MN-1002_BLK_2 and the alt text and AI label of
+// MN-1003_RST_3 (both from the fixture's assets.csv), and a credit set on
+// MN-1001_NVY_1 through the Ingest API, as the admin would.
 func testImportKeepsImageFacts(t *T) {
 	const credit = "Photo: Conformance Studio"
-	_, err := t.r.ing.Patch(t.ctx, obx.KindAsset, "KO-1001_NVY_1", map[string]any{"rights": map[string]any{"credit": credit}}, nil)
-	t.Check(err, "PATCH a credit onto KO-1001_NVY_1")
+	_, err := t.r.ing.Patch(t.ctx, obx.KindAsset, "MN-1001_NVY_1", map[string]any{"rights": map[string]any{"credit": credit}}, nil)
+	t.Check(err, "PATCH a credit onto MN-1001_NVY_1")
 	defer func() {
 		// Put the fixture state back for the checks that follow, also when this one failed.
-		if _, err := t.r.ing.Patch(t.ctx, obx.KindAsset, "KO-1001_NVY_1", map[string]any{"rights": map[string]any{"credit": nil}}, nil); err != nil {
+		if _, err := t.r.ing.Patch(t.ctx, obx.KindAsset, "MN-1001_NVY_1", map[string]any{"rights": map[string]any{"credit": nil}}, nil); err != nil {
 			t.Errorf("could not remove the test credit again: %v", err)
 		}
 		if req, err := t.r.fixtureImport(t.ctx, "files", nil); err == nil {
@@ -745,23 +745,23 @@ func testImportKeepsImageFacts(t *T) {
 			t.Fatalf("%s: data is not an asset: %v", ext, err)
 		}
 	}
-	get("KO-1002_BLK_2")
+	get("MN-1002_BLK_2")
 	if e, _ := data.Rights["embargo_until"].(string); !strings.HasPrefix(e, "2030-01-01") {
-		t.Errorf("KO-1002_BLK_2 lost its embargo: rights.embargo_until is %v, want 2030-01-01", data.Rights["embargo_until"])
+		t.Errorf("MN-1002_BLK_2 lost its embargo: rights.embargo_until is %v, want 2030-01-01", data.Rights["embargo_until"])
 	}
-	if c, _ := data.Rights["credit"].(string); c != "Photo: Kestrel Studio" {
-		t.Errorf("KO-1002_BLK_2 lost its credit: rights.credit is %v", data.Rights["credit"])
+	if c, _ := data.Rights["credit"].(string); c != "Photo: MAISON NOOR Studio" {
+		t.Errorf("MN-1002_BLK_2 lost its credit: rights.credit is %v", data.Rights["credit"])
 	}
-	get("KO-1003_RST_3")
+	get("MN-1003_RST_3")
 	if ai, _ := data.Provenance["ai_generated"].(bool); !ai {
-		t.Errorf("KO-1003_RST_3 lost its AI label: provenance.ai_generated is %v", data.Provenance["ai_generated"])
+		t.Errorf("MN-1003_RST_3 lost its AI label: provenance.ai_generated is %v", data.Provenance["ai_generated"])
 	}
 	if data.AltText["nl"] == "" || data.AltText["en"] == "" {
-		t.Errorf("KO-1003_RST_3 lost its alt text: %v", data.AltText)
+		t.Errorf("MN-1003_RST_3 lost its alt text: %v", data.AltText)
 	}
-	get("KO-1001_NVY_1")
+	get("MN-1001_NVY_1")
 	if c, _ := data.Rights["credit"].(string); c != credit {
-		t.Errorf("KO-1001_NVY_1 lost the credit set through the Ingest API: rights.credit is %v", data.Rights["credit"])
+		t.Errorf("MN-1001_NVY_1 lost the credit set through the Ingest API: rights.credit is %v", data.Rights["credit"])
 	}
 }
 
@@ -770,17 +770,17 @@ func testImportKeepsImageFacts(t *T) {
 // other field of the products (name:nl, descriptions, materials, care); an
 // empty season cell in a file that has the column removes the season.
 func testImportKeepsAbsentColumns(t *T) {
-	data, err := t.r.fixture("kestrel/products.csv")
-	t.Check(err, "read kestrel/products.csv")
+	data, err := t.r.fixture("maison-noor/products.csv")
+	t.Check(err, "read maison-noor/products.csv")
 	rows, err := csv.NewReader(bytes.NewReader(data)).ReadAll()
-	t.Check(err, "parse kestrel/products.csv")
+	t.Check(err, "parse maison-noor/products.csv")
 	col := func(name string) int {
 		for i, h := range rows[0] {
 			if h == name {
 				return i
 			}
 		}
-		t.Fatalf("kestrel/products.csv has no %s column", name)
+		t.Fatalf("maison-noor/products.csv has no %s column", name)
 		return -1
 	}
 	brand, style, nameEN, season, nameNL := col("brand"), col("style_number"), col("name:en"), col("season"), col("name:nl")
@@ -799,7 +799,7 @@ func testImportKeepsAbsentColumns(t *T) {
 				continue
 			}
 			seen[r[style]] = true
-			if r[style] == "KO-1001" {
+			if r[style] == "MN-1001" {
 				wantNL = r[nameNL]
 			}
 			rec := []string{r[brand], r[style], r[nameEN]}
@@ -830,29 +830,29 @@ func testImportKeepsAbsentColumns(t *T) {
 	}
 	get := func() {
 		product.Name, product.Description, product.Season, product.Materials, product.Care = nil, nil, nil, nil, nil
-		rec, err := t.r.ing.Get(t.ctx, obx.KindProduct, "KO-1001")
-		t.Check(err, "GET product KO-1001")
+		rec, err := t.r.ing.Get(t.ctx, obx.KindProduct, "MN-1001")
+		t.Check(err, "GET product MN-1001")
 		if err := json.Unmarshal(rec.Data, &product); err != nil {
-			t.Fatalf("KO-1001: data is not a product: %v", err)
+			t.Fatalf("MN-1001: data is not a product: %v", err)
 		}
 	}
 	only := &ingest.ImportRequest{Options: obx.ImportOptions{Mode: obx.ImportModeUpsert}, CSV: &ingest.File{Name: "products.csv", Data: build(false, "")}}
 	t.expectUnchangedImport("products.csv with only brand, style_number and name:en", only)
 	get()
 	if product.Name["nl"] != wantNL || product.Description["en"] == "" || len(product.Materials) == 0 || len(product.Care) == 0 {
-		t.Errorf("KO-1001 lost fields whose columns the file did not have: name %v, description %v, materials %d, care %d", product.Name, product.Description, len(product.Materials), len(product.Care))
+		t.Errorf("MN-1001 lost fields whose columns the file did not have: name %v, description %v, materials %d, care %d", product.Name, product.Description, len(product.Materials), len(product.Care))
 	}
-	withSeason := &ingest.ImportRequest{Options: obx.ImportOptions{Mode: obx.ImportModeUpsert}, CSV: &ingest.File{Name: "products.csv", Data: build(true, "KO-1001")}}
+	withSeason := &ingest.ImportRequest{Options: obx.ImportOptions{Mode: obx.ImportModeUpsert}, CSV: &ingest.File{Name: "products.csv", Data: build(true, "MN-1001")}}
 	job, probs := t.runImport(withSeason)
 	if job.Status != obx.JobSucceeded || job.ImportRun == nil || job.ImportRun.Counts.Updated != 1 {
-		t.Errorf("an empty season cell for KO-1001: want succeeded with updated 1, got %s %s (%s)", job.Status, short(job.ImportRun), short(probs))
+		t.Errorf("an empty season cell for MN-1001: want succeeded with updated 1, got %s %s (%s)", job.Status, short(job.ImportRun), short(probs))
 	}
 	get()
 	if product.Season != nil && *product.Season != "" {
-		t.Errorf("an empty season cell must remove the season, KO-1001 still has %q", *product.Season)
+		t.Errorf("an empty season cell must remove the season, MN-1001 still has %q", *product.Season)
 	}
 	if product.Name["nl"] != wantNL {
-		t.Errorf("KO-1001 lost name:nl in the season import: %v", product.Name)
+		t.Errorf("MN-1001 lost name:nl in the season import: %v", product.Name)
 	}
 }
 
@@ -866,16 +866,16 @@ func testMirror(t *T) {
 	var cursor string
 	var cascade []cascadeObject
 	if t.r.full != nil {
-		res := t.get(t.r.full, "/products/"+t.productID("KO-1006"))
+		res := t.get(t.r.full, "/products/"+t.productID("MN-1006"))
 		var detail map[string]any
 		if res.status != http.StatusOK || res.decode(&detail) != nil {
-			t.Fatalf("GET KO-1006: %d %s", res.status, truncate(res.body))
+			t.Fatalf("GET MN-1006: %d %s", res.status, truncate(res.body))
 		}
-		cascade = cascadeOrder(t.productID("KO-1006"), detail)
+		cascade = cascadeOrder(t.productID("MN-1006"), detail)
 		cursor = t.liveCursor(t.r.full)
 	}
-	// (a) a mirror without KO-1006 unpublishes exactly KO-1006.
-	req, err := t.r.fixtureImport(t.ctx, "files", func(row []string) bool { return row[1] != "KO-1006" })
+	// (a) a mirror without MN-1006 unpublishes exactly MN-1006.
+	req, err := t.r.fixtureImport(t.ctx, "files", func(row []string) bool { return row[1] != "MN-1006" })
 	t.Check(err, "build import")
 	req.Images = nil
 	req.AssetsCSV = nil
@@ -883,13 +883,13 @@ func testMirror(t *T) {
 	req.Options.Mode = obx.ImportModeMirror
 	job, probs := t.runImport(req)
 	if job.Status != obx.JobSucceeded || job.ImportRun == nil || job.ImportRun.Counts.Unpublished != 1 {
-		t.Errorf("mirror without KO-1006: want succeeded with unpublished 1, got %s %s (%s)", job.Status, short(job.ImportRun), short(probs))
+		t.Errorf("mirror without MN-1006: want succeeded with unpublished 1, got %s %s (%s)", job.Status, short(job.ImportRun), short(probs))
 	}
-	if rec, err := t.r.ing.Get(t.ctx, obx.KindProduct, "KO-1006"); err != nil || rec.Status != obx.StatusUnpublished {
-		t.Errorf("KO-1006 should be unpublished after the mirror import")
+	if rec, err := t.r.ing.Get(t.ctx, obx.KindProduct, "MN-1006"); err != nil || rec.Status != obx.StatusUnpublished {
+		t.Errorf("MN-1006 should be unpublished after the mirror import")
 	}
-	if rec, err := t.r.ing.Get(t.ctx, obx.KindProduct, "KO-1005"); err != nil || rec.Status != obx.StatusPublished {
-		t.Errorf("KO-1005 must stay published")
+	if rec, err := t.r.ing.Get(t.ctx, obx.KindProduct, "MN-1005"); err != nil || rec.Status != obx.StatusPublished {
+		t.Errorf("MN-1005 must stay published")
 	}
 	if t.r.full != nil {
 		live, c2 := t.newEntries(t.r.full, cursor)
@@ -902,28 +902,28 @@ func testMirror(t *T) {
 			t.Errorf("mirror entries: got [%s], want [%s]", got, strings.Join(want, "; "))
 		}
 	}
-	_, err = t.r.ing.Publish(t.ctx, obx.KindProduct, "KO-1006")
-	t.Check(err, "publish KO-1006 again")
+	_, err = t.r.ing.Publish(t.ctx, obx.KindProduct, "MN-1006")
+	t.Check(err, "publish MN-1006 again")
 	if t.r.full != nil {
 		_, cursor = t.newEntries(t.r.full, cursor)
 	}
-	// (b) a mirror with only KO-1001 of the nine Kestrel products is refused.
-	req, err = t.r.fixtureImport(t.ctx, "files", func(row []string) bool { return row[1] == "KO-1001" })
+	// (b) a mirror with only MN-1001 of the nine MAISON NOOR products is refused.
+	req, err = t.r.fixtureImport(t.ctx, "files", func(row []string) bool { return row[1] == "MN-1001" })
 	t.Check(err, "build import")
 	req.Images, req.AssetsCSV, req.Manifest = nil, nil, nil
 	req.Options.Mode = obx.ImportModeMirror
 	job, probs = t.runImport(req)
 	refused := (job.ImportRun != nil && job.ImportRun.Error != nil && job.ImportRun.Error.ObxError == obx.ErrMassUnpublishRefused) || hasCode(probs, obx.ErrMassUnpublishRefused)
 	if !refused {
-		t.Errorf("mirror with one of the nine Kestrel products: want mass_unpublish_refused, got %s %s", job.Status, short(probs))
+		t.Errorf("mirror with one of the nine MAISON NOOR products: want mass_unpublish_refused, got %s %s", job.Status, short(probs))
 	}
-	if rec, err := t.r.ing.Get(t.ctx, obx.KindProduct, "KO-1002"); err != nil || rec.Status != obx.StatusPublished {
-		t.Errorf("a refused mirror import unpublished KO-1002")
+	if rec, err := t.r.ing.Get(t.ctx, obx.KindProduct, "MN-1002"); err != nil || rec.Status != obx.StatusPublished {
+		t.Errorf("a refused mirror import unpublished MN-1002")
 	}
 	// (c) zip slip.
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
-	csvData, _ := t.r.fixture("kestrel/products.csv")
+	csvData, _ := t.r.fixture("maison-noor/products.csv")
 	w, _ := zw.Create("products.csv")
 	w.Write(csvData)
 	w, _ = zw.Create("../evil.jpg")
@@ -955,9 +955,9 @@ func hasCode(probs []obx.ImportRowError, code string) bool {
 
 func testRowErrors(t *T) {
 	csv := "brand,style_number,name:en,gtin,color_code,size,mystery\n" +
-		"Kestrel,OBX-CONF-IMP4,Conformance Test Scarf,2000199901018,GRY,S,x\n" +
-		"Kestrel,OBX-CONF-IMP4,Conformance Test Scarf,2000199901025,GRY,M,x\n" +
-		"Kestrel,OBX-CONF-IMP4,Conformance Test Scarf,2000199901029,GRY,L,x\n"
+		"MAISON NOOR,OBX-CONF-IMP4,Conformance Test Scarf,2000199901018,GRY,S,x\n" +
+		"MAISON NOOR,OBX-CONF-IMP4,Conformance Test Scarf,2000199901025,GRY,M,x\n" +
+		"MAISON NOOR,OBX-CONF-IMP4,Conformance Test Scarf,2000199901029,GRY,L,x\n"
 	job, probs := t.runImport(&ingest.ImportRequest{CSV: &ingest.File{Name: "products.csv", Data: []byte(csv)}, Options: obx.ImportOptions{Mode: obx.ImportModeUpsert}})
 	defer t.r.ing.Delete(t.ctx, obx.KindProduct, "OBX-CONF-IMP4")
 	if job.Status != obx.JobSucceeded {

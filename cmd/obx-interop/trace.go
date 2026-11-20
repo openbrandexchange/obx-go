@@ -98,7 +98,7 @@ func runTrace(ctx context.Context, base string, cr *creds, fixtures fs.FS, log i
 	if err != nil {
 		return t, err
 	}
-	var kl9001 string
+	var ml9001 string
 	for i, op := range ops {
 		if !tr.info.Renditions.ServerGenerated && op.Kind == obx.KindAsset && op.Op == obx.IngestOpUpsert {
 			op.Data = withRenditions(op.Data, rend)
@@ -134,12 +134,12 @@ func runTrace(ctx context.Context, base string, cr *creds, fixtures fs.FS, log i
 		}
 		for _, e := range entries {
 			s.Changes = append(s.Changes, tr.rawChange(e))
-			if e.Type == obx.ChangeProduct && e.ExternalIDValue() == "KL-9001" {
-				kl9001 = e.ID
+			if e.Type == obx.ChangeProduct && e.ExternalIDValue() == "ML-9001" {
+				ml9001 = e.ID
 			}
 		}
-		if kl9001 != "" {
-			if p, files, err := tr.productWithFiles(ctx, kl9001); err == nil {
+		if ml9001 != "" {
+			if p, files, err := tr.productWithFiles(ctx, ml9001); err == nil {
 				s.Product, s.Files = p, files
 			}
 		}
