@@ -8,6 +8,13 @@ it reads stay compatible within a minor version.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-21
+
+For Open Brand Exchange specification 0.3.1: the MAISON NOOR test data
+(**breaking for fixtures**: a node under test must load `fixtures/maison-noor`).
+`obx.SpecVersion` is `0.3.1`; the protocol, the Ingest API and the import
+format do not change.
+
 ### Changed
 
 - **Test data: MAISON NOOR replaces Kestrel** (spec 0.3.1, commit in
