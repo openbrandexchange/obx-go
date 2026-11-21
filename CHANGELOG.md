@@ -21,6 +21,9 @@ it reads stay compatible within a minor version.
   first brand "MAISON NOOR". A node under test must load the new fixtures.
   `mock.Credentials.KestrelBrandID`/`TrailBrandID` are now
   `MaisonNoorBrandID`/`AtelierBrandID`. Entries below keep the old name.
+- The demo portal of the online check (`deploy/checker/demo`, `obx-demo`) serves
+  the MAISON NOOR data with the public client id `obxc_demo-maison-noor`
+  (secret unchanged).
 
 ## [0.3.0] - 2026-11-17
 

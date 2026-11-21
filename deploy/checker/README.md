@@ -66,7 +66,7 @@ and admin APIs 404. The data is in memory: a restart (the container sleeps after
 without requests) resets it. Its API key is published on purpose; it can only read the demo:
 
 - Portal: `https://obx-demo.richardlindhout96.workers.dev`
-- Client id: `obxc_demo-kestrel`
+- Client id: `obxc_demo-maison-noor`
 - Client secret: `obxs_demo-read-only-public`
 
 With this key every check that can run online passes; P-AUTH-3 and P-FEED-4 need a second key
