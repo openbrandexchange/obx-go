@@ -24,7 +24,7 @@
 	"ratelimits": [{ "name": "PER_IP", "namespace_id": "1001", "simple": { "limit": 1200, "period": 60 } }],
 	"vars": {
 		// Public on purpose: the demo is read-only (see docs/conformance.md).
-		"DEMO_CLIENT": "obxc_demo-kestrel:obxs_demo-read-only-public",
+		"DEMO_CLIENT": "obxc_demo-maison-noor:obxs_demo-read-only-public",
 		"PUBLIC_URL": "https://obx-demo.richardlindhout96.workers.dev"
 	}
 }
