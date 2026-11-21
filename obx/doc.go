@@ -17,7 +17,7 @@ package obx
 const Version = "0.3"
 
 // SpecVersion is the specification release the types were generated from.
-const SpecVersion = "0.3.0"
+const SpecVersion = "0.3.1"
 
 // Header names used across the protocol and the ingest API.
 const (
