@@ -2,7 +2,7 @@
 #   docker build -t obx .
 #   docker run --rm -e OBX_URL -e OBX_TOKEN -v "$PWD/export:/data" obx push /data
 #   docker run -d --restart unless-stopped -e OBX_URL -e OBX_TOKEN -v /data/outbox:/outbox obx watch /outbox
-FROM golang:1.26-alpine AS build
+FROM golang:1.27-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
