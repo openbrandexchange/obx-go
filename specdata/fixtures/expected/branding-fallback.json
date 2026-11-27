@@ -1,0 +1,327 @@
+{
+  "description": "Neutral default per member (docs/node-admin.md#neutral-default). Each case: BrandingSettings as stored, and the look a node resolves from it. Dark-scheme values apply when the resolved color_scheme is dark; `auto` resolves per reader and is not a case here. Recomputed by bun run check.",
+  "defaults": {
+    "color_scheme": "light",
+    "colors": {
+      "primary": "#1f2937",
+      "secondary": "#4b5563",
+      "background": "#faf9f7",
+      "surface": "#ffffff",
+      "text": "#1a1a1a"
+    },
+    "heading_font": "system",
+    "body_font": "system",
+    "radius": "medium",
+    "grid_density": "comfortable",
+    "card_style": "plain",
+    "image_fit": "contain",
+    "image_background": "#ffffff",
+    "login_layout": "centered"
+  },
+  "dark_defaults": {
+    "background": "#121212",
+    "surface": "#1c1c1c",
+    "text": "#f2f0ec"
+  },
+  "cases": [
+    {
+      "name": "nothing styled",
+      "settings": {},
+      "resolved": {
+        "color_scheme": "light",
+        "colors": {
+          "primary": "#1f2937",
+          "secondary": "#4b5563",
+          "background": "#faf9f7",
+          "surface": "#ffffff",
+          "text": "#1a1a1a"
+        },
+        "heading_font": "system",
+        "body_font": "system",
+        "radius": "medium",
+        "grid_density": "comfortable",
+        "card_style": "plain",
+        "image_fit": "contain",
+        "image_background": "#ffffff",
+        "login_layout": "centered"
+      }
+    },
+    {
+      "name": "an accent colour only",
+      "settings": {
+        "accent_color": "#7a3b2e"
+      },
+      "resolved": {
+        "color_scheme": "light",
+        "colors": {
+          "primary": "#7a3b2e",
+          "secondary": "#4b5563",
+          "background": "#faf9f7",
+          "surface": "#ffffff",
+          "text": "#1a1a1a"
+        },
+        "heading_font": "system",
+        "body_font": "system",
+        "radius": "medium",
+        "grid_density": "comfortable",
+        "card_style": "plain",
+        "image_fit": "contain",
+        "image_background": "#ffffff",
+        "login_layout": "centered"
+      }
+    },
+    {
+      "name": "a partial theme: primary wins over the accent colour, a null member falls back",
+      "settings": {
+        "accent_color": "#7a3b2e",
+        "theme": {
+          "colors": {
+            "primary": "#1b2a4a",
+            "surface": null
+          },
+          "body_font": "jost",
+          "card_style": "elevated"
+        },
+        "login": {
+          "layout": "split"
+        }
+      },
+      "resolved": {
+        "color_scheme": "light",
+        "colors": {
+          "primary": "#1b2a4a",
+          "secondary": "#4b5563",
+          "background": "#faf9f7",
+          "surface": "#ffffff",
+          "text": "#1a1a1a"
+        },
+        "heading_font": "system",
+        "body_font": "jost",
+        "radius": "medium",
+        "grid_density": "comfortable",
+        "card_style": "elevated",
+        "image_fit": "contain",
+        "image_background": "#ffffff",
+        "login_layout": "split"
+      }
+    },
+    {
+      "name": "dark scheme without colours",
+      "settings": {
+        "theme": {
+          "color_scheme": "dark"
+        }
+      },
+      "resolved": {
+        "color_scheme": "dark",
+        "colors": {
+          "primary": "#1f2937",
+          "secondary": "#4b5563",
+          "background": "#121212",
+          "surface": "#1c1c1c",
+          "text": "#f2f0ec"
+        },
+        "heading_font": "system",
+        "body_font": "system",
+        "radius": "medium",
+        "grid_density": "comfortable",
+        "card_style": "plain",
+        "image_fit": "contain",
+        "image_background": "#ffffff",
+        "login_layout": "centered"
+      }
+    },
+    {
+      "name": "the full MAISON NOOR showroom",
+      "settings": {
+        "display_name": "MAISON NOOR",
+        "accent_color": "#171512",
+        "portal_name": {
+          "en": "Trade portal",
+          "nl": "Dealerportaal",
+          "de": "Händlerportal"
+        },
+        "theme": {
+          "color_scheme": "light",
+          "colors": {
+            "primary": "#171512",
+            "secondary": "#a8705a",
+            "background": "#f6f2ec",
+            "surface": "#fffdf9",
+            "text": "#171512"
+          },
+          "heading_font": "cormorant-garamond",
+          "body_font": "jost",
+          "radius": "none",
+          "grid_density": "editorial",
+          "card_style": "plain",
+          "image_fit": "cover",
+          "image_background": "#ece6dd"
+        },
+        "login": {
+          "layout": "split",
+          "background_image": "img_maison_noor_login",
+          "title": {
+            "en": "MAISON NOOR trade portal",
+            "nl": "MAISON NOOR dealerportaal",
+            "de": "MAISON NOOR Händlerportal"
+          },
+          "text": {
+            "en": "Imagery and product data for the boutiques and stores that carry the house.",
+            "nl": "Beelden en productgegevens voor de boetieks en winkels die het huis voeren.",
+            "de": "Bilder und Produktdaten für die Boutiquen und Geschäfte, die das Haus führen."
+          }
+        },
+        "home": {
+          "blocks": [
+            {
+              "id": "hero",
+              "type": "hero",
+              "image": "img_maison_noor_hero",
+              "title": {
+                "en": "Autumn/Winter 2026 — Nocturne",
+                "nl": "Herfst/winter 2026 — Nocturne",
+                "de": "Herbst/Winter 2026 — Nocturne"
+              },
+              "text": {
+                "en": "Extra-fine merino, waxed cotton and full-grain leather, in ink, oatmeal and a single note of terracotta.",
+                "nl": "Extra fijne merino, gewaxt katoen en volnerf leer, in inkt, havermout en één toets terracotta.",
+                "de": "Extrafeiner Merino, gewachste Baumwolle und Vollnarbenleder, in Tinte, Hafer und einem einzigen Hauch Terrakotta."
+              },
+              "button_label": {
+                "en": "Discover the collection",
+                "nl": "Ontdek de collectie",
+                "de": "Kollektion entdecken"
+              },
+              "link": "/catalog?season=AW26",
+              "align": "left",
+              "height": "large",
+              "overlay": "dark"
+            },
+            {
+              "id": "order-window",
+              "type": "announcement",
+              "text": {
+                "en": "Pre-orders for Spring/Summer 2027 are open until 15 January 2027. Lookbook imagery of the new styles follows in December.",
+                "nl": "Voororders voor lente/zomer 2027 kunnen tot 15 januari 2027. Lookbookbeelden van de nieuwe modellen volgen in december.",
+                "de": "Vororders für Frühjahr/Sommer 2027 sind bis zum 15. Januar 2027 möglich. Lookbook-Bilder der neuen Modelle folgen im Dezember."
+              },
+              "tone": "neutral"
+            },
+            {
+              "id": "categories",
+              "type": "tiles",
+              "title": {
+                "en": "The house",
+                "nl": "Het huis",
+                "de": "Das Haus"
+              },
+              "columns": 4,
+              "items": [
+                {
+                  "image": "img_maison_noor_knitwear",
+                  "title": {
+                    "en": "Knitwear",
+                    "nl": "Breigoed",
+                    "de": "Strick"
+                  },
+                  "link": "/catalog?item_type=sweater"
+                },
+                {
+                  "image": "img_maison_noor_outerwear",
+                  "title": {
+                    "en": "Coats & jackets",
+                    "nl": "Jassen",
+                    "de": "Mäntel & Jacken"
+                  },
+                  "link": "/catalog?item_type=jacket"
+                },
+                {
+                  "image": "img_maison_noor_shoes",
+                  "title": {
+                    "en": "Shoes",
+                    "nl": "Schoenen",
+                    "de": "Schuhe"
+                  },
+                  "link": "/catalog?item_type=shoes"
+                },
+                {
+                  "image": "img_maison_noor_bags",
+                  "title": {
+                    "en": "Bags & travel",
+                    "nl": "Tassen & reizen",
+                    "de": "Taschen & Reisen"
+                  },
+                  "link": "/catalog?item_type=bag&item_type=luggage"
+                }
+              ]
+            },
+            {
+              "id": "new-this-season",
+              "type": "products",
+              "title": {
+                "en": "New this season",
+                "nl": "Nieuw dit seizoen",
+                "de": "Neu in dieser Saison"
+              },
+              "query": "season=AW26",
+              "max": 8
+            },
+            {
+              "id": "materials",
+              "type": "image_text",
+              "image": "img_maison_noor_atelier",
+              "image_side": "right",
+              "title": {
+                "en": "Chosen fibres, stated plainly",
+                "nl": "Gekozen vezels, helder vermeld",
+                "de": "Ausgewählte Fasern, klar benannt"
+              },
+              "text": {
+                "en": "Our tees are cut from organic cotton, the NOOR ATELIER line from recycled crepe and polyamide. Every fibre and its qualifiers are in the product data, ready for your shop.",
+                "nl": "Onze T-shirts zijn van biologisch katoen, de lijn NOOR ATELIER van gerecyclede crêpe en polyamide. Elke vezel en de bijbehorende kenmerken staan in de productgegevens, klaar voor je webshop.",
+                "de": "Unsere T-Shirts sind aus Bio-Baumwolle, die Linie NOOR ATELIER aus recyceltem Crêpe und Polyamid. Jede Faser und ihre Merkmale stehen in den Produktdaten, bereit für Ihren Shop."
+              },
+              "button_label": {
+                "en": "See organic styles",
+                "nl": "Bekijk biologische modellen",
+                "de": "Bio-Modelle ansehen"
+              },
+              "link": "/catalog?qualifier=organic"
+            },
+            {
+              "id": "account-manager",
+              "type": "contact",
+              "title": {
+                "en": "Your account manager",
+                "nl": "Je accountmanager",
+                "de": "Ihre Ansprechpartnerin"
+              },
+              "name": "Inès Laurent",
+              "email": "trade@maison-noor.example",
+              "phone": "+31 20 555 0142"
+            }
+          ]
+        }
+      },
+      "resolved": {
+        "color_scheme": "light",
+        "colors": {
+          "primary": "#171512",
+          "secondary": "#a8705a",
+          "background": "#f6f2ec",
+          "surface": "#fffdf9",
+          "text": "#171512"
+        },
+        "heading_font": "cormorant-garamond",
+        "body_font": "jost",
+        "radius": "none",
+        "grid_density": "editorial",
+        "card_style": "plain",
+        "image_fit": "cover",
+        "image_background": "#ece6dd",
+        "login_layout": "split"
+      }
+    }
+  ]
+}

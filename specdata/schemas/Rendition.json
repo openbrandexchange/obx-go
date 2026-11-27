@@ -10,7 +10,7 @@
     },
     "url": {
       "$ref": "Common.json#/$defs/Url",
-      "description": "Download URL. Either short-lived signed (usable without Authorization until url_expires_at) or requiring the Bearer token. Never a permanent public URL. Clients MUST treat it as opaque."
+      "description": "Download URL. Either short-lived signed (usable without Authorization until url_expires_at; it MAY be on another host, such as object storage or a CDN) or requiring the Bearer token. Never a permanent public URL. Clients MUST treat it as opaque, MUST NOT keep it past url_expires_at and MUST NOT use it as a cache key: the URL changes with every signature, `sha256` does not (protocol.md §5.5.1)."
     },
     "url_expires_at": {
       "anyOf": [
@@ -20,7 +20,8 @@
         {
           "type": "null"
         }
-      ]
+      ],
+      "description": "When a signed `url` stops working; null when the URL requires the Bearer token. At least 5 minutes after the response that carried it."
     },
     "content_type": {
       "type": "string",
@@ -42,7 +43,8 @@
       "minimum": 1
     },
     "sha256": {
-      "$ref": "Common.json#/$defs/Sha256"
+      "$ref": "Common.json#/$defs/Sha256",
+      "description": "sha256 of the rendition's bytes: its cache key. Stays the same when the URL is signed again; changes exactly when the bytes change."
     }
   },
   "required": [

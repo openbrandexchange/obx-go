@@ -11,7 +11,8 @@
         "brand",
         "product",
         "variant",
-        "asset"
+        "asset",
+        "collection"
       ]
     },
     "id": {

@@ -8,6 +8,12 @@ it reads stay compatible within a minor version.
 
 ## [Unreleased]
 
+### Changed
+- `specdata` follows spec `main` (4fd8977): the schemas, examples and expected fixtures of the draft proposals 0006 (collection release), 0007 (private asset access), 0008 (direct upload), 0009 (collection documents) and 0010 (language selection), plus the neutral portal default. A node that implements one of them is no longer refused by the closed 0.3.1 schemas (for example `selectable_languages` in discovery, P-DISC-1).
+
+### Added
+- `obx.Upload` gets `Transfer`, `Mode`, `Put` and `PartURLs` (direct upload, proposal 0008), with the types `PresignedPut` and `PresignedPart`, so the spec's `Upload.direct-*` examples round-trip.
+
 ## [0.3.1] - 2026-11-21
 
 For Open Brand Exchange specification 0.3.1: the MAISON NOOR test data

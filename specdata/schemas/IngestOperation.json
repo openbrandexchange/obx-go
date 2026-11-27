@@ -14,7 +14,7 @@
         "publish",
         "unpublish"
       ],
-      "description": "upsert = PUT (create or replace); patch = JSON merge patch; publish/unpublish = patch of status."
+      "description": "upsert = PUT (create or replace); patch = JSON merge patch; publish/unpublish = patch of status. publish/unpublish do not apply to kind collection (422 validation_failed); patch its state instead."
     },
     "kind": {
       "type": "string",
@@ -22,7 +22,8 @@
         "brand",
         "product",
         "variant",
-        "asset"
+        "asset",
+        "collection"
       ]
     },
     "external_id": {
@@ -30,7 +31,7 @@
     },
     "data": {
       "type": "object",
-      "description": "upsert: BrandInput|ProductInput|VariantInput|AssetInput by kind. patch: merge patch of that. Absent for delete/publish/unpublish."
+      "description": "upsert: BrandInput|ProductInput|VariantInput|AssetInput|CollectionInput by kind. patch: merge patch of that. Absent for delete/publish/unpublish."
     },
     "if_match": {
       "type": [

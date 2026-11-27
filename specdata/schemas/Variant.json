@@ -50,6 +50,17 @@
     "color": {
       "$ref": "Color.json"
     },
+    "collection_id": {
+      "anyOf": [
+        {
+          "$ref": "Common.json#/$defs/Id"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Proposal 0006 (optional member): the id of the released collection of this variant's colour, or null."
+    },
     "size": {
       "type": [
         "string",
@@ -86,6 +97,10 @@
     },
     "updated_at": {
       "$ref": "Common.json#/$defs/DateTime"
+    },
+    "language_fallbacks": {
+      "$ref": "Common.json#/$defs/LanguageFallbacks",
+      "description": "Only present when the request selected a language (`lang` or `Accept-Language`, protocol.md §2.3): which localised fields of this object fell back to another language. Pointers into nested variants and assets are in their own objects."
     }
   },
   "required": [

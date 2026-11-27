@@ -1,0 +1,21 @@
+{
+  "id": "upl_7",
+  "sha256": "5239e5c1f68ea623d2e6f57e249080855ba0b8322c452f880170a017c72452f0",
+  "bytes": 10970,
+  "content_type": "image/png",
+  "part_bytes": 8388608,
+  "parts_total": 1,
+  "received_parts": [],
+  "status": "open",
+  "expires_at": "2026-09-29T10:00:00Z",
+  "transfer": "direct",
+  "mode": "single",
+  "put": {
+    "url": "https://storage.maison-noor.example/obx-uploads/upl_7?X-Amz-Expires=3600&X-Amz-Signature=5f1c0d2e",
+    "headers": {
+      "Content-Type": "image/png",
+      "Content-Length": "10970"
+    },
+    "expires_at": "2026-09-28T11:00:00Z"
+  }
+}

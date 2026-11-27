@@ -14,6 +14,7 @@
       "type": "string",
       "enum": [
         "brand",
+        "collection",
         "product",
         "variant",
         "asset",
@@ -27,7 +28,7 @@
         "upsert",
         "delete"
       ],
-      "description": "upsert: the object is visible to you with this current state. delete: tombstone, the object is no longer visible to you (deleted, unpublished, parent hidden, outside grant, rights expired)."
+      "description": "upsert: the object is visible to you with this current state. delete: tombstone, the object is no longer visible to you (deleted, unpublished, parent hidden, outside grant, collection held, rights expired)."
     },
     "id": {
       "$ref": "Common.json#/$defs/Id"
@@ -68,10 +69,13 @@
       "description": "upsert: the object's updated_at. delete: when it stopped being visible."
     },
     "data": {
-      "description": "Present on upsert (never on delete): the CURRENT representation (Brand, Product without variants/assets, Variant, Asset or Grant according to type).",
+      "description": "Present on upsert (never on delete): the CURRENT representation (Brand, Collection, Product without variants/assets, Variant, Asset or Grant according to type).",
       "anyOf": [
         {
           "$ref": "Brand.json"
+        },
+        {
+          "$ref": "Collection.json"
         },
         {
           "$ref": "Product.json"

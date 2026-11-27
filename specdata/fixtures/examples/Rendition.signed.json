@@ -1,0 +1,10 @@
+{
+  "name": "web",
+  "url": "https://media.maison-noor.example/obx/v1/assets/ast_12/renditions/web?e=1790589600&s=3b0c6f1d9a2e47c8b5d0e1f2a3b4c5d6",
+  "url_expires_at": "2026-09-28T12:00:00Z",
+  "content_type": "image/jpeg",
+  "width": 1600,
+  "height": 2000,
+  "bytes": 412337,
+  "sha256": "8d2f4c1b9e7a6f5d3c2b1a0f9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d"
+}
