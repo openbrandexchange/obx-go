@@ -188,6 +188,33 @@ type Upload struct {
 	ReceivedParts []int     `json:"received_parts"`
 	Status        string    `json:"status"`
 	ExpiresAt     time.Time `json:"expires_at"`
+	// Transfer is "node" (parts through the node) or "direct" (presigned
+	// storage URLs, capability ingest.direct_upload, spec proposal 0008).
+	// Empty means node.
+	Transfer string `json:"transfer,omitempty"`
+	// Mode is "single" or "multipart" for a direct upload.
+	Mode string `json:"mode,omitempty"`
+	// Put is the presigned PUT of a direct single upload.
+	Put *PresignedPut `json:"put,omitempty"`
+	// PartURLs are the presigned PUTs of the parts not yet received of a
+	// direct multipart upload (fresh on every GET).
+	PartURLs []PresignedPart `json:"part_urls,omitempty"`
+}
+
+// PresignedPut is a storage URL to PUT bytes to, without the ingest token,
+// with exactly Headers.
+type PresignedPut struct {
+	URL       string            `json:"url"`
+	Headers   map[string]string `json:"headers"`
+	ExpiresAt time.Time         `json:"expires_at"`
+}
+
+// PresignedPart is the presigned PUT of one part of a direct multipart upload.
+type PresignedPart struct {
+	Number    int               `json:"number"`
+	URL       string            `json:"url"`
+	Headers   map[string]string `json:"headers"`
+	ExpiresAt time.Time         `json:"expires_at"`
 }
 
 // IngestToken describes the calling token in IngestInfo.

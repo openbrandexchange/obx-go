@@ -29,6 +29,17 @@
     "color": {
       "$ref": "Color.json"
     },
+    "collection_external_id": {
+      "anyOf": [
+        {
+          "$ref": "Common.json#/$defs/ExternalId"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Proposal 0006: the collection release record of this variant's colour, overriding the product's `collection_external_id`. Membership is per colour: every variant of one colour of a product MUST have the same effective collection (422 `validation_failed`, pointer `/collection_external_id`)."
+    },
     "size": {
       "type": [
         "string",

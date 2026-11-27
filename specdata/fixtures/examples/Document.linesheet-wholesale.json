@@ -1,0 +1,15 @@
+{
+  "kind": "linesheet",
+  "collection_id": "col_3",
+  "language": "en",
+  "prices": "wholesale",
+  "currency": "EUR",
+  "content_type": "application/pdf",
+  "filename": "maison-noor-solstice-linesheet-en.pdf",
+  "url": "https://brands.maison-noor.example/obx/v1/collections/col_3/documents/linesheet?language=en&prices=wholesale&e=1799917500&s=7c2d1e0f",
+  "url_expires_at": "2027-01-15T09:05:00Z",
+  "bytes": null,
+  "sha256": null,
+  "pages": null,
+  "updated_at": "2027-01-15T09:00:00Z"
+}

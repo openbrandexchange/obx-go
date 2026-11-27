@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openbrandexchange.com/schemas/v0.3/Document.json",
+  "type": "object",
+  "title": "Document",
+  "description": "A document of a released collection for one caller: a linesheet (every visible style and colour with its sizes, and prices when stated) or a lookbook (editorial pages). Its content is limited to what the caller may see (proposal 0009).",
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": [
+        "linesheet",
+        "lookbook"
+      ],
+      "description": "Consumers MUST ignore documents of an unknown kind."
+    },
+    "collection_id": {
+      "$ref": "Common.json#/$defs/Id"
+    },
+    "language": {
+      "$ref": "Common.json#/$defs/LanguageTag"
+    },
+    "prices": {
+      "type": "string",
+      "enum": [
+        "none",
+        "retail",
+        "wholesale"
+      ],
+      "description": "none: no prices. retail: recommended retail prices. wholesale: the caller's own purchase prices; only for a logged-in retailer (a person of a retailer the brand allows, signed in to the portal), never for an API client, never in a document another caller can reach."
+    },
+    "currency": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$",
+          "description": "ISO 4217."
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "null when prices is none."
+    },
+    "content_type": {
+      "type": "string",
+      "enum": [
+        "application/pdf"
+      ]
+    },
+    "filename": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "examples": [
+        "maison-noor-solstice-linesheet.pdf"
+      ]
+    },
+    "url": {
+      "$ref": "Common.json#/$defs/Url",
+      "description": "Signed short-lived URL or one that needs the Bearer token, as for renditions (protocol.md §5.5; proposal 0007). Wholesale documents: at most 5 minutes."
+    },
+    "url_expires_at": {
+      "anyOf": [
+        {
+          "$ref": "Common.json#/$defs/DateTime"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "bytes": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1,
+      "description": "null when the node renders the document on request."
+    },
+    "sha256": {
+      "anyOf": [
+        {
+          "$ref": "Common.json#/$defs/Sha256"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "pages": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
+    "updated_at": {
+      "$ref": "Common.json#/$defs/DateTime",
+      "description": "Last change of the document's layout or of what it shows to this caller."
+    }
+  },
+  "required": [
+    "kind",
+    "collection_id",
+    "language",
+    "prices",
+    "currency",
+    "content_type",
+    "filename",
+    "url",
+    "url_expires_at",
+    "bytes",
+    "sha256",
+    "pages",
+    "updated_at"
+  ],
+  "additionalProperties": false,
+  "patternProperties": {
+    "^x-[a-z0-9]+-[a-z0-9_-]+$": true
+  }
+}

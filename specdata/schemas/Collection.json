@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openbrandexchange.com/schemas/v0.3/Collection.json",
+  "type": "object",
+  "title": "Collection",
+  "description": "A released collection (drop) of one brand. Membership is per colour and by id: the variants (and the assets of their colour) whose effective `collection_id` is this `id`. Only released collections are visible; a held collection does not exist for retailers (proposal 0006).",
+  "properties": {
+    "id": {
+      "$ref": "Common.json#/$defs/Id"
+    },
+    "external_id": {
+      "$ref": "Common.json#/$defs/ExternalId"
+    },
+    "brand_id": {
+      "$ref": "Common.json#/$defs/Id"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "Display name. Unique per brand and season among records; membership never goes by name."
+    },
+    "season": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 100,
+      "description": "Informative; the same name may be reused in another season."
+    },
+    "released_at": {
+      "$ref": "Common.json#/$defs/DateTime",
+      "description": "When the collection became visible: the scheduled `release_at`, or the time of the write that released it."
+    },
+    "updated_at": {
+      "$ref": "Common.json#/$defs/DateTime"
+    }
+  },
+  "required": [
+    "id",
+    "external_id",
+    "brand_id",
+    "name",
+    "season",
+    "released_at",
+    "updated_at"
+  ],
+  "additionalProperties": false,
+  "patternProperties": {
+    "^x-[a-z0-9]+-[a-z0-9_-]+$": true
+  }
+}

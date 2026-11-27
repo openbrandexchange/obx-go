@@ -1,0 +1,102 @@
+{
+  "description": "Language selection (protocol.md §2.3, proposal 0010) on MN-1001 of a node with content languages nl,en and the vocabularies' names (de, fr). Each case is one request to GET /obx/v1/products/{id}; content_language is the Content-Language header (null: no selection, the 0.3 response), language_fallbacks the member on the product, on every variant and on every asset, values a few fields of the response by JSON Pointer. bun run check recomputes every case from expected/product-MN-1001.json. Conformance P-LANG-1 to P-LANG-4.",
+  "product": "MN-1001",
+  "languages": ["nl", "en"],
+  "selectable_languages": ["nl", "en", "de", "fr"],
+  "cases": [
+    {
+      "name": "content language",
+      "request": { "lang": "en" },
+      "content_language": "en",
+      "language_fallbacks": { "product": {}, "variants": {}, "assets": {} },
+      "values": {
+        "/name": { "en": "Fine Merino Crew-Neck Sweater" },
+        "/materials/0/fibers/0/material/name": { "en": "Merino wool" },
+        "/care/0/name": { "en": "Wash at 30 °C, very mild process" },
+        "/variants/0/color/name": { "en": "Navy" }
+      }
+    },
+    {
+      "name": "region of a content language",
+      "request": { "lang": "en-GB" },
+      "content_language": "en",
+      "language_fallbacks": { "product": {}, "variants": {}, "assets": {} },
+      "values": { "/name": { "en": "Fine Merino Crew-Neck Sweater" } }
+    },
+    {
+      "name": "term language: texts fall back to the default, terms do not",
+      "request": { "lang": "DE_ch" },
+      "content_language": "de",
+      "language_fallbacks": {
+        "product": { "/name": "nl", "/description": "nl" },
+        "variants": { "/color/name": "nl" },
+        "assets": {}
+      },
+      "values": {
+        "/name": { "nl": "Fijne merino trui met ronde hals" },
+        "/materials/0/fibers/0/material/name": { "de": "Merinowolle" },
+        "/care/1/name": { "de": "Nicht bleichen" },
+        "/variants/0/color/name": { "nl": "Marineblauw" }
+      }
+    },
+    {
+      "name": "unknown language selects the default",
+      "request": { "lang": "ja" },
+      "content_language": "nl",
+      "language_fallbacks": { "product": {}, "variants": {}, "assets": {} },
+      "values": { "/name": { "nl": "Fijne merino trui met ronde hals" }, "/care/1/name": { "nl": "Niet bleken" } }
+    },
+    {
+      "name": "universal: codes only",
+      "request": { "lang": "universal" },
+      "content_language": "nl",
+      "language_fallbacks": { "product": {}, "variants": {}, "assets": {} },
+      "values": {
+        "/name": { "nl": "Fijne merino trui met ronde hals" },
+        "/materials/0/fibers/0/material": { "code": "merino_wool", "name": null },
+        "/care/1/name": null,
+        "/care/1/code": "do_not_bleach",
+        "/variants/0/color/family": "blue"
+      }
+    },
+    {
+      "name": "Accept-Language: first range that matches",
+      "request": { "accept_language": "ja, de-CH;q=0.9, en;q=0.8" },
+      "content_language": "de",
+      "language_fallbacks": {
+        "product": { "/name": "nl", "/description": "nl" },
+        "variants": { "/color/name": "nl" },
+        "assets": {}
+      }
+    },
+    {
+      "name": "Accept-Language: q order, * skipped",
+      "request": { "accept_language": "*, nl;q=0.4, en;q=0.6" },
+      "content_language": "en",
+      "language_fallbacks": { "product": {}, "variants": {}, "assets": {} }
+    },
+    {
+      "name": "Accept-Language without a match: no selection",
+      "request": { "accept_language": "ja, en;q=0" },
+      "content_language": null,
+      "language_fallbacks": null,
+      "values": { "/name": { "en": "Fine Merino Crew-Neck Sweater", "nl": "Fijne merino trui met ronde hals" } }
+    },
+    {
+      "name": "lang wins over Accept-Language",
+      "request": { "lang": "fr", "accept_language": "en" },
+      "content_language": "fr",
+      "language_fallbacks": {
+        "product": { "/name": "nl", "/description": "nl" },
+        "variants": { "/color/name": "nl" },
+        "assets": {}
+      },
+      "values": { "/materials/0/fibers/0/material/name": { "fr": "Laine mérinos" } }
+    },
+    {
+      "name": "malformed lang",
+      "request": { "lang": "en--GB" },
+      "status": 400
+    }
+  ]
+}

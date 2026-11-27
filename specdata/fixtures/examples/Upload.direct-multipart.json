@@ -1,0 +1,33 @@
+{
+  "id": "upl_8",
+  "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+  "bytes": 20971520,
+  "content_type": "image/tiff",
+  "part_bytes": 8388608,
+  "parts_total": 3,
+  "received_parts": [
+    1
+  ],
+  "status": "open",
+  "expires_at": "2026-09-29T10:00:00Z",
+  "transfer": "direct",
+  "mode": "multipart",
+  "part_urls": [
+    {
+      "number": 2,
+      "url": "https://storage.maison-noor.example/obx-uploads/upl_8?partNumber=2&uploadId=2~f00d&X-Amz-Expires=3600&X-Amz-Signature=a2b2",
+      "headers": {
+        "Content-Length": "8388608"
+      },
+      "expires_at": "2026-09-28T11:00:00Z"
+    },
+    {
+      "number": 3,
+      "url": "https://storage.maison-noor.example/obx-uploads/upl_8?partNumber=3&uploadId=2~f00d&X-Amz-Expires=3600&X-Amz-Signature=a3b3",
+      "headers": {
+        "Content-Length": "4194304"
+      },
+      "expires_at": "2026-09-28T11:00:00Z"
+    }
+  ]
+}

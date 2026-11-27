@@ -15,6 +15,7 @@ Everything here is **fictional**: MAISON NOOR (company "MAISON NOOR Group") is n
 | `ingest/script.ndjson` | 18 ingest operations: upserts, an idempotent repeat, an image replacement, a position conflict, an asset unpublish, an invalid GTIN, a product unpublish + republish, deletes |
 | `ingest/expected-results.json` | expected `result` (and `obx_error`) per operation |
 | `ingest/expected-changes.json` | expected live `/changes` entries per operation (`after_op`), in order |
+| `collections/` | the collection release scenario of [proposal 0006](../docs/proposals/0006-collection-release.md) (conformance I-COLL-1, P-COLL-1): `script.ndjson` (24 operations on brand `maison-noor`: hold `solstice`, load MN-7001 into it by `collection_external_id`, release, hold, move the product out and back, release by a past `release_at`, schedule a future one, refused writes, delete the record, an empty released collection, then membership per colour: colour OLV in held `riviera` while SND stays visible, a refused SND variant in another collection, release and hold of `riviera`), `expected-results.json`, `expected-changes.json`; same replay rules as `ingest/`, blobs from `ingest/files/` |
 | `ingest/files/` | the images the script references by sha256 (upload them as blobs first) |
 | `examples/*.json` | one or more valid example documents per schema (file name prefix = schema name, or a component of `openapi/node-admin.yaml` such as `BrandingSettings`) and a webhook signature test vector |
 

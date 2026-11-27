@@ -74,7 +74,19 @@
         "string",
         "null"
       ],
-      "maxLength": 200
+      "maxLength": 200,
+      "description": "Collection name as the brand writes it (informative). Membership of a collection release record is by `collection_external_id` (proposal 0006)."
+    },
+    "collection_external_id": {
+      "anyOf": [
+        {
+          "$ref": "Common.json#/$defs/ExternalId"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Proposal 0006: the external id of the collection release record its colours belong to. A variant's own `collection_external_id` overrides it for that variant's colour. A value without a record holds nothing (the record may come later). null or absent: in no collection."
     },
     "materials": {
       "anyOf": [

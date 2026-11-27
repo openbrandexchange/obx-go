@@ -65,6 +65,14 @@
       "type": "boolean",
       "description": "Include product/variant/asset lines in the manifest (default true).",
       "default": true
+    },
+    "lang": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Capability `language_selection` (protocol.md §2.3): a BCP 47 tag or `universal`; the manifest's objects are written as for `?lang=` on the read endpoints. `null` or absent = every language (as 0.3).",
+      "maxLength": 35
     }
   },
   "required": [

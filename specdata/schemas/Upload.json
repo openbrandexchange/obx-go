@@ -24,7 +24,8 @@
     },
     "parts_total": {
       "type": "integer",
-      "minimum": 1
+      "minimum": 1,
+      "maximum": 10000
     },
     "received_parts": {
       "type": "array",
@@ -45,6 +46,83 @@
     },
     "expires_at": {
       "$ref": "Common.json#/$defs/DateTime"
+    },
+    "transfer": {
+      "type": "string",
+      "enum": [
+        "node",
+        "direct"
+      ],
+      "description": "node: parts go to PUT /uploads/{id}/parts/{n} on the node. direct: bytes go straight to storage through presigned URLs (capability ingest.direct_upload, proposal 0008). Absent = node."
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "single",
+        "multipart"
+      ],
+      "description": "Direct uploads only: one PUT to `put`, or one PUT per part to `part_urls`."
+    },
+    "put": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "$ref": "Common.json#/$defs/Url",
+          "description": "Presigned storage URL (https). Send the bytes with PUT, exactly the headers in `headers`, and never the ingest token."
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Headers the signature covers (at least Content-Length; Content-Type for a single PUT). Send them exactly."
+        },
+        "expires_at": {
+          "$ref": "Common.json#/$defs/DateTime"
+        }
+      },
+      "required": [
+        "url",
+        "headers",
+        "expires_at"
+      ],
+      "additionalProperties": false,
+      "description": "Direct single upload: where to PUT the whole file."
+    },
+    "part_urls": {
+      "type": "array",
+      "description": "Direct multipart upload: a presigned URL for every part not yet received (fresh on every GET). Every part except the last is exactly part_bytes.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "url": {
+            "$ref": "Common.json#/$defs/Url",
+            "description": "Presigned storage URL (https). Send the bytes with PUT, exactly the headers in `headers`, and never the ingest token."
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Headers the signature covers (at least Content-Length; Content-Type for a single PUT). Send them exactly."
+          },
+          "expires_at": {
+            "$ref": "Common.json#/$defs/DateTime"
+          }
+        },
+        "required": [
+          "number",
+          "url",
+          "headers",
+          "expires_at"
+        ],
+        "additionalProperties": false
+      }
     }
   },
   "required": [

@@ -61,6 +61,16 @@
         "de-CH"
       ]
     },
+    "LanguageFallbacks": {
+      "type": "object",
+      "description": "Language selection (protocol.md §2.3, proposal 0010): the localised fields of this object that are served in another language than the selected one. Key = JSON Pointer (RFC 6901) relative to this object (`/name`, `/materials/0/fibers/0/material/name`, `/color/name`); value = the tag the field is served in. Empty object when every field is in the selected language. Present only in responses with a language selection.",
+      "propertyNames": {
+        "pattern": "^(/[^/]*)+$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/LanguageTag"
+      }
+    },
     "CountryCode": {
       "type": "string",
       "description": "ISO 3166-1 alpha-2 country code.",
@@ -186,6 +196,7 @@
         "access_revoked",
         "insufficient_scope",
         "forbidden",
+        "url_expired",
         "not_found",
         "method_not_allowed",
         "conflict",
